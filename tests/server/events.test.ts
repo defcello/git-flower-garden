@@ -53,6 +53,7 @@ const payload = (): RepositoriesJson => ({
   ],
   configErrors: [],
   restartNeeded: [],
+  webhooks: { state: "off", url: null, diagnostic: null, lastEvent: null },
 });
 
 const hubs: EventHub[] = [];

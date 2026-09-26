@@ -141,6 +141,7 @@ describe("example configuration", () => {
       label: "Another project",
       url: "https://github.com/OWNER/REPOSITORY.git",
       remotes: [],
+      github: "OWNER/REPOSITORY",
     });
   });
 
@@ -191,7 +192,7 @@ describe("validation errors", () => {
       "}",
     ].join("\n");
     expect(errorsFor(text)).toEqual([
-      'c.json:11:3: /extra unknown key "extra"; allowed: $schema, version, server, history, monitor, display, repositories, environment',
+      'c.json:11:3: /extra unknown key "extra"; allowed: $schema, version, server, history, monitor, display, repositories, environment, webhooks',
       "c.json:3:15: /server/host must be a loopback address (127.0.0.1, localhost, ::1); serving on a network needs authentication that does not exist yet",
       "c.json:3:34: /server/port must be an integer from 1 to 65535",
       'c.json:4:61: /history/weekdays/1 duplicate weekday "mon"',
@@ -202,7 +203,7 @@ describe("validation errors", () => {
       'c.json:7:5: /repositories/0 must have exactly one of "path" or "url"',
       "c.json:8:19: /repositories/1/url must not contain a password; use a credential helper or SSH agent",
       'c.json:8:65: /repositories/1/remotes applies only to a local "path" repository',
-      'c.json:9:32: /repositories/2/colour unknown key "colour"; allowed: id, label, path, url, remotes',
+      'c.json:9:32: /repositories/2/colour unknown key "colour"; allowed: id, label, path, url, remotes, github',
       'c.json:9:7: /repositories/2/id duplicate id "ok" (also used by /repositories/1)',
     ]);
   });
@@ -395,5 +396,72 @@ describe("validator agrees with the JSON Schema (Ajv) on structural rules", () =
     }
     expect(agreedValid).toBeGreaterThan(100);
     expect(agreedInvalid).toBeGreaterThan(100);
+  });
+});
+
+describe("webhooks and GitHub mapping (P1-F)", () => {
+  it("defaults to off, validates settings, and never accepts a secret value", () => {
+    const base = { version: 1, repositories: [] };
+    const off = parseConfig(JSON.stringify(base), dir);
+    expect(off.ok && off.config.webhooks).toEqual({
+      enabled: false,
+      host: "127.0.0.1",
+      port: 4785,
+      secretEnv: "GIT_GARDEN_WEBHOOK_SECRET",
+      safetyPollSeconds: 300,
+    });
+    const bad = parseConfig(
+      JSON.stringify({
+        ...base,
+        webhooks: {
+          enabled: true,
+          host: "0.0.0.0",
+          secretEnv: "hunter2 secret!",
+          safetyPollSeconds: 5,
+          secret: "x",
+        },
+      }),
+      dir,
+    );
+    expect(bad.ok ? [] : bad.errors.map((e) => e.pointer)).toEqual([
+      "/webhooks/secret",
+      "/webhooks/host",
+      "/webhooks/secretEnv",
+      "/webhooks/safetyPollSeconds",
+    ]);
+  });
+
+  it("maps repositories to GitHub explicitly or from github.com URLs", () => {
+    const result = parseConfig(
+      JSON.stringify({
+        version: 1,
+        repositories: [
+          { id: "a", url: "git@github.com:octo/garden.git" },
+          { id: "b", url: "https://gitlab.example/octo/garden.git" },
+          { id: "c", path: ".", github: "octo/local" },
+          { id: "d", path: ".", github: "not a repo" },
+        ],
+      }),
+      dir,
+    );
+    expect(result.ok ? [] : result.errors.map((e) => e.pointer)).toEqual([
+      "/repositories/3/github",
+    ]);
+    const ok = parseConfig(
+      JSON.stringify({
+        version: 1,
+        repositories: [
+          { id: "a", url: "git@github.com:octo/garden.git" },
+          { id: "b", url: "https://gitlab.example/octo/garden.git" },
+          { id: "c", path: ".", github: "octo/local" },
+        ],
+      }),
+      dir,
+    );
+    expect(ok.ok && ok.config.repositories.map((r) => r.github)).toEqual([
+      "octo/garden",
+      undefined,
+      "octo/local",
+    ]);
   });
 });

@@ -7,8 +7,12 @@
   "additionalProperties": false,
   "required": ["version", "repositories"],
   "properties": {
-    "$schema": { "type": "string" },
-    "version": { "const": 1 },
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
     "server": {
       "type": "object",
       "additionalProperties": false,
@@ -87,15 +91,24 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "renderer": { "const": "technical", "default": "technical" },
-        "reducedMotion": { "type": "boolean", "default": false }
+        "renderer": {
+          "const": "technical",
+          "default": "technical"
+        },
+        "reducedMotion": {
+          "type": "boolean",
+          "default": false
+        }
       }
     },
     "environment": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "const": false, "default": false }
+        "enabled": {
+          "const": false,
+          "default": false
+        }
       }
     },
     "repositories": {
@@ -134,17 +147,68 @@
               "type": "string",
               "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
             }
+          },
+          "github": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$",
+            "description": "GitHub repository (owner/name) whose push events trigger a fetch. Derived automatically for github.com URLs."
           }
         },
         "oneOf": [
-          { "required": ["path"], "not": { "required": ["url"] } },
+          {
+            "required": ["path"],
+            "not": {
+              "required": ["url"]
+            }
+          },
           {
             "required": ["url"],
             "not": {
-              "anyOf": [{ "required": ["path"] }, { "required": ["remotes"] }]
+              "anyOf": [
+                {
+                  "required": ["path"]
+                },
+                {
+                  "required": ["remotes"]
+                }
+              ]
             }
           }
         ]
+      }
+    },
+    "webhooks": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional GitHub push notifications (see the user guide). Polling stays on as a safety net.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "host": {
+          "enum": ["127.0.0.1", "localhost", "::1"],
+          "default": "127.0.0.1",
+          "description": "Loopback only; expose the receiver through a tunnel or reverse proxy you run."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 4785
+        },
+        "secretEnv": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$",
+          "default": "GIT_GARDEN_WEBHOOK_SECRET",
+          "description": "Environment variable that holds the webhook secret. The secret itself never goes in this file."
+        },
+        "safetyPollSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 86400,
+          "default": 300
+        }
       }
     }
   }

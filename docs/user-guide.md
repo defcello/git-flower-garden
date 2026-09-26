@@ -173,6 +173,41 @@ needed":
 4. On Windows, Git Credential Manager must have a stored credential. Run one
    `git fetch` in a terminal to store it.
 
+## Faster remote updates with GitHub push notifications (optional)
+
+By default git-garden checks remotes every `monitor.remotePollSeconds`. For
+GitHub repositories you administer, GitHub can notify git-garden right after
+a push. git-garden then fetches at once, and keeps a slow safety poll
+(`webhooks.safetyPollSeconds`, default 5 minutes) in case a notification is
+lost.
+
+1. **Choose a secret** (at least 16 characters) and put it in an environment
+   variable for git-garden: `GIT_GARDEN_WEBHOOK_SECRET`, or another name set
+   in `webhooks.secretEnv`. The secret never goes in the configuration file.
+2. **Enable the receiver:** `"webhooks": { "enabled": true }`. It listens on
+   `http://127.0.0.1:4785/github/webhook` (`webhooks.port`) and nowhere else. It
+   is separate from the viewer and has no other routes.
+3. **Expose only that address to GitHub** with a tunnel or reverse proxy you
+   run (for example Cloudflare Tunnel, ngrok, or Tailscale Funnel, all of which
+   have free tiers), forwarding a public HTTPS URL to
+   `http://127.0.0.1:4785/github/webhook`. Do not expose the viewer's port.
+4. **Add a webhook** in the GitHub repository's *Settings → Webhooks* (repository
+   admin rights needed): payload URL = your public URL, content type =
+   `application/json`, secret = your secret, events = *Pushes*, *Branch or tag
+   creation*, and *Branch or tag deletion*.
+5. **Map the repository.** Sources with a github.com `url` are mapped
+   automatically. For a local clone, add `"github": "owner/name"`, or rely on its
+   monitored `remotes` pointing at github.com.
+
+The page shows each remote's last notification next to its last fetch. If the
+secret is missing or the receiver cannot start, the page says so and ordinary
+polling continues.
+
+**Rotating the secret:** set the new value in the environment variable,
+restart git-garden, then update the secret in GitHub's webhook settings.
+Notifications that arrive in between are rejected; the safety poll covers the
+gap.
+
 ## Diagnostics and data
 
 ```sh
@@ -217,8 +252,8 @@ text. See [SECURITY.md](../SECURITY.md) to report a problem.
   with backoff (at most 15 minutes).
 - For a local repository with monitored `remotes`, remote *tags* come from the
   clone, not the remote.
-- GitHub push notifications (webhooks) are not supported yet; remotes are
-  polled.
+- GitHub push notifications need your own tunnel or reverse proxy; there is
+  no hosted relay, and GitHub Apps are not supported.
 - Holidays are not excluded from business days.
 - After a restart, local repositories are re-read before their graphs appear
   (typically about a second each); remote-only repositories show their cached

@@ -18,7 +18,11 @@
  */
 import { access, mkdir, stat } from "node:fs/promises";
 import { cpus } from "node:os";
-import type { Config, RepositoryConfig } from "../config/config.ts";
+import {
+  githubFromUrl,
+  type Config,
+  type RepositoryConfig,
+} from "../config/config.ts";
 import { defaultCacheDir } from "../config/paths.ts";
 import { historyWindow, nextRecomputeMs } from "../core/business-days.ts";
 import {
@@ -62,6 +66,8 @@ export interface RemoteStatus {
   lastSuccess: number | null;
   nextAttempt: number | null;
   diagnostic: string | null;
+  /** Last accepted push notification for this repository (P1-F), if any. */
+  lastEvent: number | null;
 }
 
 export interface RepositoryView {
@@ -146,6 +152,8 @@ export interface ServiceOptions {
   /** Overrides for tests; production uses the configuration. */
   intervals?: {
     reconcileMs?: number;
+    /** Safety poll while push notifications are active (default: webhooks.safetyPollSeconds). */
+    safetyPollMs?: number;
     /** Full read at least this often, even when the fingerprint is unchanged. */
     fullReconcileMs?: number;
     remotePollMs?: number;
@@ -187,6 +195,10 @@ interface Entry {
   lastFullRead: number;
   fetchAbort: AbortController | null;
   stopped: boolean;
+  /** GitHub "owner/name" (lowercase) this repository's remotes correspond to. */
+  githubNames: Set<string>;
+  fetching: boolean;
+  fetchAgain: boolean;
 }
 
 const MAX_BACKOFF_MS = 15 * 60 * 1000;
@@ -240,6 +252,7 @@ export class RepositoryService {
   /** Bounds concurrent local reads so a large garden does not thrash a small machine. */
   private readonly readSlots: Semaphore;
   private reconcileTimer: ReturnType<typeof setInterval> | null = null;
+  private webhooksActive = false;
   private windowTimer: ReturnType<typeof setTimeout> | null = null;
   private windowStart: number | null = null;
   private readonly intervals: NonNullable<ServiceOptions["intervals"]>;
@@ -307,6 +320,9 @@ export class RepositoryService {
       probeDir: null,
       lastFullRead: 0,
       fetchAbort: null,
+      githubNames: new Set(repo.github ? [repo.github.toLowerCase()] : []),
+      fetching: false,
+      fetchAgain: false,
       stopped: false,
       view: {
         id: repo.id,
@@ -322,6 +338,7 @@ export class RepositoryService {
                 lastSuccess: null,
                 nextAttempt: null,
                 diagnostic: null,
+                lastEvent: null,
               }
             : null,
         status: {
@@ -794,8 +811,13 @@ export class RepositoryService {
     }
     entry.remoteTimer = setTimeout(() => {
       entry.remoteTimer = null;
+      entry.fetching = true;
       void this.fetchRemotes(entry.config.id).finally(() => {
-        this.scheduleFetch(entry, this.nextFetchDelay(entry));
+        entry.fetching = false;
+        // A notification during the fetch may describe a newer push: fetch again now.
+        const again = entry.fetchAgain;
+        entry.fetchAgain = false;
+        this.scheduleFetch(entry, again ? 0 : this.nextFetchDelay(entry));
       });
     }, delayMs);
     entry.remoteTimer.unref();
@@ -803,9 +825,13 @@ export class RepositoryService {
 
   /** Poll interval ±10% jitter; after failures, exponential backoff to 15 minutes. */
   private nextFetchDelay(entry: Entry): number {
-    const base =
-      this.intervals.remotePollMs ??
-      this.config.monitor.remotePollSeconds * 1000;
+    // With push notifications active, polling is only a safety net.
+    const notified = this.webhooksActive && entry.githubNames.size > 0;
+    const base = notified
+      ? (this.intervals.safetyPollMs ??
+        this.config.webhooks.safetyPollSeconds * 1000)
+      : (this.intervals.remotePollMs ??
+        this.config.monitor.remotePollSeconds * 1000);
     const delay =
       entry.remoteFailures === 0
         ? base
@@ -814,6 +840,37 @@ export class RepositoryService {
             base * 2 ** Math.min(entry.remoteFailures, 16),
           );
     return Math.round(delay * (0.9 + this.random() * 0.2));
+  }
+
+  /**
+   * Mark push notifications as active (the receiver is listening) or not.
+   * Inactive means ordinary polling for every remote.
+   */
+  setWebhooksActive(active: boolean): void {
+    this.webhooksActive = active;
+  }
+
+  /**
+   * A push notification for GitHub repository "owner/name": fetch every
+   * monitored repository that maps to it now (or right after a fetch in
+   * progress). Returns the matching repository IDs.
+   */
+  notifyGithub(fullName: string): string[] {
+    const name = fullName.toLowerCase();
+    const matched: string[] = [];
+    for (const entry of this.entries.values()) {
+      if (entry.remotes.length === 0 || !entry.githubNames.has(name)) continue;
+      matched.push(entry.config.id);
+      if (entry.view.remote) {
+        this.setView(entry, {
+          ...entry.view,
+          remote: { ...entry.view.remote, lastEvent: this.now() },
+        });
+      }
+      if (entry.fetching) entry.fetchAgain = true;
+      else this.scheduleFetch(entry, 0);
+    }
+    return matched;
   }
 
   /** Fetch every monitored remote of one repository now (also used for manual retry). */
@@ -833,6 +890,8 @@ export class RepositoryService {
         const url =
           entry.config.url ??
           (await remoteUrl(entry.config.path as string, remote.name));
+        const github = githubFromUrl(url);
+        if (github) entry.githubNames.add(github.toLowerCase());
         await mkdir(dir, { recursive: true });
         await ensureCache(dir);
         await this.withCache(entry, () =>
@@ -875,6 +934,7 @@ export class RepositoryService {
         lastSuccess: errors.length > 0 ? previous.lastSuccess : this.now(),
         nextAttempt: previous.nextAttempt,
         diagnostic: errors.length > 0 ? errors.join("; ") : null,
+        lastEvent: previous.lastEvent,
       },
     });
     await this.refresh(id);

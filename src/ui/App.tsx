@@ -143,6 +143,11 @@ export function App() {
           </ul>
         </div>
       )}
+      {repositories?.webhooks.state === "error" && (
+        <div className="banner" role="status">
+          {repositories.webhooks.diagnostic}
+        </div>
+      )}
       {repositories && repositories.restartNeeded.length > 0 && (
         <div className="banner" role="status">
           Restart git-garden to apply changes to{" "}
@@ -310,6 +315,8 @@ function RemoteLine({
           ? "checking"
           : "up to date"}{" "}
       · {checked}
+      {remote.lastEvent !== null &&
+        ` · notified ${relativeTime(remote.lastEvent, now)}`}
       {next}
       {remote.state === "error" && remote.diagnostic && (
         <div className="diagnostic">{remote.diagnostic}</div>

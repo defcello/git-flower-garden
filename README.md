@@ -23,6 +23,7 @@ Git graph semantics, and acceptance criteria.
 | Interactive technical view | Browser UI: garden of repository plots, circular `+`/`−` focus, hover tooltips, pinned commit details, pan/zoom, keyboard and touch support ([ADR 0011](docs/decisions/0011-interactive-technical-renderer.md)) |
 | Live monitoring | Watchers plus periodic reconciliation for local repositories; remote-only `url` sources and `remotes` of local clones fetched into a private cache; live updates over server-sent events; configuration reload ([ADR 0012](docs/decisions/0012-continuous-monitoring.md)) |
 | Operations | `git-garden demo` (fictional repositories, no setup), `git-garden status`, `git-garden cache`, [user guide](docs/user-guide.md) |
+| Push notifications | Optional GitHub webhooks to an isolated loopback receiver behind your own tunnel, with a safety poll ([ADR 0014](docs/decisions/0014-github-push-notifications.md)) |
 | Garden art | Planned; see roadmap Phase 2 |
 
 ## Trying it

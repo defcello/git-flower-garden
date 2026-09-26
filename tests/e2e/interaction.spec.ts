@@ -251,6 +251,8 @@ test.describe("focus view", () => {
     await page.keyboard.press("Enter");
     const graph = page.locator(".focus-graph");
     await expect(graph).toBeVisible();
+    // The first frame waits for the container's first measurement.
+    await expect(graph).toHaveAttribute("data-framed", "true");
     const start = await camera(page);
     const g = await box(graph);
 

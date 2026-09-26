@@ -312,7 +312,7 @@ describe("CLI", () => {
     let io = capture();
     expect(await main(["validate-config", "--config", file], io)).toBe(1);
     expect(io.lines[0]).toBe(
-      `ERR ${file}:3:52: /repositories/0/bogus unknown key "bogus"; allowed: id, label, path, url, remotes`,
+      `ERR ${file}:3:52: /repositories/0/bogus unknown key "bogus"; allowed: id, label, path, url, remotes, github`,
     );
 
     // Two entries for one repository: the main checkout and one of its worktrees.

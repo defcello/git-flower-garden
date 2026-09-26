@@ -22,6 +22,17 @@ export const MAX_CONFIG_BYTES = 1024 * 1024;
 export const LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "::1"] as const;
 export const URL_SCHEMES = ["https", "http", "ssh", "git", "file"] as const;
 export const ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const GITHUB_REPO = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/;
+
+/** "owner/name" for a github.com URL (https, ssh, or scp-like), else undefined. */
+export function githubFromUrl(url: string): string | undefined {
+  const match =
+    /^(?:https?:\/\/(?:[^@/]+@)?github\.com\/|ssh:\/\/git@github\.com\/|git@github\.com:)([^/]+)\/([^/]+?)(?:\.git)?\/?$/i.exec(
+      url,
+    );
+  const repo = match ? `${match[1] ?? ""}/${match[2] ?? ""}` : undefined;
+  return repo !== undefined && GITHUB_REPO.test(repo) ? repo : undefined;
+}
 
 export interface RepositoryConfig {
   id: string;
@@ -31,6 +42,8 @@ export interface RepositoryConfig {
   url?: string;
   /** Remotes of a local repository to monitor through the app-owned cache. */
   remotes: string[];
+  /** GitHub repository ("owner/name") whose push events trigger a fetch (P1-F). */
+  github?: string;
 }
 
 export interface Config {
@@ -46,6 +59,16 @@ export interface Config {
   display: { renderer: "technical"; reducedMotion: boolean };
   repositories: RepositoryConfig[];
   environment: { enabled: boolean };
+  webhooks: {
+    enabled: boolean;
+    /** Loopback address for a user-managed tunnel or reverse proxy. */
+    host: (typeof LOOPBACK_HOSTS)[number];
+    port: number;
+    /** Name of the environment variable holding the webhook secret. */
+    secretEnv: string;
+    /** Poll interval for webhook-covered remotes while events arrive (a safety net). */
+    safetyPollSeconds: number;
+  };
 }
 
 export interface ConfigError {
@@ -195,6 +218,7 @@ export function validateConfig(
     "display",
     "repositories",
     "environment",
+    "webhooks",
   ]);
   if (!root) return { ok: false, errors };
 
@@ -329,6 +353,60 @@ export function validateConfig(
       'must be "technical" (the garden renderer is not available yet)',
     );
   }
+  const webhookSection = section(root, "webhooks", [
+    "enabled",
+    "host",
+    "port",
+    "secretEnv",
+    "safetyPollSeconds",
+  ]);
+  const webhooksEnabled = boolean(
+    "/webhooks/enabled",
+    webhookSection.enabled,
+    false,
+  );
+  let webhookHost: Config["webhooks"]["host"] = "127.0.0.1";
+  if (webhookSection.host !== undefined) {
+    if (
+      typeof webhookSection.host === "string" &&
+      (LOOPBACK_HOSTS as readonly string[]).includes(webhookSection.host)
+    ) {
+      webhookHost = webhookSection.host as Config["webhooks"]["host"];
+    } else {
+      err(
+        "/webhooks/host",
+        "must be a loopback address; expose the receiver through a tunnel or reverse proxy you run",
+      );
+    }
+  }
+  const webhookPort = integer(
+    "/webhooks/port",
+    webhookSection.port,
+    1,
+    65535,
+    4785,
+  );
+  let secretEnv = "GIT_GARDEN_WEBHOOK_SECRET";
+  if (webhookSection.secretEnv !== undefined) {
+    if (
+      typeof webhookSection.secretEnv !== "string" ||
+      !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(webhookSection.secretEnv)
+    ) {
+      err(
+        "/webhooks/secretEnv",
+        "must be an environment variable name; the secret itself never goes in this file",
+      );
+    } else {
+      secretEnv = webhookSection.secretEnv;
+    }
+  }
+  const safetyPollSeconds = integer(
+    "/webhooks/safetyPollSeconds",
+    webhookSection.safetyPollSeconds,
+    60,
+    86400,
+    300,
+  );
   const environment = section(root, "environment", ["enabled"]);
   const environmentEnabled = boolean(
     "/environment/enabled",
@@ -350,7 +428,14 @@ export function validateConfig(
     const ids = new Map<string, number>();
     root.repositories.forEach((entry: unknown, i) => {
       const p = at("/repositories", i);
-      const repo = object(p, entry, ["id", "label", "path", "url", "remotes"]);
+      const repo = object(p, entry, [
+        "id",
+        "label",
+        "path",
+        "url",
+        "remotes",
+        "github",
+      ]);
       if (!repo) return;
       const id = repo.id;
       if (typeof id !== "string" || !ID_PATTERN.test(id)) {
@@ -430,6 +515,19 @@ export function validateConfig(
           ];
         }
       }
+      let github: string | undefined;
+      if (repo.github !== undefined) {
+        if (typeof repo.github !== "string" || !GITHUB_REPO.test(repo.github)) {
+          err(
+            `${p}/github`,
+            'must be a GitHub repository such as "owner/name"',
+          );
+        } else {
+          github = repo.github;
+        }
+      } else if (url !== undefined) {
+        github = githubFromUrl(url);
+      }
       if (typeof id === "string") {
         const label =
           typeof repo.label === "string" && repo.label.trim() !== ""
@@ -441,6 +539,7 @@ export function validateConfig(
           remotes,
           ...(path === undefined ? {} : { path }),
           ...(url === undefined ? {} : { url }),
+          ...(github === undefined ? {} : { github }),
         });
       }
     });
@@ -457,6 +556,13 @@ export function validateConfig(
       display: { renderer: "technical", reducedMotion },
       repositories,
       environment: { enabled: environmentEnabled },
+      webhooks: {
+        enabled: webhooksEnabled,
+        host: webhookHost,
+        port: webhookPort,
+        secretEnv,
+        safetyPollSeconds,
+      },
     },
   };
 }

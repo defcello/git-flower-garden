@@ -23,6 +23,7 @@ import type {
   GraphNodeJson,
   RepositoriesJson,
   RepositoryStatusJson,
+  WebhooksJson,
   WorktreeJson,
 } from "../api/types.ts";
 import type {
@@ -120,6 +121,7 @@ export interface ConfigHealth {
   configErrors: string[];
   restartNeeded: string[];
   notice?: string;
+  webhooks?: WebhooksJson;
 }
 
 export function repositoriesJson(
@@ -140,6 +142,12 @@ export function repositoriesJson(
       .map((id) => statusJson(service.view(id) as RepositoryView)),
     configErrors: health.configErrors,
     restartNeeded: health.restartNeeded,
+    webhooks: health.webhooks ?? {
+      state: "off",
+      url: null,
+      diagnostic: null,
+      lastEvent: null,
+    },
   };
 }
 

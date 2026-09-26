@@ -20,11 +20,13 @@ import {
   RepositoryService,
   type ServiceOptions,
 } from "../monitor/repository-service.ts";
+import type { WebhooksJson } from "../api/types.ts";
 import {
   startServer,
   type ConfigHealth,
   type StartedServer,
 } from "./server.ts";
+import { startWebhookReceiver, type WebhookReceiver } from "./webhook.ts";
 
 export interface RunningApp {
   service: RepositoryService;
@@ -46,6 +48,10 @@ export interface AppOptions extends ServiceOptions {
   configPollMs?: number;
   /** Shown on every page (demo mode). */
   notice?: string;
+  /** Environment to read the webhook secret from (tests). */
+  env?: Readonly<Record<string, string | undefined>>;
+  /** Webhook receiver port override (0 picks a free port). */
+  webhookPort?: number;
   /** Wait until every repository has been read once before listening (default true). */
   waitForFirstRead?: boolean;
 }
@@ -88,13 +94,53 @@ export async function startApp(
     host: config.server.host,
     port: options.port ?? config.server.port,
   };
+  // Optional GitHub push notifications on their own isolated listener.
+  let receiver: WebhookReceiver | null = null;
+  let webhookProblem: string | null = null;
+  const webhookStatus = (): WebhooksJson => {
+    if (!config.webhooks.enabled)
+      return { state: "off", url: null, diagnostic: null, lastEvent: null };
+    if (!receiver)
+      return {
+        state: "error",
+        url: null,
+        diagnostic: webhookProblem,
+        lastEvent: null,
+      };
+    return {
+      state: "listening",
+      url: receiver.url,
+      diagnostic: null,
+      lastEvent: receiver.stats().lastEventAt,
+    };
+  };
+  if (config.webhooks.enabled) {
+    const secret = (options.env ?? process.env)[config.webhooks.secretEnv];
+    if (!secret) {
+      webhookProblem = `Push notifications are enabled, but the environment variable ${config.webhooks.secretEnv} is not set; remotes are polled instead.`;
+    } else {
+      try {
+        receiver = await startWebhookReceiver({
+          host: config.webhooks.host,
+          port: options.webhookPort ?? config.webhooks.port,
+          secret,
+          onInvalidate: (repository) => {
+            service.notifyGithub(repository);
+          },
+        });
+        service.setWebhooksActive(true);
+      } catch (error) {
+        webhookProblem = `The push-notification receiver could not start (${error instanceof Error ? error.message : String(error)}); remotes are polled instead.`;
+      }
+    }
+  }
   const server: StartedServer = await startServer(
     service,
     listen.host,
     listen.port,
     {
       uiDir,
-      health: () => health,
+      health: () => ({ ...health, webhooks: webhookStatus() }),
     },
   );
 
@@ -138,6 +184,8 @@ export async function startApp(
         if (next.server.host !== listen.host) restartNeeded.push("server.host");
         if (options.port === undefined && next.server.port !== listen.port)
           restartNeeded.push("server.port");
+        if (JSON.stringify(next.webhooks) !== JSON.stringify(config.webhooks))
+          restartNeeded.push("webhooks");
         health = { ...health, configErrors: [], restartNeeded };
         await service.applyConfig(next);
         server.hub.publish();
@@ -178,12 +226,13 @@ export async function startApp(
     service,
     url: server.url,
     reloadConfig,
-    health: () => health,
+    health: () => ({ ...health, webhooks: webhookStatus() }),
     close: async () => {
       watcher?.close();
       if (debounce) clearTimeout(debounce);
       if (poll) clearInterval(poll);
       service.stop();
+      await receiver?.close();
       await server.close();
     },
   };

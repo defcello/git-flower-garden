@@ -19,6 +19,7 @@ export interface RemoteStatusJson {
   lastSuccess: number | null;
   nextAttempt: number | null;
   diagnostic: string | null;
+  lastEvent: number | null;
 }
 
 export interface RepositoryStatusJson {
@@ -50,6 +51,16 @@ export interface RepositoriesJson {
   configErrors: string[];
   /** Settings that need a restart to take effect. */
   restartNeeded: string[];
+  /** Optional GitHub push notifications (P1-F). */
+  webhooks: WebhooksJson;
+}
+
+export interface WebhooksJson {
+  state: "off" | "listening" | "error";
+  /** Where the receiver listens (loopback; exposed by the user's tunnel or proxy). */
+  url: string | null;
+  diagnostic: string | null;
+  lastEvent: number | null;
 }
 
 export type InclusionReasonJson =

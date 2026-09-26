@@ -639,3 +639,8 @@ code,
   margin: 6px 0 0;
   padding-left: 18px;
 }
+
+/* Until the first measurement frames the tree, draw nothing rather than a jump. */
+.focus-graph.unframed .graph {
+  visibility: hidden;
+}

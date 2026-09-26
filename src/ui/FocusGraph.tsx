@@ -164,7 +164,8 @@ export function FocusGraph(props: FocusGraphProps) {
       </div>
       <div
         ref={container}
-        className="focus-graph"
+        className={`focus-graph${camera === null ? " unframed" : ""}`}
+        data-framed={camera === null ? "false" : "true"}
         data-scale={cam.scale.toFixed(3)}
         data-x={cam.x.toFixed(1)}
         data-y={cam.y.toFixed(1)}
