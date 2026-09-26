@@ -1,6 +1,6 @@
 # git-garden roadmap
 
-Status: design baseline; implementation has not started. Updated: 2026-09-26.
+Status: P0-A foundation in progress (toolchain, ADRs, fixtures); no graph functionality yet. Updated: 2026-09-26.
 
 This document is the implementation contract for future sessions and contributors. It takes the repository from its initial README and MIT license to a reliable, beautiful, continuously updated garden of Git repositories. Checkboxes describe future work, not completed capabilities. Milestones are dependency gates, not calendar promises.
 
@@ -325,18 +325,18 @@ Dependencies: none. Outcome: reproducible contributor environment and small Git 
 
 ### P0-A: Project foundation
 
-- [ ] Record ADRs for local browser architecture, read-only source policy, exact ancestor interpretation, time-window semantics, and initial rendering stack.
-- [ ] Pin supported Node/Git versions after capability checks; establish TypeScript strict mode, formatting, lint, build, unit-test, and browser-test commands.
-- [ ] Add README contributor setup, `.gitignore`, lockfile, config/cache exclusions, and minimal CI for Windows, macOS, Linux.
-- [ ] Preserve MIT licensing; add contribution and security-reporting guidance without suggesting affiliation with an employer or animation studio.
-- [ ] Add deterministic demo fixtures, with fictional names/messages and no private repository metadata.
+- [x] Record ADRs for local browser architecture, read-only source policy, exact ancestor interpretation, time-window semantics, and initial rendering stack.
+- [ ] Pin supported Node/Git versions after capability checks; establish TypeScript strict mode, formatting, lint, build, unit-test, and browser-test commands. *(All but browser tests done, see ADR 0006. Browser tests arrive with the first UI, per ADR 0005.)*
+- [ ] Add README contributor setup, `.gitignore`, lockfile, config/cache exclusions, and minimal CI for Windows, macOS, Linux. *(Files added. Check this box after the first green CI run on all three OSes.)*
+- [x] Preserve MIT licensing; add contribution and security-reporting guidance without suggesting affiliation with an employer or animation studio.
+- [x] Add deterministic demo fixtures, with fictional names/messages and no private repository metadata.
 
 Exit: a fresh clone can install, build, and run one meaningful test on each CI OS. README identifies implemented versus planned features. No empty framework or success-only test counts as validation.
 
 ### P0-B: Risk probes
 
 - [ ] Demonstrate machine-readable refs, annotated tags, detached/unborn worktrees, and ordered parents using installed Git.
-- [ ] Build fixtures for a fork/merge, old branch heads, three-head ancestry, and a criss-cross merge with multiple bases.
+- [x] Build fixtures for a fork/merge, old branch heads, three-head ancestry, and a criss-cross merge with multiple bases.
 - [ ] Prototype the bitset ancestor selector and an independent exhaustive oracle; record correctness and memory/time observations.
 - [ ] Prove app-owned fetch sees a remote update without changing user refs, index, working files, or Git configuration.
 - [ ] Show one static upward SVG DAG with merged edges and a collapsed old path.
@@ -615,8 +615,8 @@ Open choices intentionally deferred: exact dependency versions, layout-library a
 
 | Gate | Status | Evidence / next step |
 | --- | --- | --- |
-| Design baseline | Documented | This roadmap; no application implementation yet |
-| P0 foundation and risk probes | Not started | Toolchain/ADRs, then Git fixtures and exact selector probe |
+| Design baseline | Documented | This roadmap |
+| P0 foundation and risk probes | In progress | P0-A: ADRs 0001–0006 in `docs/decisions/`; `npm run check` passes locally on Windows; fixture topology verified against `git merge-base` in `tests/fixtures/builder.test.ts`. Open: first CI run on all three OSes, and browser-test command (deferred to first UI). Next: rest of P0-B, starting with the bitset selector and exhaustive oracle. |
 | P1 functional visualization | Not started | P1-A through P1-E; optional P1-F event acceleration |
 | P2 living garden | Not started | Art proof after functional release, then scene/environment |
 | P3 public stable release | Not started | Installation rehearsal and release gates |

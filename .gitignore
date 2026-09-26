@@ -1,0 +1,31 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local git-garden configuration and caches. Configurations name private
+# paths and remotes; caches hold private repository objects. Neither belongs
+# in this repository. Commit only git-garden.example.json.
+git-garden.json
+*.local.json
+.git-garden/
+.cache/
+
+# Materialized demo fixtures (see `npm run fixture`)
+tmp/
+
+# Secrets
+.env
+.env.*
+
+# Editors and operating systems
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

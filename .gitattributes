@@ -1,0 +1,3 @@
+# Keep LF in the repository and working tree on every OS so formatting
+# checks and golden outputs behave identically in Windows CI.
+* text=auto eol=lf
