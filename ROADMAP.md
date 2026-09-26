@@ -327,7 +327,7 @@ Dependencies: none. Outcome: reproducible contributor environment and small Git 
 
 - [x] Record ADRs for local browser architecture, read-only source policy, exact ancestor interpretation, time-window semantics, and initial rendering stack.
 - [ ] Pin supported Node/Git versions after capability checks; establish TypeScript strict mode, formatting, lint, build, unit-test, and browser-test commands. *(All but browser tests done, see ADR 0006. Browser tests arrive with the first UI, per ADR 0005.)*
-- [ ] Add README contributor setup, `.gitignore`, lockfile, config/cache exclusions, and minimal CI for Windows, macOS, Linux. *(Files added. Check this box after the first green CI run on all three OSes.)*
+- [x] Add README contributor setup, `.gitignore`, lockfile, config/cache exclusions, and minimal CI for Windows, macOS, Linux.
 - [x] Preserve MIT licensing; add contribution and security-reporting guidance without suggesting affiliation with an employer or animation studio.
 - [x] Add deterministic demo fixtures, with fictional names/messages and no private repository metadata.
 
@@ -616,7 +616,7 @@ Open choices intentionally deferred: exact dependency versions, layout-library a
 | Gate | Status | Evidence / next step |
 | --- | --- | --- |
 | Design baseline | Documented | This roadmap |
-| P0 foundation and risk probes | In progress | P0-A: ADRs 0001–0006 in `docs/decisions/`; `npm run check` passes locally on Windows; fixture topology verified against `git merge-base` in `tests/fixtures/builder.test.ts`. Open: first CI run on all three OSes, and browser-test command (deferred to first UI). Next: rest of P0-B, starting with the bitset selector and exhaustive oracle. |
+| P0 foundation and risk probes | In progress | P0-A: ADRs 0001–0006 in `docs/decisions/`; `npm run check` passes locally on Windows and in CI run 36222369361 on Ubuntu, Windows, and macOS (26 tests each, Git 2.55; golden fixture OID matched everywhere); fixture topology verified against `git merge-base` in `tests/fixtures/builder.test.ts`. Open: browser-test command (deferred to first UI). Next: rest of P0-B, starting with the bitset selector and exhaustive oracle. |
 | P1 functional visualization | Not started | P1-A through P1-E; optional P1-F event acceleration |
 | P2 living garden | Not started | Art proof after functional release, then scene/environment |
 | P3 public stable release | Not started | Installation rehearsal and release gates |
