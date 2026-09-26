@@ -211,10 +211,128 @@ export const crissCross: FixtureSpec = {
   branches: { main: "left2", side: "right2" },
 };
 
+/**
+ * A tour of everything the technical view must show honestly: years of quiet
+ * history compressed into one dashed edge, an old abandoned branch kept with
+ * its base, a recent fork merged back, an open branch, an annotated release
+ * tag, and an old tag that stays hidden. View it on Tuesday 2026-09-22.
+ */
+export const gardenTour: FixtureSpec = {
+  description:
+    "Garden tour: compressed old history, an old branch, a recent fork and merge, an open branch, tags.",
+  commits: [
+    {
+      name: "a1",
+      message: "Clear the plot",
+      committed: "2024-01-08T10:00:00-05:00",
+    },
+    {
+      name: "a2",
+      parents: ["a1"],
+      message: "Test the soil",
+      committed: "2024-02-12T10:00:00-05:00",
+    },
+    {
+      name: "rock1",
+      parents: ["a2"],
+      message: "Try a rock garden",
+      committed: "2024-03-11T10:00:00-04:00",
+    },
+    {
+      name: "rock2",
+      parents: ["rock1"],
+      message: "Add alpine plants",
+      committed: "2024-03-12T10:00:00-04:00",
+    },
+    {
+      name: "a3",
+      parents: ["a2"],
+      message: "Lay the path",
+      committed: "2024-05-06T10:00:00-04:00",
+    },
+    {
+      name: "a4",
+      parents: ["a3"],
+      message: "Edge the lawn",
+      committed: "2024-09-09T10:00:00-04:00",
+    },
+    {
+      name: "a5",
+      parents: ["a4"],
+      message: "Winterize",
+      committed: "2025-11-17T10:00:00-05:00",
+    },
+    {
+      name: "a6",
+      parents: ["a5"],
+      message: "Order bulbs",
+      committed: "2026-09-10T10:00:00-04:00",
+    },
+    {
+      name: "m1",
+      parents: ["a6"],
+      message: "Prune the hedges",
+      committed: "2026-09-21T09:00:00-04:00",
+    },
+    {
+      name: "t1",
+      parents: ["m1"],
+      message: "Sketch the trellis",
+      committed: "2026-09-21T10:00:00-04:00",
+    },
+    {
+      name: "m2",
+      parents: ["m1"],
+      message: "Mulch the beds",
+      committed: "2026-09-21T11:00:00-04:00",
+    },
+    {
+      name: "t2",
+      parents: ["t1"],
+      message: "Build the trellis",
+      committed: "2026-09-21T13:00:00-04:00",
+    },
+    {
+      name: "merge",
+      parents: ["m2", "t2"],
+      message: "Merge branch 'trellis'",
+      committed: "2026-09-22T09:00:00-04:00",
+    },
+    {
+      name: "h1",
+      parents: ["merge"],
+      message: "Start the herb spiral",
+      committed: "2026-09-22T10:00:00-04:00",
+    },
+    {
+      name: "h2",
+      parents: ["h1"],
+      message: 'Plant <basil> & "thyme"',
+      committed: "2026-09-22T11:00:00-04:00",
+    },
+    {
+      name: "m3",
+      parents: ["merge"],
+      message: "Water everything",
+      committed: "2026-09-22T12:00:00-04:00",
+    },
+  ],
+  branches: { main: "m3", herbs: "h2", "archive/rock-garden": "rock2" },
+  tags: { "v0.9": "a4" },
+  annotatedTags: {
+    "v1.0": {
+      target: "merge",
+      message: "First bloom",
+      tagged: "2026-09-22T09:30:00-04:00",
+    },
+  },
+};
+
 export const demoFixtures = {
   forkMerge,
   oldBranchHead,
   threeHeads,
   crissCross,
+  gardenTour,
 } as const;
 export type DemoFixtureName = keyof typeof demoFixtures;

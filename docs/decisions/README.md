@@ -16,5 +16,6 @@ supersedes the old one and update the roadmap, examples, schema, and tests toget
 | [0006](0006-toolchain-baseline.md) | Node.js 24, TypeScript 6.0, Vitest, ESLint, Prettier; Git 2.36 or newer | Accepted |
 | [0007](0007-ancestor-selector-evidence.md) | Evidence: bitset ancestor selector matches oracle and Git; time and memory measured | Accepted |
 | [0008](0008-git-read-and-fetch-evidence.md) | Evidence: Git machine-readable output and app-owned fetch isolation | Accepted |
+| [0009](0009-visible-graph-and-static-svg.md) | Visible graph, reduced edges, layout, and static SVG | Accepted |
 
 Benchmark and probe evidence (roadmap P0-B onward) also belongs in this directory.

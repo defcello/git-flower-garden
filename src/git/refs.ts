@@ -12,6 +12,7 @@ export interface GitRef {
   shortName: string;
   /** Object the ref points to directly (an annotated tag object for annotated tags). */
   oid: string;
+  /** Git object type of `oid`, or "missing" when the object is unavailable. */
   objectType: string;
   /** Fully peeled target of a tag object, or null for a ref that points at a non-tag. */
   peeledOid: string | null;
@@ -21,12 +22,16 @@ export interface GitRef {
 }
 
 const NAMESPACES = ["refs/heads/", "refs/remotes/", "refs/tags/"];
-const FORMAT = "%(refname)%00%(objecttype)%00%(objectname)%00%(symref)";
+// Names and OIDs only. Asking for-each-ref for object types makes the whole
+// listing fail when a single ref points at a missing object.
+const FORMAT = "%(refname)%00%(objectname)%00%(symref)";
 
 /**
  * Enumerate local branches, remote-tracking branches, and tags. Symbolic refs
  * such as `refs/remotes/origin/HEAD` are aliases, not branches, and are skipped.
  * Stash, notes, replace, and other namespaces are outside the default scope.
+ * A ref whose object is unavailable is reported with objectType "missing"
+ * rather than failing the whole read.
  */
 export async function readRefs(cwd: string): Promise<GitRef[]> {
   const [refOutput, remoteOutput] = await Promise.all([
@@ -40,20 +45,36 @@ export async function readRefs(cwd: string): Promise<GitRef[]> {
 
   const refs: GitRef[] = [];
   for (const line of records(refOutput, "\n")) {
-    const [name, objectType, oid, symref] = line.split("\0");
-    if (!name || !objectType || !oid || symref) continue;
+    const [name, oid, symref] = line.split("\0");
+    if (!name || !oid || symref) continue;
     const classified = classify(name, remotes);
     if (!classified) continue;
     refs.push({
       name,
       ...classified,
       oid,
-      objectType,
+      objectType: "missing",
       peeledOid: null,
       peeledType: null,
-      commitOid: objectType === "commit" ? oid : null,
+      commitOid: null,
     });
   }
+  if (refs.length === 0) return refs;
+
+  // One batch lookup of every direct target; unavailable objects print "<oid> missing".
+  const types = records(
+    await readGit(["cat-file", "--batch-check=%(objecttype)"], {
+      cwd,
+      input: refs.map((ref) => `${ref.oid}\n`).join(""),
+    }),
+    "\n",
+  );
+  refs.forEach((ref, i) => {
+    const line = types[i] ?? "";
+    ref.objectType =
+      line === "" || line.endsWith(" missing") ? "missing" : line;
+    if (ref.objectType === "commit") ref.commitOid = ref.oid;
+  });
 
   const tags = refs.filter((ref) => ref.objectType === "tag");
   if (tags.length > 0) {

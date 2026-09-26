@@ -18,7 +18,8 @@
     "test:watch": "vitest",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm test",
     "fixture": "node tests/fixtures/materialize.ts",
-    "bench:ancestors": "node scripts/bench-ancestors.ts"
+    "bench:ancestors": "node scripts/bench-ancestors.ts",
+    "render:fixture": "node scripts/render-fixture.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

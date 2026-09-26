@@ -15,7 +15,8 @@ real-time technical view to a living garden.
 | Git access | `src/git/`: shell-free Git calls with timeouts, output limits, and redacted errors; read-only readers for repository identity, refs, tags, worktrees, and commits; app-owned remote cache fetch |
 | Demo fixtures | `tests/fixtures/`: deterministic repositories (fork/merge, old branch, three heads, criss-cross) |
 | Ancestor selection prototype | `src/core/ancestor-anchors.ts`: exact common-ancestor anchors, checked against an independent oracle and Git ([evidence](docs/decisions/0007-ancestor-selector-evidence.md)) |
-| Graph selection, monitoring, UI, garden art | Planned; see roadmap Phases 1 and 2 |
+| Graph selection and static rendering | `src/core/`, `src/render/`: business-day window, visible commits with honest compressed edges, deterministic layout, technical SVG ([example](docs/decisions/assets/garden-tour.svg)) |
+| Configuration, live monitoring, interactive UI, garden art | Planned; see roadmap Phases 1 and 2 |
 
 ## Contributor setup
 
@@ -38,8 +39,9 @@ Individual commands:
 | `npm run format` | Apply Prettier formatting |
 | `npm run fixture -- <name> [dir]` | Write a demo repository to `tmp/fixtures/<name>` (or `dir`) to look at |
 | `npm run bench:ancestors` | Benchmark the ancestor selector (`-- --quick` for a smoke run) |
+| `npm run render:fixture -- <name> <now> <out.svg>` | Render a demo repository to a static SVG as of a given time |
 
-Demo fixture names: `forkMerge`, `oldBranchHead`, `threeHeads`, `crissCross`. For
+Demo fixture names: `forkMerge`, `oldBranchHead`, `threeHeads`, `crissCross`, `gardenTour`. For
 example, `npm run fixture -- crissCross` followed by
 `git -C tmp/fixtures/crissCross log --graph --oneline --all`.
 
