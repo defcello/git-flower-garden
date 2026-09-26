@@ -1,6 +1,6 @@
 {
   "name": "git-garden",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Visualize Git activity as a garden of commits.",
   "license": "MIT",
@@ -26,7 +26,8 @@
     "git-garden.example.json",
     "README.md",
     "LICENSE",
-    "docs/user-guide.md"
+    "docs/user-guide.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=24"
