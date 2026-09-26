@@ -11,7 +11,7 @@
  *
  * Without --config, the per-user configuration file is used.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { request } from "node:http";
 import { dirname, resolve } from "node:path";
@@ -425,10 +425,18 @@ export async function main(
 }
 
 // Run when executed directly (not when imported by tests).
-const invoked = process.argv[1] === undefined ? "" : resolve(process.argv[1]);
+// Compare real paths: npm installs the command as a symlink (macOS, Linux),
+// and temporary directories can be symlinks too (macOS /var -> /private/var).
+function realPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
 if (
-  invoked === resolve(import.meta.filename) ||
-  invoked === resolve(import.meta.filename).replace(/\.ts$/, ".js")
+  process.argv[1] !== undefined &&
+  realPath(process.argv[1]) === realPath(import.meta.filename)
 ) {
   process.exitCode = await main(process.argv.slice(2));
 }

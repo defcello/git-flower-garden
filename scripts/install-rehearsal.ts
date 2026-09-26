@@ -158,6 +158,13 @@ try {
   console.log(versionOut);
   if (versionOut !== `git-garden ${installed.version}`)
     throw new Error(`unexpected version output: ${versionOut}`);
+  if (process.platform !== "win32") {
+    // The installed command is a symlink to dist/cli.js, run via its shebang.
+    const viaShim = run(shim, ["--version"], app).trim();
+    console.log(`${viaShim} (via the installed symlink)`);
+    if (viaShim !== versionOut)
+      throw new Error(`the installed command printed: ${viaShim}`);
+  }
 
   step("init-config and validate-config against a real repository");
   const config = join(work, "config.json");
@@ -199,7 +206,10 @@ try {
       if (!script || (await get(new URL(script, url).href)).status !== 200)
         throw new Error("UI script not served");
       await waitFor("repository ready", async () =>
-        (await get(`${url}api/repositories`)).body.includes('"state":"ready"'),
+        // CI checkouts are shallow, which is reported honestly as "incomplete".
+        /"state":"(ready|incomplete)"/.test(
+          (await get(`${url}api/repositories`)).body,
+        ),
       );
       console.log(`served ${url}: health ok, UI ok, repository ready`);
     },
