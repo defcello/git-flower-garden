@@ -147,6 +147,53 @@ describe("loopback server", () => {
     expect(page.body).toContain('src="/api/repositories/tour/graph.svg');
   });
 
+  it("finds old tags and temporarily reveals their commits with connecting context", async () => {
+    const tags = JSON.parse(
+      (await get(`${server.url}api/repositories/tour/tags?q=V0`)).body,
+    ) as {
+      tags: { shortName: string; commitOid: string }[];
+    };
+    expect(tags.tags.map((t) => t.shortName)).toEqual(["v0.9"]);
+    const oldOid = tags.tags[0]?.commitOid as string;
+
+    type Graph = {
+      revealed: string[];
+      completeness: { coherent: boolean };
+      nodes: { oid: string; reasons: string[]; subject: string }[];
+      edges: {
+        child: string;
+        parent: string;
+        kind: string;
+        hidden: number | null;
+      }[];
+    };
+    const plain = JSON.parse(
+      (await get(`${server.url}api/repositories/tour/graph`)).body,
+    ) as Graph;
+    expect(plain.nodes.some((n) => n.oid === oldOid)).toBe(false);
+    expect(plain.completeness.coherent).toBe(true);
+
+    const revealed = JSON.parse(
+      (
+        await get(
+          `${server.url}api/repositories/tour/graph?reveal=${oldOid},not-an-oid`,
+        )
+      ).body,
+    ) as Graph;
+    expect(revealed.revealed).toEqual([oldOid]);
+    const node = revealed.nodes.find((n) => n.oid === oldOid);
+    expect(node).toMatchObject({
+      reasons: ["inspection"],
+      subject: "Edge the lawn",
+    });
+    // The 4-commit compressed run is now split around the revealed commit.
+    const collapsed = revealed.edges
+      .filter((e) => e.kind === "collapsed")
+      .map((e) => e.hidden)
+      .sort();
+    expect(collapsed).toEqual([1, 1, 2]);
+  });
+
   it("answers an empty repository with an empty graph, not an error", async () => {
     const reply = await get(`${server.url}api/repositories/empty/graph`);
     expect(reply.status).toBe(200);

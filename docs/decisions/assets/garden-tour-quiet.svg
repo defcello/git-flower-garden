@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 324" width="496" height="324" role="img" aria-labelledby="t d">
+<title id="t">Garden tour: compressed old history, an old branch, a recent fork and merge, an open branch, tags. Viewed 2026-10-07T12:00:00-04:00.</title>
+<desc id="d">5 visible commits of 16 reachable. Parents are drawn below children.</desc>
+<style>
+      svg { background: #fbfaf7; font: 12px system-ui, sans-serif; }
+      .edge { fill: none; stroke: #4a5a4f; stroke-width: 2; }
+      .edge.collapsed { stroke-dasharray: 2 5; stroke-linecap: round; stroke-width: 2.5; }
+      .tail { stroke: #4a5a4f; stroke-width: 2; stroke-dasharray: 2 5; stroke-linecap: round; }
+      .tail.boundary { stroke-dasharray: none; stroke: #9a3b2a; }
+      .node { stroke: #1f2a22; stroke-width: 1.5; }
+      .node.head { fill: #2f7d4f; } .node.recent { fill: #7fb08a; }
+      .node.ancestor, .node.other { fill: #fbfaf7; }
+      .ring { fill: none; stroke: #2f7d4f; stroke-width: 1.5; }
+      .worktree { fill: #c28a2c; stroke: #1f2a22; }
+      .boundary { fill: none; stroke: #9a3b2a; stroke-width: 1.5; }
+      .hidden-count { fill: #4a5a4f; font-size: 10px; }
+      .badge rect { fill: #fbfaf7; stroke: #4a5a4f; stroke-dasharray: 2 2; }
+      .badge text { fill: #1f2a22; font-size: 9px; text-anchor: middle; }
+      .refs { fill: #1f2a22; font-weight: 600; } .subject { fill: #4a5a4f; }
+      .legend { fill: #4a5a4f; }
+    </style>
+<path class="edge direct" d="M24 24 L24 96"/>
+<path class="edge collapsed" d="M52 132 C52 150 24 150 24 168"/>
+<g class="badge"><title>Hidden ancestry: 1 commit</title><rect x="45" y="143" width="14" height="14" rx="7"/><text x="52" y="153.5">1</text></g>
+<path class="edge collapsed" d="M52 60 C52 78 24 78 24 96"/>
+<g class="badge"><title>Hidden ancestry: 1 commit</title><rect x="45" y="71" width="14" height="14" rx="7"/><text x="52" y="81.5">1</text></g>
+<path class="edge collapsed" d="M24 96 L24 168"/>
+<g class="badge"><title>Hidden ancestry: multiple paths</title><rect x="17" y="107" width="14" height="14" rx="7"/><text x="24" y="117.5">…</text></g>
+<line class="tail" x1="24" y1="168" x2="24" y2="196.8"/>
+<text class="hidden-count" x="30" y="196.8">older history: 1 hidden</text>
+<g class="commit" data-oid="37253ef7c10519b9cbc32615d8e63af0246f1a11"><title>37253ef7c10519b9cbc32615d8e63af0246f1a11
+Water everything
+Included as: head, worktree</title>
+<circle class="node head" cx="24" cy="24" r="7"/><circle class="ring" cx="24" cy="24" r="10"/><rect class="worktree" x="32" y="12" width="7" height="7"/>
+<text x="90" y="28">
+<tspan class="refs">main </tspan>
+<tspan class="subject">37253ef Water everything</tspan></text></g>
+<g class="commit" data-oid="9ab3a58fce1b481132ea21e3023103f4fc394e75"><title>9ab3a58fce1b481132ea21e3023103f4fc394e75
+Plant &lt;basil&gt; &amp; &quot;thyme&quot;
+Included as: head</title>
+<circle class="node head" cx="52" cy="60" r="7"/><circle class="ring" cx="52" cy="60" r="10"/>
+<text x="90" y="64">
+<tspan class="refs">herbs </tspan>
+<tspan class="subject">9ab3a58 Plant &lt;basil&gt; &amp; &quot;thyme&quot;</tspan></text></g>
+<g class="commit" data-oid="db8eb48aab6c4a57221b05388a381ce98c9767ed"><title>db8eb48aab6c4a57221b05388a381ce98c9767ed
+Merge branch &apos;trellis&apos;
+Included as: ancestor</title>
+<path class="node ancestor" d="M24 89 L31 96 L24 103 L17 96 Z"/>
+<text x="90" y="100">
+<tspan class="refs">tag: v1.0 </tspan>
+<tspan class="subject">db8eb48 Merge branch &apos;trellis&apos;</tspan></text></g>
+<g class="commit" data-oid="94f0cf2cab77e0c9e10deb6f6f469e3b74527669"><title>94f0cf2cab77e0c9e10deb6f6f469e3b74527669
+Add alpine plants
+Included as: head</title>
+<circle class="node head" cx="52" cy="132" r="7"/><circle class="ring" cx="52" cy="132" r="10"/>
+<text x="90" y="136">
+<tspan class="refs">archive/rock-garden </tspan>
+<tspan class="subject">94f0cf2 Add alpine plants</tspan></text></g>
+<g class="commit" data-oid="adba6158204c67309ef3f7403f4513e28d1f97b8"><title>adba6158204c67309ef3f7403f4513e28d1f97b8
+Test the soil
+Included as: ancestor</title>
+<path class="node ancestor" d="M24 161 L31 168 L24 175 L17 168 Z"/>
+<text x="90" y="172">
+
+<tspan class="subject">adba615 Test the soil</tspan></text></g>
+<g class="legend" transform="translate(12 246)">
+<text y="0">Older commits are lower. Legend:</text>
+<circle class="node head" cx="8" cy="18" r="7"/><circle class="ring" cx="8" cy="18" r="10"/><text x="24" y="22">branch head</text>
+<circle class="node recent" cx="118" cy="18" r="5"/><text x="130" y="22">recent commit</text>
+<path class="node ancestor" d="M228 11 L235 18 L228 25 L221 18 Z"/><text x="242" y="22">common ancestor</text>
+<rect class="worktree" x="350" y="14" width="7" height="7"/><text x="362" y="22">worktree HEAD</text>
+<line class="edge" x1="0" y1="44" x2="30" y2="44"/><text x="38" y="48">parent</text>
+<line class="edge collapsed" x1="100" y1="44" x2="130" y2="44"/><text x="138" y="48">hidden ancestry; badge = hidden commits (… = multiple paths)</text>
+<line class="tail boundary" x1="100" y1="66" x2="130" y2="66"/><text x="138" y="70">missing history (shallow or unavailable)</text>
+</g></svg>

@@ -365,10 +365,10 @@ Dependencies: P1-A; use a pure core with no browser or network requirements.
 
 - [x] Implement business-day calculation using an injectable clock/time-zone boundary.
 - [x] Implement reachable DAG indexing, exact head-subset merge-base union, mandatory node selection, and reduced edges.
-- [ ] Attach inclusion reasons and completeness metadata; implement old-tag lookup/temporary expansion.
-- [ ] Test timestamp inversion, DST, weekends, custom weekdays, old heads, duplicate heads, disconnected histories, criss-cross, octopus merges, and shallow boundaries.
+- [x] Attach inclusion reasons and completeness metadata; implement old-tag lookup/temporary expansion.
+- [x] Test timestamp inversion, DST, weekends, custom weekdays, old heads, duplicate heads, disconnected histories, criss-cross, octopus merges, and shallow boundaries.
 - [x] Prove reduced edges preserve selected-node reachability in generated small DAGs; verify all mandatory nodes are retained.
-- [ ] Benchmark a long old history with very few selected nodes; show that rendering stays compact even if initial indexing is expensive.
+- [x] Benchmark a long old history with very few selected nodes; show that rendering stays compact even if initial indexing is expensive.
 
 Exit: independent oracle agrees for generated small cases, all required nodes are present, no false ancestry appears, and the exact quiet-repository behavior is documented with screenshots/fixture outputs.
 
@@ -617,7 +617,7 @@ Open choices intentionally deferred: exact dependency versions, layout-library a
 | --- | --- | --- |
 | Design baseline | Documented | This roadmap |
 | P0 foundation and risk probes | Done (browser tests deferred) | P0-A: ADRs 0001–0006 in `docs/decisions/`; `npm run check` passes locally on Windows and in CI run 36222369361 on Ubuntu, Windows, and macOS (26 tests each, Git 2.55; golden fixture OID matched everywhere); fixture topology verified against `git merge-base` in `tests/fixtures/builder.test.ts`. Open: browser-test command (deferred to first UI). P0-B: ancestor selector matches an exhaustive oracle (2,000 random DAGs) and `git merge-base` (demo fixtures and 12 random repositories), green in CI run 36244010015 on all three OSes (43 tests each); deliberate bugs are caught; stress case (1M commits, 1,000 heads) takes about 3.5 s and 650 MiB on a 4 GB Core m3 ([ADR 0007](docs/decisions/0007-ancestor-selector-evidence.md)). Git readers (refs, peeled tags, worktrees, topology, length-framed commits) verified against fixture truth and independent Git commands; app-owned cache fetch leaves the user's clone byte-identical ([ADR 0008](docs/decisions/0008-git-read-and-fetch-evidence.md)). Static SVG of `gardenTour` through the full read-only pipeline, with reduced edges and layout checked by independent oracles ([ADR 0009](docs/decisions/0009-visible-graph-and-static-svg.md)). P0-B complete. |
-| P1 functional visualization | In progress | P1-A done: strict config with line/column errors, validated against the JSON Schema via Ajv; `init-config`/`validate-config`/`serve`; loopback server with Host/Origin checks and a local SVG preview; isolated per-source status. P1-B core landed early for the SVG probe. Next: finish P1-B (completeness metadata, old-tag lookup, remaining fixtures, long-history benchmark). |
+| P1 functional visualization | In progress | P1-A done: strict config with line/column errors, validated against the JSON Schema via Ajv; `init-config`/`validate-config`/`serve`; loopback server with Host/Origin checks and a local SVG preview; isolated per-source status. P1-B core landed early for the SVG probe. P1-B done: every checklist item has an oracle-checked test or measurement; quiet repositories keep a compact skeleton (100k-commit history renders 7 commits in 300 px; cold read and selection about 3.3 s) ([ADR 0010](docs/decisions/0010-quiet-history-and-pipeline-benchmark.md)). Next: P1-C interactive technical renderer. |
 | P2 living garden | Not started | Art proof after functional release, then scene/environment |
 | P3 public stable release | Not started | Installation rehearsal and release gates |
 

@@ -17,5 +17,6 @@ supersedes the old one and update the roadmap, examples, schema, and tests toget
 | [0007](0007-ancestor-selector-evidence.md) | Evidence: bitset ancestor selector matches oracle and Git; time and memory measured | Accepted |
 | [0008](0008-git-read-and-fetch-evidence.md) | Evidence: Git machine-readable output and app-owned fetch isolation | Accepted |
 | [0009](0009-visible-graph-and-static-svg.md) | Visible graph, reduced edges, layout, and static SVG | Accepted |
+| [0010](0010-quiet-history-and-pipeline-benchmark.md) | Evidence: quiet repositories and graph pipeline cost | Accepted |
 
 Benchmark and probe evidence (roadmap P0-B onward) also belongs in this directory.

@@ -246,3 +246,87 @@ describe("agrees with a path-enumeration oracle", () => {
     expect(missingTails).toBeGreaterThan(100);
   }, 60_000);
 });
+
+describe("named fixture cases (roadmap section 12)", () => {
+  const window: HistoryWindow = {
+    startMs: 1_000_000_000,
+    endMs: 2_000_000_000,
+    businessDates: [],
+    timeZone: "UTC",
+  };
+  const commits = (entries: [string, string[], number][]) =>
+    new Map<string, TopologyCommit>(
+      entries.map(([oid, parents, t]) => [oid, { parents, committerTime: t }]),
+    );
+
+  it("keeps a recent ancestor below an old-dated child (timestamp inversion)", () => {
+    // tip has a skewed, ancient clock; its parent is genuinely recent.
+    const g = buildVisibleGraph({
+      commits: commits([
+        ["root", [], 100],
+        ["recentParent", ["root"], 1_500_000],
+        ["tip", ["recentParent"], 200],
+      ]),
+      heads: [{ id: "main", commitOid: "tip" }],
+      window,
+    });
+    expect(g.nodes.get("recentParent")?.reasons).toEqual(["recent"]);
+    expect(edgeList(g)).toEqual(["tip->recentParent direct"]);
+  });
+
+  it("shows several refs on one commit as one node", () => {
+    const g = buildVisibleGraph({
+      commits: commits([
+        ["a", [], 100],
+        ["b", ["a"], 200],
+      ]),
+      heads: [
+        { id: "refs/heads/main", commitOid: "b" },
+        { id: "refs/remotes/origin/main", commitOid: "b" },
+      ],
+      window,
+    });
+    expect([...g.nodes.keys()]).toEqual(["b"]);
+    expect(g.nodes.get("b")?.reasons).toEqual(["head"]);
+  });
+
+  it("keeps every parent of an octopus merge in order", () => {
+    const g = buildVisibleGraph({
+      commits: commits([
+        ["r", [], 1_100_000],
+        ["p", ["r"], 1_200_000],
+        ["q", ["r"], 1_200_001],
+        ["s", ["r"], 1_200_002],
+        ["o", ["p", "q", "s"], 1_300_000],
+      ]),
+      heads: [{ id: "main", commitOid: "o" }],
+      window,
+    });
+    const fromOctopus = g.edges.filter((e) => e.child === "o");
+    expect(fromOctopus.map((e) => [e.parent, e.parentIndexes])).toEqual([
+      ["p", [0]],
+      ["q", [1]],
+      ["s", [2]],
+    ]);
+  });
+
+  it("never connects unrelated histories", () => {
+    const g = buildVisibleGraph({
+      commits: commits([
+        ["a1", [], 1_100_000],
+        ["a2", ["a1"], 1_200_000],
+        ["b1", [], 1_100_000],
+        ["b2", ["b1"], 1_200_000],
+      ]),
+      heads: [
+        { id: "a", commitOid: "a2" },
+        { id: "b", commitOid: "b2" },
+      ],
+      window,
+    });
+    expect(edgeList(g)).toEqual(["a2->a1 direct", "b2->b1 direct"]);
+    expect(
+      [...g.nodes.values()].some((n) => n.reasons.includes("ancestor")),
+    ).toBe(false);
+  });
+});

@@ -90,6 +90,8 @@ export function graphJson(view: GraphView) {
     revision: view.revision,
     window: graph.window,
     reachableCount: graph.reachableCount,
+    completeness: view.completeness,
+    revealed: view.revealed,
     nodes: [...layout.nodes.values()].map((n) => {
       const node = graph.nodes.get(n.oid);
       const d = view.details.get(n.oid);
@@ -201,7 +203,9 @@ export function createHandler(service: RepositoryService, port: () => number) {
         return;
       }
       const match =
-        /^\/api\/repositories\/([^/]+)\/(graph|graph\.svg|status)$/.exec(path);
+        /^\/api\/repositories\/([^/]+)\/(graph|graph\.svg|status|tags)$/.exec(
+          path,
+        );
       if (match) {
         const id = decodeURIComponent(match[1] as string);
         const view = service.view(id);
@@ -215,7 +219,24 @@ export function createHandler(service: RepositoryService, port: () => number) {
           sendJson(res, 200, statusJson(view));
           return;
         }
-        const graph = await service.graph(id);
+        if (match[2] === "tags") {
+          const tags = service.tags(id, url.searchParams.get("q") ?? "");
+          if (!tags) {
+            sendJson(res, 503, {
+              error: "No snapshot yet",
+              status: view.status,
+            });
+            return;
+          }
+          sendJson(res, 200, { id, tags });
+          return;
+        }
+        // ?reveal=<oid>[,<oid>…] temporarily shows commits, e.g. an old tag's target.
+        const reveal = (url.searchParams.get("reveal") ?? "")
+          .split(",")
+          .filter((oid) => /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(oid))
+          .slice(0, 20);
+        const graph = await service.graph(id, reveal);
         if (!graph) {
           sendJson(res, 503, { error: "No snapshot yet", status: view.status });
           return;

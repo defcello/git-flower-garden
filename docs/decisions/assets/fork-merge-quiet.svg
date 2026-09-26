@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 468 216" width="468" height="216" role="img" aria-labelledby="t d">
+<title id="t">Fork and merge: `trellis` forks from main and merges back with a two-parent merge. Viewed 2026-10-07T12:00:00-04:00.</title>
+<desc id="d">2 visible commits of 6 reachable. Parents are drawn below children.</desc>
+<style>
+      svg { background: #fbfaf7; font: 12px system-ui, sans-serif; }
+      .edge { fill: none; stroke: #4a5a4f; stroke-width: 2; }
+      .edge.collapsed { stroke-dasharray: 2 5; stroke-linecap: round; stroke-width: 2.5; }
+      .tail { stroke: #4a5a4f; stroke-width: 2; stroke-dasharray: 2 5; stroke-linecap: round; }
+      .tail.boundary { stroke-dasharray: none; stroke: #9a3b2a; }
+      .node { stroke: #1f2a22; stroke-width: 1.5; }
+      .node.head { fill: #2f7d4f; } .node.recent { fill: #7fb08a; }
+      .node.ancestor, .node.other { fill: #fbfaf7; }
+      .ring { fill: none; stroke: #2f7d4f; stroke-width: 1.5; }
+      .worktree { fill: #c28a2c; stroke: #1f2a22; }
+      .boundary { fill: none; stroke: #9a3b2a; stroke-width: 1.5; }
+      .hidden-count { fill: #4a5a4f; font-size: 10px; }
+      .badge rect { fill: #fbfaf7; stroke: #4a5a4f; stroke-dasharray: 2 2; }
+      .badge text { fill: #1f2a22; font-size: 9px; text-anchor: middle; }
+      .refs { fill: #1f2a22; font-weight: 600; } .subject { fill: #4a5a4f; }
+      .legend { fill: #4a5a4f; }
+    </style>
+<path class="edge direct" d="M24 24 L24 60"/>
+<line class="tail" x1="24" y1="24" x2="38" y2="52.8"/>
+<text class="hidden-count" x="44" y="52.8">older history: 3 hidden</text>
+<line class="tail" x1="24" y1="60" x2="24" y2="88.8"/>
+<text class="hidden-count" x="30" y="88.8">older history: 3 hidden</text>
+<g class="commit" data-oid="76aed088c02e114398e6ffb01b68cc10c89b443a"><title>76aed088c02e114398e6ffb01b68cc10c89b443a
+Merge branch &apos;trellis&apos;
+Included as: head, worktree</title>
+<circle class="node head" cx="24" cy="24" r="7"/><circle class="ring" cx="24" cy="24" r="10"/><rect class="worktree" x="32" y="12" width="7" height="7"/>
+<text x="62" y="28">
+<tspan class="refs">main </tspan>
+<tspan class="subject">76aed08 Merge branch &apos;trellis&apos;</tspan></text></g>
+<g class="commit" data-oid="ce16dc72bcdd6ccd90d820cd4643c7c0a950699f"><title>ce16dc72bcdd6ccd90d820cd4643c7c0a950699f
+Build the trellis
+Included as: head, ancestor</title>
+<circle class="node head" cx="24" cy="60" r="7"/><circle class="ring" cx="24" cy="60" r="10"/>
+<text x="62" y="64">
+<tspan class="refs">trellis </tspan>
+<tspan class="subject">ce16dc7 Build the trellis</tspan></text></g>
+<g class="legend" transform="translate(12 138)">
+<text y="0">Older commits are lower. Legend:</text>
+<circle class="node head" cx="8" cy="18" r="7"/><circle class="ring" cx="8" cy="18" r="10"/><text x="24" y="22">branch head</text>
+<circle class="node recent" cx="118" cy="18" r="5"/><text x="130" y="22">recent commit</text>
+<path class="node ancestor" d="M228 11 L235 18 L228 25 L221 18 Z"/><text x="242" y="22">common ancestor</text>
+<rect class="worktree" x="350" y="14" width="7" height="7"/><text x="362" y="22">worktree HEAD</text>
+<line class="edge" x1="0" y1="44" x2="30" y2="44"/><text x="38" y="48">parent</text>
+<line class="edge collapsed" x1="100" y1="44" x2="130" y2="44"/><text x="138" y="48">hidden ancestry; badge = hidden commits (… = multiple paths)</text>
+<line class="tail boundary" x1="100" y1="66" x2="130" y2="66"/><text x="138" y="70">missing history (shallow or unavailable)</text>
+</g></svg>

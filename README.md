@@ -58,6 +58,7 @@ Individual commands:
 | `npm run fixture -- <name> [dir]` | Write a demo repository to `tmp/fixtures/<name>` (or `dir`) to look at |
 | `npm run bench:ancestors` | Benchmark the ancestor selector (`-- --quick` for a smoke run) |
 | `npm run render:fixture -- <name> <now> <out.svg>` | Render a demo repository to a static SVG as of a given time |
+| `npm run bench:graph` | Benchmark the full pipeline on a long quiet history (`-- --quick` for a smoke run) |
 
 Demo fixture names: `forkMerge`, `oldBranchHead`, `threeHeads`, `crissCross`, `gardenTour`. For
 example, `npm run fixture -- crissCross` followed by

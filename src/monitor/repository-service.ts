@@ -48,6 +48,18 @@ export interface GraphView {
   layout: Layout;
   labels: Map<string, string[]>;
   details: Map<string, CommitDetails>;
+  completeness: RepositorySnapshot["completeness"];
+  /** Commits revealed for inspection that exist in this repository. */
+  revealed: string[];
+}
+
+export interface TagSummary {
+  name: string;
+  shortName: string;
+  /** Commit the tag resolves to, or null for tags of trees/blobs/missing objects. */
+  commitOid: string | null;
+  objectType: string;
+  peeledType: string | null;
 }
 
 interface Entry {
@@ -55,6 +67,8 @@ interface Entry {
   view: RepositoryView;
   inFlight: Promise<RepositoryView> | null;
   details: Map<string, CommitDetails>;
+  /** The most recent graph and the inputs it was computed from. */
+  lastGraph: { key: string; view: GraphView } | null;
 }
 
 export interface ServiceOptions {
@@ -80,6 +94,7 @@ export class RepositoryService {
       config: repo,
       inFlight: null,
       details: new Map(),
+      lastGraph: null,
       view: {
         id: repo.id,
         label: repo.label,
@@ -178,9 +193,23 @@ export class RepositoryService {
     const entry = this.entries.get(id);
     const snapshot = entry?.view.snapshot;
     if (!entry || !snapshot) return undefined;
-    const window = historyWindow(this.config.history, this.now());
+    const now = this.now();
+    const window = historyWindow(this.config.history, now);
+    const revealed = [...new Set(reveal)]
+      .filter((oid) => snapshot.topology.commits.has(oid))
+      .sort();
+    // Selection depends on the snapshot, the window, the reveal set, and
+    // (for future-dated commits) the current minute. Reuse the last result
+    // when none of those changed: large histories take seconds to select.
+    const key = [
+      entry.view.revision,
+      window.startMs,
+      Math.floor(now / 60_000),
+      revealed.join(","),
+    ].join("|");
+    if (entry.lastGraph?.key === key) return entry.lastGraph.view;
     const graph = buildVisibleGraph(
-      snapshotGraphInput(snapshot, window, reveal),
+      snapshotGraphInput(snapshot, window, revealed),
     );
     const layout = layoutGraph(graph, { priority: lanePriority(snapshot) });
     const missing = [...graph.nodes.keys()].filter(
@@ -198,14 +227,41 @@ export class RepositoryService {
         return d ? [[oid, d] as const] : [];
       }),
     );
-    return {
+    // Keep only what is visible so an all-day monitor's cache stays bounded.
+    entry.details = new Map(details);
+    const view: GraphView = {
       id,
       revision: entry.view.revision,
       graph,
       layout,
       labels: refLabels(snapshot),
       details,
+      completeness: snapshot.completeness,
+      revealed,
     };
+    entry.lastGraph = { key, view };
+    return view;
+  }
+
+  /**
+   * Search every tag, including old ones whose commits are hidden (roadmap
+   * section 4.4). Matching is a case-insensitive substring of the short name.
+   */
+  tags(id: string, query = "", limit = 200): TagSummary[] | undefined {
+    const snapshot = this.entries.get(id)?.view.snapshot;
+    if (!snapshot) return undefined;
+    const q = query.toLowerCase();
+    return snapshot.refs
+      .filter((r) => r.kind === "tag" && r.shortName.toLowerCase().includes(q))
+      .sort((a, b) => (a.shortName < b.shortName ? -1 : 1))
+      .slice(0, limit)
+      .map((r) => ({
+        name: r.name,
+        shortName: r.shortName,
+        commitOid: r.commitOid,
+        objectType: r.objectType,
+        peeledType: r.peeledType,
+      }));
   }
 }
 
