@@ -7,8 +7,8 @@
  */
 import { mkdir, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { buildFixture } from "./builder.ts";
-import { demoFixtures, type DemoFixtureName } from "./demo.ts";
+import { buildFixture } from "../../src/demo/builder.ts";
+import { demoFixtures, type DemoFixtureName } from "../../src/demo/fixtures.ts";
 
 const [name, directory] = process.argv.slice(2);
 const names = Object.keys(demoFixtures);

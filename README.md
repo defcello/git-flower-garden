@@ -1,10 +1,13 @@
 # git-garden
 Visualize Git activity as a garden of commits.
 
-git-garden is in early development. It cannot visualize a repository yet. The
-[roadmap](ROADMAP.md) describes the architecture, Git graph semantics,
-implementation phases, and acceptance criteria. It also lays out the path from a
-real-time technical view to a living garden.
+git-garden watches your Git repositories and shows their live commit graphs in
+a browser: every branch head, the common ancestors that connect them, and the
+last few business days of work, with older history compressed honestly. It
+reads your repositories and never changes them. Version 0.1 is the technical
+view; the garden artwork (flowering bushes on a Blue Ridge hillside) is
+Phase 2 of the [roadmap](ROADMAP.md), which also describes the architecture,
+Git graph semantics, and acceptance criteria.
 
 ## What exists today
 
@@ -19,9 +22,16 @@ real-time technical view to a living garden.
 | Configuration and service | `git-garden init-config`, `validate-config`, `serve`: strict versioned config ([schema](git-garden.schema.json), [example](git-garden.example.json)); a loopback-only server that re-reads repositories every few seconds |
 | Interactive technical view | Browser UI: garden of repository plots, circular `+`/`−` focus, hover tooltips, pinned commit details, pan/zoom, keyboard and touch support ([ADR 0011](docs/decisions/0011-interactive-technical-renderer.md)) |
 | Live monitoring | Watchers plus periodic reconciliation for local repositories; remote-only `url` sources and `remotes` of local clones fetched into a private cache; live updates over server-sent events; configuration reload ([ADR 0012](docs/decisions/0012-continuous-monitoring.md)) |
+| Operations | `git-garden demo` (fictional repositories, no setup), `git-garden status`, `git-garden cache`, [user guide](docs/user-guide.md) |
 | Garden art | Planned; see roadmap Phase 2 |
 
 ## Trying it
+
+The quickest look: `npm ci && npm run build && node dist/cli.js demo`, then open
+<http://127.0.0.1:4784/>. The [user guide](docs/user-guide.md) covers
+installation, configuration, and troubleshooting.
+
+With your own repositories:
 
 ```sh
 npm ci
@@ -63,6 +73,8 @@ Individual commands:
 | `npm run bench:ancestors` | Benchmark the ancestor selector (`-- --quick` for a smoke run) |
 | `npm run render:fixture -- <name> <now> <out.svg>` | Render a demo repository to a static SVG as of a given time |
 | `npm run bench:graph` | Benchmark the full pipeline on a long quiet history (`-- --quick` for a smoke run) |
+| `npm run bench:live` | Measure detection latency, startup, idle CPU, and memory of the live service |
+| `npm run rehearse:install` | Pack, install into an empty project, and exercise the installed CLI (build first) |
 
 Demo fixture names: `forkMerge`, `oldBranchHead`, `threeHeads`, `crissCross`, `gardenTour`. For
 example, `npm run fixture -- crissCross` followed by

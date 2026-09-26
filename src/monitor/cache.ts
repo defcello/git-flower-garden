@@ -7,7 +7,14 @@
  * Cleanup is limited to these directories and happens only on explicit request.
  */
 import { randomBytes } from "node:crypto";
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import type { RepositoryConfig } from "../config/config.ts";
 import type { CachedRemote } from "../git/remote-snapshot.ts";
@@ -94,4 +101,41 @@ export async function removeRepositoryCache(
     force: true,
     maxRetries: 5,
   });
+}
+
+/** Total bytes of all files under a directory (0 if it does not exist). */
+export async function directorySize(dir: string): Promise<number> {
+  let total = 0;
+  const walk = async (d: string): Promise<void> => {
+    let entries;
+    try {
+      entries = await readdir(d, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (entry.isFile())
+        total += (await stat(full).catch(() => ({ size: 0 }))).size;
+    }
+  };
+  await walk(dir);
+  return total;
+}
+
+/** Repository ids that have a cache directory. */
+export async function cachedRepositoryIds(
+  cacheRoot: string,
+): Promise<string[]> {
+  try {
+    return (
+      await readdir(join(cacheRoot, "repositories"), { withFileTypes: true })
+    )
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return [];
+  }
 }

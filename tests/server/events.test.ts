@@ -33,6 +33,7 @@ const payload = (): RepositoriesJson => ({
     businessDays: 2,
     reducedMotion: false,
     windowStartMs: 0,
+    notice: null,
   },
   repositories: [
     {

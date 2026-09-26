@@ -38,6 +38,8 @@ export interface DisplayJson {
   reducedMotion: boolean;
   /** Start of the recent-history window; when it moves, graphs change. */
   windowStartMs: number;
+  /** A notice to show on every page, e.g. demo mode. */
+  notice: string | null;
 }
 
 export interface RepositoriesJson {

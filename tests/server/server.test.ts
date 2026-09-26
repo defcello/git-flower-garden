@@ -7,8 +7,8 @@ import { parseConfig, type Config } from "../../src/config/config.ts";
 import { defaultCacheDir, defaultConfigPath } from "../../src/config/paths.ts";
 import { RepositoryService } from "../../src/monitor/repository-service.ts";
 import { startServer, type StartedServer } from "../../src/server/server.ts";
-import { buildFixture, fixtureGit } from "../fixtures/builder.ts";
-import { gardenTour } from "../fixtures/demo.ts";
+import { buildFixture, fixtureGit } from "../../src/demo/builder.ts";
+import { gardenTour } from "../../src/demo/fixtures.ts";
 import { snapshotTree } from "../helpers/snapshot.ts";
 import { useTempDirs } from "../helpers/temp-dir.ts";
 

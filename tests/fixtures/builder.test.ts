@@ -6,8 +6,13 @@ import {
   toGitDate,
   type BuiltFixture,
   type FixtureSpec,
-} from "./builder.ts";
-import { crissCross, forkMerge, oldBranchHead, threeHeads } from "./demo.ts";
+} from "../../src/demo/builder.ts";
+import {
+  crissCross,
+  forkMerge,
+  oldBranchHead,
+  threeHeads,
+} from "../../src/demo/fixtures.ts";
 
 const tempDir = useTempDirs();
 

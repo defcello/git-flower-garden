@@ -31,6 +31,7 @@ import type {
   RepositoryView,
 } from "../monitor/repository-service.ts";
 import { escapeXml, renderSvg } from "../render/svg.ts";
+import { directorySize } from "../monitor/cache.ts";
 import { EventHub } from "./events.ts";
 
 export const API_VERSION = 1;
@@ -118,6 +119,7 @@ export function statusJson(view: RepositoryView): RepositoryStatusJson {
 export interface ConfigHealth {
   configErrors: string[];
   restartNeeded: string[];
+  notice?: string;
 }
 
 export function repositoriesJson(
@@ -131,6 +133,7 @@ export function repositoriesJson(
       businessDays: service.config.history.businessDays,
       reducedMotion: service.config.display.reducedMotion,
       windowStartMs: service.windowStartMs(),
+      notice: health.notice ?? null,
     },
     repositories: service
       .ids()
@@ -311,6 +314,33 @@ export function createHandler(
       }
       if (path === "/api/repositories") {
         sendJson(res, 200, repositoriesJson(service, health()));
+        return;
+      }
+      if (path === "/api/diagnostics") {
+        const repositories = await Promise.all(
+          service.diagnostics().map(async (d) => ({
+            ...d,
+            cacheBytes: d.cacheDirectory
+              ? await directorySize(d.cacheDirectory)
+              : null,
+          })),
+        );
+        const memory = process.memoryUsage();
+        sendJson(res, 200, {
+          apiVersion: API_VERSION,
+          process: {
+            pid: process.pid,
+            node: process.version,
+            uptimeSeconds: Math.round(process.uptime()),
+            rssBytes: memory.rss,
+            heapUsedBytes: memory.heapUsed,
+            cpuMicros: process.cpuUsage(),
+            eventClients: hub?.size ?? 0,
+          },
+          cacheRoot: service.cacheDirectory(),
+          configErrors: health().configErrors,
+          repositories,
+        });
         return;
       }
       if (path === "/api/events" && hub) {

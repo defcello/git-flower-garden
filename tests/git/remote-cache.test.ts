@@ -17,8 +17,8 @@ import {
 } from "../../src/git/remote-cache.ts";
 import { readRefs } from "../../src/git/refs.ts";
 import { GitError } from "../../src/git/run-git.ts";
-import { buildFixture, fixtureGit } from "../fixtures/builder.ts";
-import { forkMerge } from "../fixtures/demo.ts";
+import { buildFixture, fixtureGit } from "../../src/demo/builder.ts";
+import { forkMerge } from "../../src/demo/fixtures.ts";
 import { snapshotTree } from "../helpers/snapshot.ts";
 import { useTempDirs } from "../helpers/temp-dir.ts";
 

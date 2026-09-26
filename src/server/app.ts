@@ -44,6 +44,10 @@ export interface AppOptions extends ServiceOptions {
   configPath?: string;
   /** How often to re-check the configuration file (a backstop for watch events). */
   configPollMs?: number;
+  /** Shown on every page (demo mode). */
+  notice?: string;
+  /** Wait until every repository has been read once before listening (default true). */
+  waitForFirstRead?: boolean;
 }
 
 /** dist/ui next to the running code, whether it runs from src/ or dist/. */
@@ -69,9 +73,17 @@ export async function startApp(
     background: true,
     ...options,
   });
-  await service.start();
+  // Progressive startup: listen first so the page appears at once, with each
+  // repository filling in as it is read. Tests can wait for the first reads.
+  const starting = service.start();
+  if (options.waitForFirstRead ?? true) await starting;
+  else void starting;
   const uiDir = options.uiDir === undefined ? await findUiDir() : options.uiDir;
-  let health: ConfigHealth = { configErrors: [], restartNeeded: [] };
+  let health: ConfigHealth = {
+    configErrors: [],
+    restartNeeded: [],
+    ...(options.notice === undefined ? {} : { notice: options.notice }),
+  };
   const listen = {
     host: config.server.host,
     port: options.port ?? config.server.port,
@@ -113,10 +125,10 @@ export async function startApp(
         const result = parseConfig(text, dirname(configPath));
         if (!result.ok) {
           health = {
+            ...health,
             configErrors: result.errors.map((e) =>
               formatConfigError(basename(configPath), e),
             ),
-            restartNeeded: health.restartNeeded,
           };
           server.hub.publish();
           return;
@@ -126,7 +138,7 @@ export async function startApp(
         if (next.server.host !== listen.host) restartNeeded.push("server.host");
         if (options.port === undefined && next.server.port !== listen.port)
           restartNeeded.push("server.port");
-        health = { configErrors: [], restartNeeded };
+        health = { ...health, configErrors: [], restartNeeded };
         await service.applyConfig(next);
         server.hub.publish();
       } finally {

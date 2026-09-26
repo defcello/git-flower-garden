@@ -12,8 +12,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseConfig } from "../../src/config/config.ts";
 import { startApp } from "../../src/server/app.ts";
-import { buildFixture, fixtureGit } from "../fixtures/builder.ts";
-import { crissCross, forkMerge, gardenTour } from "../fixtures/demo.ts";
+import { buildFixture, fixtureGit } from "../../src/demo/builder.ts";
+import { crissCross, forkMerge, gardenTour } from "../../src/demo/fixtures.ts";
 
 export const FIXTURE_NOW = Date.parse("2026-09-22T15:00:00-04:00");
 

@@ -23,6 +23,7 @@ import {
   readTopologyTolerant,
   SNAPSHOT_SCHEMA_VERSION,
   type ObjectSource,
+  type ReadSnapshotOptions,
   type RepositorySnapshot,
 } from "./snapshot.ts";
 
@@ -86,7 +87,7 @@ export async function readLocalWithRemotes(
   path: string,
   cacheDir: string,
   remotes: readonly CachedRemote[],
-  options: { now?: () => number; fetched?: ReadonlySet<string> } = {},
+  options: ReadSnapshotOptions & { fetched?: ReadonlySet<string> } = {},
 ): Promise<RepositorySnapshot> {
   const local = await readSnapshot(path, options);
   const live = remotes.filter((r) => options.fetched?.has(r.key) ?? true);

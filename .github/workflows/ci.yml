@@ -27,6 +27,8 @@ jobs:
       # Browser tests use the runner's preinstalled Chrome (Edge on Windows);
       # no Playwright browser download is needed.
       - run: npm run check
+      # Pack, install into an empty project, and run the installed CLI.
+      - run: npm run rehearse:install
       - if: failure()
         uses: actions/upload-artifact@v7
         with:

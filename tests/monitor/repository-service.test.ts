@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { parseConfig } from "../../src/config/config.ts";
 import { readSnapshot } from "../../src/git/snapshot.ts";
 import { RepositoryService } from "../../src/monitor/repository-service.ts";
-import { buildFixture, fixtureGit } from "../fixtures/builder.ts";
-import { gardenTour } from "../fixtures/demo.ts";
+import { buildFixture, fixtureGit } from "../../src/demo/builder.ts";
+import { gardenTour } from "../../src/demo/fixtures.ts";
 import { useTempDirs } from "../helpers/temp-dir.ts";
 
 const tempDir = useTempDirs();

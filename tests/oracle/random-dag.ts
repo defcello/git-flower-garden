@@ -3,7 +3,7 @@
  * created in order and may only name earlier commits as parents, so every
  * generated graph is acyclic by construction.
  */
-import type { FixtureSpec } from "../fixtures/builder.ts";
+import type { FixtureSpec } from "../../src/demo/builder.ts";
 
 /** Small, fast, deterministic PRNG (mulberry32). Returns floats in [0, 1). */
 export function seededRandom(seed: number): () => number {

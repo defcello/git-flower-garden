@@ -4,8 +4,8 @@ import {
   type AncestorAnchor,
   type ParentMap,
 } from "../../src/core/ancestor-anchors.ts";
-import { buildFixture, type FixtureSpec } from "../fixtures/builder.ts";
-import { demoFixtures } from "../fixtures/demo.ts";
+import { buildFixture, type FixtureSpec } from "../../src/demo/builder.ts";
+import { demoFixtures } from "../../src/demo/fixtures.ts";
 import { useTempDirs } from "../helpers/temp-dir.ts";
 import { oracleAnchors } from "../oracle/best-common-ancestors.ts";
 import { gitAnchors } from "../oracle/git-merge-bases.ts";

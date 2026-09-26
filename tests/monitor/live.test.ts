@@ -14,8 +14,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { RepositoriesJson } from "../../src/api/types.ts";
 import { parseConfig } from "../../src/config/config.ts";
 import { startApp, type RunningApp } from "../../src/server/app.ts";
-import { buildFixture, fixtureGit, FIXTURE_ENV } from "../fixtures/builder.ts";
-import { forkMerge, gardenTour } from "../fixtures/demo.ts";
+import {
+  buildFixture,
+  fixtureGit,
+  FIXTURE_ENV,
+} from "../../src/demo/builder.ts";
+import { forkMerge, gardenTour } from "../../src/demo/fixtures.ts";
 import { snapshotTree } from "../helpers/snapshot.ts";
 import { useTempDirs } from "../helpers/temp-dir.ts";
 import { runGit } from "../../src/git/run-git.ts";

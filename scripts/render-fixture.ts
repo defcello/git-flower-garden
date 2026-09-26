@@ -20,8 +20,8 @@ import { readCommitDetails } from "../src/git/commits.ts";
 import { readSnapshot } from "../src/git/snapshot.ts";
 import { layoutGraph } from "../src/render/layout.ts";
 import { renderSvg } from "../src/render/svg.ts";
-import { buildFixture } from "../tests/fixtures/builder.ts";
-import { demoFixtures, type DemoFixtureName } from "../tests/fixtures/demo.ts";
+import { buildFixture } from "../src/demo/builder.ts";
+import { demoFixtures, type DemoFixtureName } from "../src/demo/fixtures.ts";
 
 const [name, nowIso, out] = process.argv.slice(2);
 if (

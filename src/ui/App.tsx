@@ -123,6 +123,11 @@ export function App() {
         )}
         <Legend />
       </header>
+      {repositories?.display.notice && (
+        <div className="banner notice" role="note">
+          {repositories.display.notice}
+        </div>
+      )}
       {repositories && repositories.configErrors.length > 0 && (
         <div className="banner" role="alert">
           <strong>

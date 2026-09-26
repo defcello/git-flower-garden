@@ -28,7 +28,7 @@ import {
   buildFixture,
   type FixtureCommit,
   type FixtureSpec,
-} from "../tests/fixtures/builder.ts";
+} from "../src/demo/builder.ts";
 
 const quick = process.argv.includes("--quick");
 const NOW = Date.parse("2026-09-22T15:00:00-04:00");

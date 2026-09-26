@@ -1,6 +1,6 @@
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { runGit } from "../../src/git/run-git.ts";
+import { runGit } from "../git/run-git.ts";
 
 /** One commit in a fixture, named so tests can refer to it without knowing its OID. */
 export interface FixtureCommit {

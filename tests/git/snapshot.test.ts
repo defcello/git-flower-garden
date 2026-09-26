@@ -7,9 +7,10 @@ import {
   snapshotGraphInput,
 } from "../../src/core/snapshot-graph.ts";
 import { buildVisibleGraph } from "../../src/core/visible-graph.ts";
+import { readCommitDetails } from "../../src/git/commits.ts";
 import { readSnapshot } from "../../src/git/snapshot.ts";
-import { buildFixture, fixtureGit } from "../fixtures/builder.ts";
-import { gardenTour } from "../fixtures/demo.ts";
+import { buildFixture, fixtureGit } from "../../src/demo/builder.ts";
+import { gardenTour } from "../../src/demo/fixtures.ts";
 import { useTempDirs } from "../helpers/temp-dir.ts";
 
 const tempDir = useTempDirs();
@@ -104,5 +105,63 @@ describe("readSnapshot end to end", () => {
     expect(
       buildVisibleGraph(input).nodes.get(fixture.oid("a4"))?.reasons,
     ).toContain("worktree");
+  });
+
+  it("proves coherence with an unchanged fingerprint, and re-verifies when it changes", async () => {
+    const fixture = await buildFixture(
+      gardenTour,
+      join(await tempDir(), "repo"),
+    );
+    let calls = 0;
+    const stable = await readSnapshot(fixture.dir, {
+      fingerprint: () => Promise.resolve("same"),
+    });
+    expect(stable.fingerprint).toBe("same");
+    expect(stable.completeness).toMatchObject({ coherent: true, attempts: 1 });
+    const moving = await readSnapshot(fixture.dir, {
+      fingerprint: () => Promise.resolve(String(calls++)),
+    });
+    // The fingerprint changed during the read: no fingerprint is trusted, and
+    // coherence comes from re-reading the refs instead.
+    expect(moving.fingerprint).toBeUndefined();
+    expect(moving.completeness.coherent).toBe(true);
+    expect(moving.topology.commits.size).toBe(stable.topology.commits.size);
+  });
+
+  it("handles SHA-256 repositories: 64-character IDs through selection and details", async () => {
+    const fixture = await buildFixture(
+      gardenTour,
+      join(await tempDir(), "repo"),
+      {
+        objectFormat: "sha256",
+      },
+    );
+    expect(fixture.oid("m3")).toMatch(/^[0-9a-f]{64}$/);
+    const snapshot = await readSnapshot(fixture.dir);
+    expect(snapshot.location.objectFormat).toBe("sha256");
+    const window = historyWindow(
+      {
+        businessDays: 2,
+        weekdays: ["mon", "tue", "wed", "thu", "fri"],
+        timeZone: "America/New_York",
+      },
+      Date.parse("2026-09-22T15:00:00-04:00"),
+    );
+    const graph = buildVisibleGraph(snapshotGraphInput(snapshot, window));
+    // Same shape as the SHA-1 build of this fixture.
+    expect(graph.nodes.size).toBe(10);
+    expect(
+      graph.edges
+        .filter((e) => e.kind === "collapsed")
+        .map((e) => e.hidden)
+        .sort(),
+    ).toEqual([1, 4]);
+    const details = await readCommitDetails(fixture.dir, [
+      fixture.oid("merge"),
+    ]);
+    expect(details.get(fixture.oid("merge"))?.parents).toEqual([
+      fixture.oid("m2"),
+      fixture.oid("t2"),
+    ]);
   });
 });

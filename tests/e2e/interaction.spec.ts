@@ -6,7 +6,7 @@
  */
 import { join } from "node:path";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { FIXTURE_ENV } from "../fixtures/builder.ts";
+import { FIXTURE_ENV } from "../../src/demo/builder.ts";
 import { runGit } from "../../src/git/run-git.ts";
 
 const root = process.env.GARDEN_E2E_ROOT as string;

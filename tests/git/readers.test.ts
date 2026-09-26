@@ -17,7 +17,7 @@ import {
   toGitDate,
   type BuiltFixture,
   type FixtureSpec,
-} from "../fixtures/builder.ts";
+} from "../../src/demo/builder.ts";
 import { snapshotTree } from "../helpers/snapshot.ts";
 import { useTempDirs } from "../helpers/temp-dir.ts";
 

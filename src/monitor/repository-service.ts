@@ -17,6 +17,7 @@
  * Changes are published to listeners (the server-sent event hub).
  */
 import { access, mkdir, stat } from "node:fs/promises";
+import { cpus } from "node:os";
 import type { Config, RepositoryConfig } from "../config/config.ts";
 import { defaultCacheDir } from "../config/paths.ts";
 import { historyWindow, nextRecomputeMs } from "../core/business-days.ts";
@@ -38,6 +39,7 @@ import { readSnapshot, type RepositorySnapshot } from "../git/snapshot.ts";
 import type { GitWorktree } from "../git/worktrees.ts";
 import { layoutGraph, type Layout } from "../render/layout.ts";
 import { cachedRemotes, objectsDir, readMeta, writeMeta } from "./cache.ts";
+import { refFingerprint } from "./probe.ts";
 import { watchRepository, type RepositoryWatch } from "./watch.ts";
 
 export type SourceState =
@@ -96,6 +98,36 @@ export interface TagSummary {
   peeledType: string | null;
 }
 
+export interface Timings {
+  /** Duration of the most recent read of the repository (and its cache). */
+  lastReadMs: number | null;
+  /** Duration of the most recent graph selection, layout, and detail read. */
+  lastGraphMs: number | null;
+  /** Duration of the most recent fetch of all monitored remotes. */
+  lastFetchMs: number | null;
+  reads: number;
+  fetches: number;
+  fetchFailures: number;
+}
+
+export interface RepositoryDiagnostics {
+  id: string;
+  kind: "local" | "remote";
+  revision: number;
+  status: SourceStatus;
+  remote: RemoteStatus | null;
+  counts: {
+    refs: number;
+    worktrees: number;
+    reachableCommits: number;
+    visibleCommits: number | null;
+  } | null;
+  timings: Timings;
+  consecutiveFetchFailures: number;
+  watching: boolean;
+  cacheDirectory: string | null;
+}
+
 export type ServiceEvent =
   | { type: "repository"; id: string }
   | { type: "repositories" }
@@ -114,11 +146,15 @@ export interface ServiceOptions {
   /** Overrides for tests; production uses the configuration. */
   intervals?: {
     reconcileMs?: number;
+    /** Full read at least this often, even when the fingerprint is unchanged. */
+    fullReconcileMs?: number;
     remotePollMs?: number;
     debounceMs?: number;
   };
   /** Random source for jitter (tests). */
   random?: () => number;
+  /** Maximum concurrent repository reads (default: half the logical CPUs, at least 2). */
+  readConcurrency?: number;
 }
 
 interface Entry {
@@ -143,6 +179,12 @@ interface Entry {
   debounce: ReturnType<typeof setTimeout> | null;
   remoteTimer: ReturnType<typeof setTimeout> | null;
   remoteFailures: number;
+  timings: Timings;
+  /** Stat fingerprint of ref metadata taken just before the last successful read. */
+  probe: string | null;
+  probeDir: string | null;
+  /** performance.now() of the last successful full read. */
+  lastFullRead: number;
   fetchAbort: AbortController | null;
   stopped: boolean;
 }
@@ -195,6 +237,8 @@ export class RepositoryService {
   private readonly watchFiles: boolean;
   private readonly random: () => number;
   private readonly fetches: Semaphore;
+  /** Bounds concurrent local reads so a large garden does not thrash a small machine. */
+  private readonly readSlots: Semaphore;
   private reconcileTimer: ReturnType<typeof setInterval> | null = null;
   private windowTimer: ReturnType<typeof setTimeout> | null = null;
   private windowStart: number | null = null;
@@ -211,6 +255,9 @@ export class RepositoryService {
     this.random = options.random ?? Math.random;
     this.intervals = options.intervals ?? {};
     this.fetches = new Semaphore(config.monitor.maxConcurrentFetches);
+    this.readSlots = new Semaphore(
+      options.readConcurrency ?? Math.max(2, Math.floor(cpus().length / 2)),
+    );
     for (const repo of config.repositories) this.add(repo);
   }
 
@@ -248,6 +295,17 @@ export class RepositoryService {
       debounce: null,
       remoteTimer: null,
       remoteFailures: 0,
+      timings: {
+        lastReadMs: null,
+        lastGraphMs: null,
+        lastFetchMs: null,
+        reads: 0,
+        fetches: 0,
+        fetchFailures: 0,
+      },
+      probe: null,
+      probeDir: null,
+      lastFullRead: 0,
       fetchAbort: null,
       stopped: false,
       view: {
@@ -345,7 +403,7 @@ export class RepositoryService {
     this.reconcileTimer = setInterval(() => {
       // Local sources only; remote-only sources change only when fetched.
       for (const entry of this.entries.values()) {
-        if (entry.config.path !== undefined) void this.refresh(entry.config.id);
+        if (entry.config.path !== undefined) void this.reconcile(entry);
       }
       this.checkWindow();
     }, reconcileMs);
@@ -478,7 +536,10 @@ export class RepositoryService {
         entry.pending = false;
         entry.readsStarted++;
         const started = entry.readsStarted;
-        await this.doRefresh(entry);
+        const t0 = performance.now();
+        await this.readSlots.run(() => this.doRefresh(entry));
+        entry.timings.lastReadMs = Math.round(performance.now() - t0);
+        entry.timings.reads++;
         this.settle(entry, started);
       }
     } finally {
@@ -531,10 +592,17 @@ export class RepositoryService {
                   repo.path as string,
                   objectsDir(this.cacheRoot, repo.id),
                   entry.remotes,
-                  { now: this.now, fetched: entry.fetched },
+                  {
+                    now: this.now,
+                    fetched: entry.fetched,
+                    fingerprint: refFingerprint,
+                  },
                 ),
               )
-            : await this.read(repo.path, { now: this.now });
+            : await this.read(repo.path, {
+                now: this.now,
+                fingerprint: refFingerprint,
+              });
       } else {
         const remote = entry.remotes[0] as CachedRemote;
         snapshot = entry.fetched.has(remote.key)
@@ -569,7 +637,13 @@ export class RepositoryService {
         });
         return;
       }
-      if (repo.path !== undefined) this.ensureWatch(entry, snapshot);
+      if (repo.path !== undefined) {
+        this.ensureWatch(entry, snapshot);
+        // Taken before the read, so a change made during it shows up next tick.
+        entry.probe = snapshot.fingerprint ?? null;
+        entry.probeDir = snapshot.location.commonDir;
+        entry.lastFullRead = performance.now();
+      }
       const fingerprint = snapshotFingerprint(snapshot);
       const changed = fingerprint !== entry.fingerprint;
       entry.fingerprint = fingerprint;
@@ -627,12 +701,51 @@ export class RepositoryService {
     );
   }
 
+  /**
+   * One reconciliation tick: a full read if the stat fingerprint of the ref
+   * metadata changed, or if the last full read is older than the full
+   * reconciliation interval (the backstop for coarse timestamps and changes
+   * outside the Git directory). Otherwise no Git process is started.
+   */
+  private async reconcile(entry: Entry): Promise<void> {
+    // A read already in progress: skip this tick. The next tick compares
+    // fingerprints against that read, so a change made meanwhile is still
+    // caught; queuing another read here would, on a slow machine where reads
+    // outlast the tick, keep a repository reading forever.
+    if (entry.stopped || entry.running) return;
+    const fullMs = this.intervals.fullReconcileMs ?? 5 * 60_000;
+    if (
+      entry.probe === null ||
+      entry.probeDir === null ||
+      performance.now() - entry.lastFullRead > fullMs
+    ) {
+      void this.refresh(entry.config.id);
+      return;
+    }
+    await this.checkFingerprint(entry);
+  }
+
+  /** Read if the ref metadata fingerprint differs from the last read's (or none is known). */
+  private async checkFingerprint(entry: Entry): Promise<void> {
+    if (entry.stopped) return;
+    if (entry.probe === null || entry.probeDir === null) {
+      void this.refresh(entry.config.id);
+      return;
+    }
+    const current = await refFingerprint(entry.probeDir);
+    if (current !== entry.probe) void this.refresh(entry.config.id);
+  }
+
   private hint(entry: Entry): void {
     if (entry.stopped) return;
     if (entry.debounce) clearTimeout(entry.debounce);
     entry.debounce = setTimeout(() => {
       entry.debounce = null;
-      void this.refresh(entry.config.id);
+      // Watch events include metadata noise, notably last-access-time updates
+      // caused by Git's own reads on Windows, which would otherwise make every
+      // read trigger another. Only a changed fingerprint (sizes, modification
+      // times, directory listings) leads to a read.
+      void this.checkFingerprint(entry);
     }, this.intervals.debounceMs ?? 250);
     entry.debounce.unref();
   }
@@ -708,6 +821,7 @@ export class RepositoryService {
     const entry = this.entries.get(id);
     if (!entry || entry.remotes.length === 0 || entry.stopped)
       return entry?.view;
+    const fetchStarted = performance.now();
     const attempt = this.now();
     const dir = objectsDir(this.cacheRoot, entry.config.id);
     const errors: string[] = [];
@@ -749,6 +863,9 @@ export class RepositoryService {
       () => undefined,
     );
     entry.remoteFailures = errors.length > 0 ? entry.remoteFailures + 1 : 0;
+    entry.timings.fetches++;
+    if (errors.length > 0) entry.timings.fetchFailures++;
+    entry.timings.lastFetchMs = Math.round(performance.now() - fetchStarted);
     const previous = entry.view.remote as RemoteStatus;
     this.setView(entry, {
       ...entry.view,
@@ -790,6 +907,7 @@ export class RepositoryService {
     ].join("|");
     if (entry.lastGraph?.key === key) return entry.lastGraph.view;
 
+    const t0 = performance.now();
     const graph = buildVisibleGraph(
       snapshotGraphInput(snapshot, window, revealed),
     );
@@ -824,7 +942,40 @@ export class RepositoryService {
       worktrees: snapshot.worktrees,
     };
     entry.lastGraph = { key, view };
+    entry.timings.lastGraphMs = Math.round(performance.now() - t0);
     return view;
+  }
+
+  /** Operational details for troubleshooting (roadmap P1-E). */
+  diagnostics(): RepositoryDiagnostics[] {
+    return this.ids().map((id) => {
+      const entry = this.entries.get(id) as Entry;
+      const snapshot = entry.view.snapshot;
+      return {
+        id,
+        kind: entry.view.kind,
+        revision: entry.view.revision,
+        status: entry.view.status,
+        remote: entry.view.remote,
+        counts: snapshot
+          ? {
+              refs: snapshot.refs.length,
+              worktrees: snapshot.worktrees.length,
+              reachableCommits: snapshot.topology.commits.size,
+              visibleCommits: entry.lastGraph?.view.graph.nodes.size ?? null,
+            }
+          : null,
+        timings: { ...entry.timings },
+        consecutiveFetchFailures: entry.remoteFailures,
+        watching: entry.watch !== null,
+        cacheDirectory:
+          entry.remotes.length > 0 ? objectsDir(this.cacheRoot, id) : null,
+      };
+    });
+  }
+
+  cacheDirectory(): string {
+    return this.cacheRoot;
   }
 
   /**

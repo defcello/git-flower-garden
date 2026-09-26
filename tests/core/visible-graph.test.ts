@@ -9,8 +9,8 @@ import {
   type TopologyCommit,
   type VisibleGraph,
 } from "../../src/core/visible-graph.ts";
-import { toGitDate, type FixtureSpec } from "../fixtures/builder.ts";
-import { oldBranchHead, forkMerge } from "../fixtures/demo.ts";
+import { toGitDate, type FixtureSpec } from "../../src/demo/builder.ts";
+import { oldBranchHead, forkMerge } from "../../src/demo/fixtures.ts";
 import { oracleAnchors } from "../oracle/best-common-ancestors.ts";
 import { randomDag, seededRandom } from "../oracle/random-dag.ts";
 

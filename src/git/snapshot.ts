@@ -31,6 +31,11 @@ export interface RepositorySnapshot {
   topology: Topology;
   /** Object source for commit details. */
   objects: ObjectSource;
+  /**
+   * Stat fingerprint of the ref metadata taken before the read, when the read
+   * was verified coherent by an unchanged fingerprint (see readSnapshot).
+   */
+  fingerprint?: string;
   completeness: {
     /** Refs and worktrees did not move during the read. */
     coherent: boolean;
@@ -116,17 +121,58 @@ export async function readTopologyTolerant(
   }
 }
 
+export interface ReadSnapshotOptions {
+  now?: () => number;
+  /**
+   * Cheap stat fingerprint of the ref metadata. When the fingerprint is the
+   * same before and after reading, nothing moved during the read and the
+   * refs need not be read a second time to prove coherence.
+   */
+  fingerprint?: (commonDir: string) => Promise<string>;
+}
+
 export async function readSnapshot(
   path: string,
-  options: { now?: () => number } = {},
+  options: ReadSnapshotOptions = {},
 ): Promise<RepositorySnapshot> {
   const now = options.now ?? Date.now;
   const location = await resolveRepository(path);
   const cwd = location.workTree ?? location.gitDir;
   const objects: ObjectSource = { cwd, alternates: [] };
 
+  const before = await options.fingerprint?.(location.commonDir);
   let refs = await readRefs(cwd);
   let worktrees = await readWorktrees(cwd);
+  if (before !== undefined && options.fingerprint) {
+    const tips = commitTips(refs, worktrees);
+    const topology = await readTopologyTolerant(
+      objects,
+      tips,
+      join(location.commonDir, "shallow"),
+    );
+    if ((await options.fingerprint(location.commonDir)) === before) {
+      return {
+        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+        capturedAt: now(),
+        location,
+        refs,
+        worktrees,
+        topology,
+        objects,
+        fingerprint: before,
+        completeness: {
+          coherent: true,
+          attempts: 1,
+          shallow: location.shallow,
+          grafts: location.grafts,
+          missingTips: missingTips(refs, tips, topology),
+        },
+      };
+    }
+    // Something moved: fall back to verifying by re-reading.
+    refs = await readRefs(cwd);
+    worktrees = await readWorktrees(cwd);
+  }
   for (let attempt = 1; ; attempt++) {
     const tips = commitTips(refs, worktrees);
     const topology = await readTopologyTolerant(
