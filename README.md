@@ -12,7 +12,7 @@ real-time technical view to a living garden.
 | --- | --- |
 | Design and semantics | Documented in [ROADMAP.md](ROADMAP.md) and [architecture decisions](docs/decisions/) |
 | Toolchain and CI | TypeScript, lint, format, unit tests on Windows, macOS, and Linux |
-| Git subprocess wrapper | `src/git/`: shell-free Git calls with timeouts, output limits, and redacted errors; Git version check |
+| Git access | `src/git/`: shell-free Git calls with timeouts, output limits, and redacted errors; read-only readers for repository identity, refs, tags, worktrees, and commits; app-owned remote cache fetch |
 | Demo fixtures | `tests/fixtures/`: deterministic repositories (fork/merge, old branch, three heads, criss-cross) |
 | Ancestor selection prototype | `src/core/ancestor-anchors.ts`: exact common-ancestor anchors, checked against an independent oracle and Git ([evidence](docs/decisions/0007-ancestor-selector-evidence.md)) |
 | Graph selection, monitoring, UI, garden art | Planned; see roadmap Phases 1 and 2 |

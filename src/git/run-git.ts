@@ -63,10 +63,18 @@ function sanitizeDiagnostic(text: string): string {
  * Run the installed Git CLI with an argument array (never through a shell)
  * and resolve with its standard output decoded as UTF-8.
  */
-export function runGit(
+export async function runGit(
   args: readonly string[],
   options: RunGitOptions,
 ): Promise<string> {
+  return (await runGitRaw(args, options)).toString("utf8");
+}
+
+/** Like {@link runGit}, but resolve with raw bytes for length-framed output. */
+export function runGitRaw(
+  args: readonly string[],
+  options: RunGitOptions,
+): Promise<Buffer> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   const describe = `git ${args[0] ?? ""}`.trim();
@@ -148,7 +156,7 @@ export function runGit(
         );
         return;
       }
-      resolve(Buffer.concat(stdout).toString("utf8"));
+      resolve(Buffer.concat(stdout));
     });
 
     // Git may exit before consuming its input; that is reported via "close".

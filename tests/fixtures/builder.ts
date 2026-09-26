@@ -23,6 +23,10 @@ export interface FixtureSpec {
   branches: Readonly<Record<string, string>>;
   /** Lightweight tag name -> commit name. */
   tags?: Readonly<Record<string, string>>;
+  /** Annotated tag name -> target commit, tag message, and tagger time (ISO 8601). */
+  annotatedTags?: Readonly<
+    Record<string, { target: string; message: string; tagged: string }>
+  >;
   /** Branch checked out in the working tree. Defaults to `main`. */
   head?: string;
 }
@@ -42,7 +46,7 @@ export interface BuildOptions {
  * Isolate fixture construction from the developer's own Git configuration and
  * identity so the same spec produces the same object IDs on every machine.
  */
-const FIXTURE_ENV = {
+export const FIXTURE_ENV = {
   GIT_CONFIG_NOSYSTEM: "1",
   // Git for Windows maps "/dev/null" to its null device; Node's os.devNull
   // (`\\.\nul`) is rejected by Git for Windows.
@@ -52,6 +56,19 @@ const FIXTURE_ENV = {
   GIT_COMMITTER_NAME: "Fern Example",
   GIT_COMMITTER_EMAIL: "fern@example.invalid",
 } as const;
+
+/** Run Git in a fixture with the same isolated configuration and identity. */
+export function fixtureGit(
+  dir: string,
+  args: readonly string[],
+  input?: string,
+): Promise<string> {
+  return runGit(args, {
+    cwd: dir,
+    env: FIXTURE_ENV,
+    ...(input === undefined ? {} : { input }),
+  });
+}
 
 /** Every commit is created on this ref, which is deleted once real refs exist. */
 const SCRATCH_REF = "refs/git-garden-fixture/build";
@@ -176,6 +193,14 @@ function fastImportStream(spec: FixtureSpec): string {
   for (const [ref, target] of refs) {
     out.push(`reset ${ref}\nfrom ${mark(target)}\n\n`);
   }
+  for (const [name, tag] of Object.entries(spec.annotatedTags ?? {})) {
+    out.push(
+      `tag ${name}\n`,
+      `from ${mark(tag.target)}\n`,
+      `tagger ${identity} ${toGitDate(tag.tagged)}\n`,
+      data(`${tag.message}\n`),
+    );
+  }
   out.push("done\n");
   return out.join("");
 }
@@ -205,6 +230,9 @@ function validateSpec(spec: FixtureSpec): void {
   const refs = [
     ...Object.entries(spec.branches),
     ...Object.entries(spec.tags ?? {}),
+    ...Object.entries(spec.annotatedTags ?? {}).map(
+      ([name, tag]): [string, string] => [name, tag.target],
+    ),
   ];
   for (const [ref, target] of refs) {
     if (!seen.has(target))
