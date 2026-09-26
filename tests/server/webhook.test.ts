@@ -46,6 +46,9 @@ function deliver(
       target,
       {
         method: d.method ?? "POST",
+        // A fresh connection each time: the receiver closes the socket of an
+        // oversized request, which must not affect the next delivery.
+        agent: false,
         headers: {
           "Content-Type": "application/json",
           "X-GitHub-Event": d.event ?? "push",
@@ -65,10 +68,12 @@ function deliver(
       },
     );
     req.on("error", (error) => {
-      // The receiver may close the socket early for oversized bodies.
+      // For an oversized body the receiver may close the socket before the
+      // client finishes sending; that is the rejection we expect.
+      const code = (error as NodeJS.ErrnoException).code;
       if (
-        (error as NodeJS.ErrnoException).code === "ECONNRESET" ||
-        (error as NodeJS.ErrnoException).code === "EPIPE"
+        body.length > MAX_WEBHOOK_BYTES &&
+        (code === "ECONNRESET" || code === "EPIPE")
       ) {
         resolve({ status: 413, text: "connection closed" });
       } else reject(error);
