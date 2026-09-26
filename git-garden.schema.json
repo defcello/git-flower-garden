@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/defcello/git-garden/blob/main/git-garden.schema.json",
+  "title": "git-garden configuration",
+  "description": "Configuration version 1. git-garden validates more than this schema can express (IANA time zones, duplicate repository ids, URL safety); run `git-garden validate-config` for the full check.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "repositories"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "description": "Loopback only. Serving on a network needs authentication that does not exist yet.",
+          "enum": ["127.0.0.1", "localhost", "::1"],
+          "default": "127.0.0.1"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 4783
+        }
+      }
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "businessDays": {
+          "description": "Show every commit from the start of the Nth most recent business date through now.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 366,
+          "default": 2
+        },
+        "weekdays": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+          },
+          "default": ["mon", "tue", "wed", "thu", "fri"]
+        },
+        "timeZone": {
+          "description": "IANA time zone, e.g. America/New_York. Defaults to the system time zone.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "monitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "localReconcileSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600,
+          "default": 5
+        },
+        "remotePollSeconds": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 86400,
+          "default": 60
+        },
+        "maxConcurrentFetches": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16,
+          "default": 2
+        },
+        "fetchTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 3600,
+          "default": 120
+        }
+      }
+    },
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "renderer": { "const": "technical", "default": "technical" },
+        "reducedMotion": { "type": "boolean", "default": false }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "const": false, "default": false }
+      }
+    },
+    "repositories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "description": "Stable identity for layout and caches. Renaming the label keeps the plot.",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "\\S"
+          },
+          "path": {
+            "description": "Local repository or worktree. Relative paths are resolved against this file's directory.",
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "url": {
+            "description": "Remote-only repository: https, http, ssh, git, or file URL, or user@host:path. No inline passwords.",
+            "type": "string",
+            "minLength": 1
+          },
+          "remotes": {
+            "description": "For a local path: remotes to monitor through git-garden's own cache.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+            }
+          }
+        },
+        "oneOf": [
+          { "required": ["path"], "not": { "required": ["url"] } },
+          {
+            "required": ["url"],
+            "not": {
+              "anyOf": [{ "required": ["path"] }, { "required": ["remotes"] }]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

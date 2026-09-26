@@ -1,0 +1,31 @@
+{
+  "$schema": "./git-garden.schema.json",
+  "version": 1,
+  "server": { "host": "127.0.0.1", "port": 4783 },
+  "history": {
+    "businessDays": 2,
+    "weekdays": ["mon", "tue", "wed", "thu", "fri"],
+    "timeZone": "America/New_York"
+  },
+  "monitor": {
+    "localReconcileSeconds": 5,
+    "remotePollSeconds": 60,
+    "maxConcurrentFetches": 2,
+    "fetchTimeoutSeconds": 120
+  },
+  "display": { "renderer": "technical", "reducedMotion": false },
+  "repositories": [
+    {
+      "id": "git-garden-local",
+      "label": "git-garden",
+      "path": ".",
+      "remotes": ["origin"]
+    },
+    {
+      "id": "another-project",
+      "label": "Another project",
+      "url": "https://github.com/OWNER/REPOSITORY.git"
+    }
+  ],
+  "environment": { "enabled": false }
+}

@@ -5,6 +5,9 @@
   "description": "Visualize Git activity as a garden of commits.",
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "git-garden": "dist/cli.js"
+  },
   "engines": {
     "node": ">=24"
   },
@@ -14,6 +17,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "start": "node src/cli.ts serve",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm test",
@@ -24,6 +28,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "24.19.0",
+    "ajv": "8.20.0",
     "eslint": "10.11.0",
     "prettier": "3.9.9",
     "typescript": "6.0.3",

@@ -351,11 +351,11 @@ The Phase 1 release is independently useful. No art, weather, relay hosting, or 
 
 Dependencies: P0. Suggested working increment: one local repository rendered as a debug snapshot.
 
-- [ ] Implement versioned config validation, documented defaults, example file, and `init-config`/`validate-config` commands.
-- [ ] Implement safe Git subprocess wrapper with cancellation, output limits, sanitized errors, and capability detection.
-- [ ] Resolve local/common Git directories and enumerate branch refs, tags, worktrees, and immutable commit objects.
-- [ ] Establish snapshot/status contracts and one loopback-only service endpoint.
-- [ ] Handle zero sources, empty repositories, missing paths, malformed config, Unicode paths, and paths containing spaces.
+- [x] Implement versioned config validation, documented defaults, example file, and `init-config`/`validate-config` commands.
+- [x] Implement safe Git subprocess wrapper with cancellation, output limits, sanitized errors, and capability detection.
+- [x] Resolve local/common Git directories and enumerate branch refs, tags, worktrees, and immutable commit objects.
+- [x] Establish snapshot/status contracts and one loopback-only service endpoint.
+- [x] Handle zero sources, empty repositories, missing paths, malformed config, Unicode paths, and paths containing spaces.
 
 Exit: fixtures match Git's refs/parents/worktrees, invalid configs identify the failing field, and monitoring reads leave the fixture's user-owned Git state unchanged.
 
@@ -617,7 +617,7 @@ Open choices intentionally deferred: exact dependency versions, layout-library a
 | --- | --- | --- |
 | Design baseline | Documented | This roadmap |
 | P0 foundation and risk probes | Done (browser tests deferred) | P0-A: ADRs 0001–0006 in `docs/decisions/`; `npm run check` passes locally on Windows and in CI run 36222369361 on Ubuntu, Windows, and macOS (26 tests each, Git 2.55; golden fixture OID matched everywhere); fixture topology verified against `git merge-base` in `tests/fixtures/builder.test.ts`. Open: browser-test command (deferred to first UI). P0-B: ancestor selector matches an exhaustive oracle (2,000 random DAGs) and `git merge-base` (demo fixtures and 12 random repositories), green in CI run 36244010015 on all three OSes (43 tests each); deliberate bugs are caught; stress case (1M commits, 1,000 heads) takes about 3.5 s and 650 MiB on a 4 GB Core m3 ([ADR 0007](docs/decisions/0007-ancestor-selector-evidence.md)). Git readers (refs, peeled tags, worktrees, topology, length-framed commits) verified against fixture truth and independent Git commands; app-owned cache fetch leaves the user's clone byte-identical ([ADR 0008](docs/decisions/0008-git-read-and-fetch-evidence.md)). Static SVG of `gardenTour` through the full read-only pipeline, with reduced edges and layout checked by independent oracles ([ADR 0009](docs/decisions/0009-visible-graph-and-static-svg.md)). P0-B complete. |
-| P1 functional visualization | In progress | P1-B core landed early for the SVG probe: business-day window, visible graph, reduced edges, layout. Next: P1-A configuration, CLI, and loopback endpoint. |
+| P1 functional visualization | In progress | P1-A done: strict config with line/column errors, validated against the JSON Schema via Ajv; `init-config`/`validate-config`/`serve`; loopback server with Host/Origin checks and a local SVG preview; isolated per-source status. P1-B core landed early for the SVG probe. Next: finish P1-B (completeness metadata, old-tag lookup, remaining fixtures, long-history benchmark). |
 | P2 living garden | Not started | Art proof after functional release, then scene/environment |
 | P3 public stable release | Not started | Installation rehearsal and release gates |
 
