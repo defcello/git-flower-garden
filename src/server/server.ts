@@ -31,6 +31,7 @@ import type {
   RepositoryView,
 } from "../monitor/repository-service.ts";
 import { escapeXml, renderSvg } from "../render/svg.ts";
+import { EventHub } from "./events.ts";
 
 export const API_VERSION = 1;
 
@@ -58,6 +59,7 @@ const MIME: Record<string, string> = {
 
 export interface StartedServer {
   server: Server;
+  hub: EventHub;
   url: string;
   close(): Promise<void>;
 }
@@ -65,6 +67,7 @@ export interface StartedServer {
 export interface ServerOptions {
   /** Built UI directory (dist/ui). Without it, "/" serves the static preview. */
   uiDir?: string | null;
+  health?: () => ConfigHealth;
 }
 
 /** Hosts a browser may legitimately send for this server. */
@@ -100,6 +103,7 @@ export function statusJson(view: RepositoryView): RepositoryStatusJson {
     kind: view.kind,
     revision: view.revision,
     status: view.status,
+    remote: view.remote,
     counts: view.snapshot
       ? {
           refs: view.snapshot.refs.length,
@@ -107,6 +111,32 @@ export function statusJson(view: RepositoryView): RepositoryStatusJson {
           reachableCommits: view.snapshot.topology.commits.size,
         }
       : null,
+  };
+}
+
+/** Configuration problems and restart notices supplied by the app. */
+export interface ConfigHealth {
+  configErrors: string[];
+  restartNeeded: string[];
+}
+
+export function repositoriesJson(
+  service: RepositoryService,
+  health: ConfigHealth = { configErrors: [], restartNeeded: [] },
+): RepositoriesJson {
+  return {
+    apiVersion: API_VERSION,
+    display: {
+      timeZone: service.config.history.timeZone,
+      businessDays: service.config.history.businessDays,
+      reducedMotion: service.config.display.reducedMotion,
+      windowStartMs: service.windowStartMs(),
+    },
+    repositories: service
+      .ids()
+      .map((id) => statusJson(service.view(id) as RepositoryView)),
+    configErrors: health.configErrors,
+    restartNeeded: health.restartNeeded,
   };
 }
 
@@ -232,6 +262,8 @@ export function createHandler(
   service: RepositoryService,
   port: () => number,
   ui: Map<string, { type: string; body: Buffer }> | null = null,
+  hub: EventHub | null = null,
+  health: () => ConfigHealth = () => ({ configErrors: [], restartNeeded: [] }),
 ) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const host = req.headers.host ?? "";
@@ -278,18 +310,11 @@ export function createHandler(
         return;
       }
       if (path === "/api/repositories") {
-        const body: RepositoriesJson = {
-          apiVersion: API_VERSION,
-          display: {
-            timeZone: service.config.history.timeZone,
-            businessDays: service.config.history.businessDays,
-            reducedMotion: service.config.display.reducedMotion,
-          },
-          repositories: service
-            .ids()
-            .map((id) => statusJson(service.view(id) as RepositoryView)),
-        };
-        sendJson(res, 200, body);
+        sendJson(res, 200, repositoriesJson(service, health()));
+        return;
+      }
+      if (path === "/api/events" && hub) {
+        hub.connect(req, res, SECURITY_HEADERS);
         return;
       }
       const match =
@@ -376,7 +401,13 @@ export async function startServer(
 ): Promise<StartedServer> {
   const ui = options.uiDir ? await loadUi(options.uiDir) : null;
   let actualPort = port;
-  const handler = createHandler(service, () => actualPort, ui);
+  const health =
+    options.health ?? (() => ({ configErrors: [], restartNeeded: [] }));
+  const hub = new EventHub(() => repositoriesJson(service, health()));
+  const unsubscribe = service.subscribe(() => {
+    hub.publish();
+  });
+  const handler = createHandler(service, () => actualPort, ui, hub, health);
   const server = createServer((req, res) => {
     void handler(req, res);
   });
@@ -392,8 +423,11 @@ export async function startServer(
       resolve({
         server,
         url: `http://${shown}:${String(actualPort)}/`,
+        hub,
         close: () =>
           new Promise<void>((done) => {
+            unsubscribe();
+            hub.close();
             server.closeAllConnections();
             server.close(() => {
               done();

@@ -186,7 +186,12 @@ export async function main(
       }
       let app;
       try {
-        app = await startApp(config);
+        app = await startApp(config, {
+          configPath: file,
+          ...(parsed.values.port === undefined
+            ? {}
+            : { port: config.server.port }),
+        });
       } catch (error) {
         io.err(error instanceof Error ? error.message : String(error));
         return 1;

@@ -14,6 +14,13 @@ import { readWorktrees, type GitWorktree } from "./worktrees.ts";
 
 export const SNAPSHOT_SCHEMA_VERSION = 1;
 
+/** Where commit objects for this snapshot are read (see remote-snapshot.ts). */
+export interface ObjectSource {
+  cwd: string;
+  /** Extra object directories for this read only (GIT_ALTERNATE_OBJECT_DIRECTORIES). */
+  alternates: string[];
+}
+
 export interface RepositorySnapshot {
   schemaVersion: typeof SNAPSHOT_SCHEMA_VERSION;
   /** Milliseconds since the epoch when the read completed. */
@@ -22,6 +29,8 @@ export interface RepositorySnapshot {
   refs: GitRef[];
   worktrees: GitWorktree[];
   topology: Topology;
+  /** Object source for commit details. */
+  objects: ObjectSource;
   completeness: {
     /** Refs and worktrees did not move during the read. */
     coherent: boolean;
@@ -60,6 +69,53 @@ export function commitTips(
   return [...tips].sort();
 }
 
+export function missingTips(
+  refs: readonly GitRef[],
+  tips: readonly string[],
+  topology: Topology,
+): string[] {
+  return [
+    ...new Set([
+      ...refs.filter((r) => r.objectType === "missing").map((r) => r.oid),
+      ...tips.filter((tip) => !topology.commits.has(tip)),
+    ]),
+  ].sort();
+}
+
+/**
+ * Read the topology reachable from `tips`. `rev-list` fails outright if any
+ * tip is missing, so on failure each tip is read alone and unavailable ones
+ * are left out (callers report them as missing).
+ */
+export async function readTopologyTolerant(
+  objects: ObjectSource,
+  tips: readonly string[],
+  shallowFile: string | undefined,
+): Promise<Topology> {
+  const options = {
+    alternates: objects.alternates,
+    ...(shallowFile === undefined ? {} : { shallowFile }),
+  };
+  try {
+    return await readTopology(objects.cwd, tips, options);
+  } catch (error) {
+    const merged: Topology = { commits: new Map(), shallowBoundary: new Set() };
+    let anyRead = false;
+    for (const tip of tips) {
+      try {
+        const part = await readTopology(objects.cwd, [tip], options);
+        for (const [oid, entry] of part.commits) merged.commits.set(oid, entry);
+        for (const oid of part.shallowBoundary) merged.shallowBoundary.add(oid);
+        anyRead = true;
+      } catch {
+        // This tip's history is unavailable; it is reported in missingTips.
+      }
+    }
+    if (!anyRead && tips.length > 0) throw error;
+    return merged;
+  }
+}
+
 export async function readSnapshot(
   path: string,
   options: { now?: () => number } = {},
@@ -67,17 +123,17 @@ export async function readSnapshot(
   const now = options.now ?? Date.now;
   const location = await resolveRepository(path);
   const cwd = location.workTree ?? location.gitDir;
+  const objects: ObjectSource = { cwd, alternates: [] };
 
   let refs = await readRefs(cwd);
   let worktrees = await readWorktrees(cwd);
   for (let attempt = 1; ; attempt++) {
     const tips = commitTips(refs, worktrees);
-    const topology = await readTopology(cwd, tips, {
-      shallowFile: join(location.commonDir, "shallow"),
-    }).catch((error: unknown) => {
-      // rev-list fails outright if any tip is missing; fall back to reading tips one at a time.
-      return readAvailable(cwd, tips, location, error);
-    });
+    const topology = await readTopologyTolerant(
+      objects,
+      tips,
+      join(location.commonDir, "shallow"),
+    );
     const refsAfter = await readRefs(cwd);
     const worktreesAfter = await readWorktrees(cwd);
     const coherent =
@@ -90,47 +146,17 @@ export async function readSnapshot(
         refs,
         worktrees,
         topology,
+        objects,
         completeness: {
           coherent,
           attempts: attempt,
           shallow: location.shallow,
           grafts: location.grafts,
-          missingTips: [
-            ...new Set([
-              ...refs
-                .filter((r) => r.objectType === "missing")
-                .map((r) => r.oid),
-              ...tips.filter((tip) => !topology.commits.has(tip)),
-            ]),
-          ].sort(),
+          missingTips: missingTips(refs, tips, topology),
         },
       };
     }
     refs = refsAfter;
     worktrees = worktreesAfter;
   }
-}
-
-async function readAvailable(
-  cwd: string,
-  tips: readonly string[],
-  location: RepositoryLocation,
-  original: unknown,
-): Promise<Topology> {
-  const merged: Topology = { commits: new Map(), shallowBoundary: new Set() };
-  let anyRead = false;
-  for (const tip of tips) {
-    try {
-      const part = await readTopology(cwd, [tip], {
-        shallowFile: join(location.commonDir, "shallow"),
-      });
-      for (const [oid, entry] of part.commits) merged.commits.set(oid, entry);
-      for (const oid of part.shallowBoundary) merged.shallowBoundary.add(oid);
-      anyRead = true;
-    } catch {
-      // This tip's history is unavailable; it is reported in missingTips.
-    }
-  }
-  if (!anyRead && tips.length > 0) throw original;
-  return merged;
 }

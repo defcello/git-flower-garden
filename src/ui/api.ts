@@ -19,21 +19,21 @@ export interface GardenData {
   graphs: ReadonlyMap<string, GraphJson>;
   /** When repository status was last received (milliseconds since the epoch). */
   fetchedAt: number;
-  /** Set when the service cannot be reached; the last data stays on screen. */
+  /** Set while the live connection is down; the last data stays on screen. */
   connectionError: string | null;
 }
-
-const POLL_MS = 3000;
-/** Re-fetch graphs at least this often: the recent window moves with the clock. */
-const GRAPH_MAX_AGE_MS = 60_000;
 
 function needsGraph(repo: RepositoryStatusJson): boolean {
   return repo.revision > 0 && repo.counts !== null;
 }
 
 /**
- * Poll the service for repository status and fetch each graph when its
- * snapshot revision changes. (Server-sent events replace polling in P1-D.)
+ * Live data over server-sent events (roadmap section 5.2). Each event carries
+ * every repository's status; a graph is fetched when its revision or the
+ * history window changes. Responses that arrive after a newer one are
+ * discarded, so an old graph can never overwrite a newer one. The browser's
+ * EventSource reconnects on its own, and the first message after a reconnect
+ * resynchronizes everything.
  */
 export function useGardenData(): GardenData {
   const [repositories, setRepositories] = useState<RepositoriesJson | null>(
@@ -44,63 +44,78 @@ export function useGardenData(): GardenData {
   );
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState(0);
-  const fetched = useRef(new Map<string, { revision: number; at: number }>());
+  /** Per repository: the graph version requested most recently. */
+  const requested = useRef(new Map<string, string>());
+  /** Per repository: the newest revision already shown. */
+  const shown = useRef(new Map<string, number>());
 
   useEffect(() => {
     const controller = new AbortController();
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    const events = new EventSource("/api/events");
 
-    const tick = async (): Promise<void> => {
+    const loadGraph = async (
+      repo: RepositoryStatusJson,
+      key: string,
+    ): Promise<void> => {
       try {
-        const repos = await getJson<RepositoriesJson>(
-          "/api/repositories",
+        const graph = await getJson<GraphJson>(
+          `/api/repositories/${encodeURIComponent(repo.id)}/graph`,
           controller.signal,
         );
-        setRepositories(repos);
-        setFetchedAt(Date.now());
-        setConnectionError(null);
-        const ids = new Set(repos.repositories.map((r) => r.id));
-        const updates = await Promise.all(
-          repos.repositories.filter(needsGraph).flatMap((repo) => {
-            const last = fetched.current.get(repo.id);
-            const fresh =
-              last &&
-              last.revision === repo.revision &&
-              Date.now() - last.at < GRAPH_MAX_AGE_MS;
-            if (fresh) return [];
-            return [
-              getJson<GraphJson>(
-                `/api/repositories/${encodeURIComponent(repo.id)}/graph`,
-                controller.signal,
-              ).then((graph) => {
-                fetched.current.set(repo.id, {
-                  revision: repo.revision,
-                  at: Date.now(),
-                });
-                return graph;
-              }),
-            ];
-          }),
-        );
-        setGraphs((previous) => {
-          const next = new Map([...previous].filter(([id]) => ids.has(id)));
-          for (const graph of updates) next.set(graph.id, graph);
-          return next;
-        });
+        // Ignore a response overtaken by a newer request or an already-shown newer revision.
+        if (requested.current.get(repo.id) !== key) return;
+        if (graph.revision < (shown.current.get(repo.id) ?? 0)) return;
+        shown.current.set(repo.id, graph.revision);
+        setGraphs((previous) => new Map(previous).set(graph.id, graph));
       } catch (error) {
-        if (controller.signal.aborted) return;
-        setConnectionError(
-          error instanceof Error ? error.message : String(error),
-        );
-      } finally {
-        if (!controller.signal.aborted)
-          timer = setTimeout(() => void tick(), POLL_MS);
+        if (!controller.signal.aborted) {
+          // The next status message will request it again.
+          requested.current.delete(repo.id);
+          setConnectionError(
+            error instanceof Error ? error.message : String(error),
+          );
+        }
       }
     };
-    void tick();
+
+    events.addEventListener("repositories", (message: MessageEvent<string>) => {
+      const repos = JSON.parse(message.data) as RepositoriesJson;
+      setRepositories(repos);
+      setFetchedAt(Date.now());
+      setConnectionError(null);
+      const ids = new Set(repos.repositories.map((r) => r.id));
+      for (const id of [...requested.current.keys()]) {
+        if (!ids.has(id)) {
+          requested.current.delete(id);
+          shown.current.delete(id);
+        }
+      }
+      setGraphs((previous) =>
+        [...previous.keys()].every((id) => ids.has(id))
+          ? previous
+          : new Map([...previous].filter(([id]) => ids.has(id))),
+      );
+      for (const repo of repos.repositories.filter(needsGraph)) {
+        const key = `${String(repo.revision)}|${String(repos.display.windowStartMs)}`;
+        if (requested.current.get(repo.id) === key) continue;
+        requested.current.set(repo.id, key);
+        void loadGraph(repo, key);
+      }
+    });
+    events.onerror = () => {
+      setConnectionError("connection lost; reconnecting");
+    };
+    events.onopen = () => {
+      // A reconnect may be to a restarted service whose revisions start over:
+      // forget what was shown and let the first message request everything.
+      requested.current.clear();
+      shown.current.clear();
+      setConnectionError(null);
+    };
+
     return () => {
       controller.abort();
-      clearTimeout(timer);
+      events.close();
     };
   }, []);
 

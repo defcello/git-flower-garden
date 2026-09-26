@@ -67,6 +67,8 @@ if (!result.ok) throw new Error(JSON.stringify(result.errors));
 
 const app = await startApp(result.config, {
   now: () => FIXTURE_NOW,
+  // Never touch the real per-user cache from tests.
+  cacheRoot: join(root, ".git-garden-cache"),
   port,
   uiDir: resolve(import.meta.dirname, "../../dist/ui"),
 });

@@ -43,7 +43,11 @@ export interface CommitDetails {
 export async function readTopology(
   cwd: string,
   tips: readonly string[],
-  options: { maxOutputBytes?: number; shallowFile?: string } = {},
+  options: {
+    maxOutputBytes?: number;
+    shallowFile?: string;
+    alternates?: readonly string[];
+  } = {},
 ): Promise<Topology> {
   const commits = new Map<string, TopologyEntry>();
   const shallowBoundary = new Set<string>();
@@ -55,6 +59,7 @@ export async function readTopology(
         input: tips.map((tip) => `${tip}\n`).join(""),
         maxOutputBytes: options.maxOutputBytes ?? 1024 * 1024 * 1024,
         timeoutMs: 120_000,
+        ...(options.alternates ? { alternates: options.alternates } : {}),
       },
     );
     for (const line of records(output, "\n")) {
@@ -88,6 +93,7 @@ async function readShallowFile(path: string): Promise<string[]> {
 export async function readCommitDetails(
   cwd: string,
   oids: readonly string[],
+  options: { alternates?: readonly string[] } = {},
 ): Promise<Map<string, CommitDetails>> {
   const result = new Map<string, CommitDetails>();
   if (oids.length === 0) return result;
@@ -95,6 +101,7 @@ export async function readCommitDetails(
     cwd,
     input: oids.map((oid) => `${oid}\n`).join(""),
     maxOutputBytes: 256 * 1024 * 1024,
+    ...(options.alternates ? { alternates: options.alternates } : {}),
   });
 
   let offset = 0;

@@ -1,13 +1,25 @@
 /**
- * Owns the latest coherent snapshot and status of every configured source
- * (roadmap sections 5 and 5.2). One read runs per repository at a time;
- * concurrent requests share it. A failed refresh keeps the last good
- * snapshot and marks the source stale, so one broken repository never blanks
- * the garden or blocks the others.
+ * Continuous monitoring of every configured source (roadmap sections 5 and 5.2).
+ *
+ * Per repository:
+ * - One read at a time. Triggers that arrive during a read are merged into a
+ *   single follow-up read, so a change made mid-read is never missed and a
+ *   burst of events never queues a burst of reads.
+ * - Filesystem watchers are hints (debounced 250 ms); a reconcile timer is the
+ *   source of truth. A failed read keeps the last good snapshot ("stale").
+ * - Remotes are fetched into an app-owned cache on a jittered timer, with a
+ *   global concurrency limit and exponential backoff; local monitoring keeps
+ *   running whatever the network does. Remote freshness is reported
+ *   separately from local freshness.
+ * - The revision changes only when what the graph shows changed, so quiet
+ *   reconciles do not make clients refetch.
+ *
+ * Changes are published to listeners (the server-sent event hub).
  */
-import { stat } from "node:fs/promises";
+import { access, mkdir, stat } from "node:fs/promises";
 import type { Config, RepositoryConfig } from "../config/config.ts";
-import { historyWindow } from "../core/business-days.ts";
+import { defaultCacheDir } from "../config/paths.ts";
+import { historyWindow, nextRecomputeMs } from "../core/business-days.ts";
 import {
   lanePriority,
   refLabels,
@@ -15,10 +27,18 @@ import {
 } from "../core/snapshot-graph.ts";
 import { buildVisibleGraph, type VisibleGraph } from "../core/visible-graph.ts";
 import { readCommitDetails, type CommitDetails } from "../git/commits.ts";
+import { ensureCache, fetchIntoCache, remoteUrl } from "../git/remote-cache.ts";
+import {
+  readLocalWithRemotes,
+  readRemoteOnlySnapshot,
+  type CachedRemote,
+} from "../git/remote-snapshot.ts";
 import { redactCredentials } from "../git/run-git.ts";
 import { readSnapshot, type RepositorySnapshot } from "../git/snapshot.ts";
 import type { GitWorktree } from "../git/worktrees.ts";
 import { layoutGraph, type Layout } from "../render/layout.ts";
+import { cachedRemotes, objectsDir, readMeta, writeMeta } from "./cache.ts";
+import { watchRepository, type RepositoryWatch } from "./watch.ts";
 
 export type SourceState =
   "initializing" | "ready" | "stale" | "offline" | "error" | "incomplete";
@@ -32,13 +52,25 @@ export interface SourceStatus {
   diagnostic: string | null;
 }
 
+export interface RemoteStatus {
+  /** "pending" before the first fetch attempt finishes. */
+  state: "pending" | "ok" | "error";
+  lastAttempt: number | null;
+  /** Last successful fetch, including one remembered from a previous run. */
+  lastSuccess: number | null;
+  nextAttempt: number | null;
+  diagnostic: string | null;
+}
+
 export interface RepositoryView {
   id: string;
   label: string;
   kind: "local" | "remote";
-  /** Increases on every successful refresh. */
+  /** Changes whenever what the graph shows may have changed. */
   revision: number;
   status: SourceStatus;
+  /** Freshness of monitored remotes; null for local-only sources. */
+  remote: RemoteStatus | null;
   snapshot: RepositorySnapshot | null;
 }
 
@@ -64,45 +96,176 @@ export interface TagSummary {
   peeledType: string | null;
 }
 
-interface Entry {
-  config: RepositoryConfig;
-  view: RepositoryView;
-  inFlight: Promise<RepositoryView> | null;
-  details: Map<string, CommitDetails>;
-  /** The most recent graph and the inputs it was computed from. */
-  lastGraph: { key: string; view: GraphView } | null;
-}
+export type ServiceEvent =
+  | { type: "repository"; id: string }
+  | { type: "repositories" }
+  | { type: "window" };
 
 export interface ServiceOptions {
   now?: () => number;
+  /** Replaces local snapshot reads (tests). */
   readSnapshot?: typeof readSnapshot;
+  /** Root of app-owned caches; defaults to the per-user cache directory. */
+  cacheRoot?: string;
+  /** Run watchers and timers. Off by default so unit tests stay deterministic. */
+  background?: boolean;
+  /** Filesystem watchers (with background); reconciliation still runs without them. */
+  watch?: boolean;
+  /** Overrides for tests; production uses the configuration. */
+  intervals?: {
+    reconcileMs?: number;
+    remotePollMs?: number;
+    debounceMs?: number;
+  };
+  /** Random source for jitter (tests). */
+  random?: () => number;
+}
+
+interface Entry {
+  config: RepositoryConfig;
+  view: RepositoryView;
+  remotes: CachedRemote[];
+  /** Remotes with fetched (or remembered) cache contents. */
+  fetched: Set<string>;
+  /** A read loop is running. */
+  running: boolean;
+  /** Another read is wanted after the current one. */
+  pending: boolean;
+  readsStarted: number;
+  /** Tail of the queue of cache reads and fetches (see withCache). */
+  cacheLock: Promise<void>;
+  waiters: { target: number; resolve: (view: RepositoryView) => void }[];
+  fingerprint: string | null;
+  details: Map<string, CommitDetails>;
+  lastGraph: { key: string; view: GraphView } | null;
+  watch: RepositoryWatch | null;
+  watchedDir: string | null;
+  debounce: ReturnType<typeof setTimeout> | null;
+  remoteTimer: ReturnType<typeof setTimeout> | null;
+  remoteFailures: number;
+  fetchAbort: AbortController | null;
+  stopped: boolean;
+}
+
+const MAX_BACKOFF_MS = 15 * 60 * 1000;
+
+/** Bounds the number of concurrent fetches across all repositories. */
+class Semaphore {
+  private active = 0;
+  private limit: number;
+  private readonly waiting: (() => void)[] = [];
+
+  constructor(limit: number) {
+    this.limit = limit;
+  }
+
+  setLimit(limit: number): void {
+    this.limit = limit;
+    this.drain();
+  }
+
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    await new Promise<void>((resolve) => {
+      this.waiting.push(resolve);
+      this.drain();
+    });
+    try {
+      return await task();
+    } finally {
+      this.active--;
+      this.drain();
+    }
+  }
+
+  private drain(): void {
+    while (this.active < this.limit && this.waiting.length > 0) {
+      this.active++;
+      (this.waiting.shift() as () => void)();
+    }
+  }
 }
 
 export class RepositoryService {
   private readonly entries = new Map<string, Entry>();
   private readonly now: () => number;
   private readonly read: typeof readSnapshot;
+  private readonly listeners = new Set<(event: ServiceEvent) => void>();
+  private readonly cacheRoot: string;
+  private readonly background: boolean;
+  private readonly watchFiles: boolean;
+  private readonly random: () => number;
+  private readonly fetches: Semaphore;
+  private reconcileTimer: ReturnType<typeof setInterval> | null = null;
+  private windowTimer: ReturnType<typeof setTimeout> | null = null;
+  private windowStart: number | null = null;
+  private readonly intervals: NonNullable<ServiceOptions["intervals"]>;
   config: Config;
 
   constructor(config: Config, options: ServiceOptions = {}) {
     this.config = config;
     this.now = options.now ?? Date.now;
     this.read = options.readSnapshot ?? readSnapshot;
+    this.cacheRoot = options.cacheRoot ?? defaultCacheDir();
+    this.background = options.background ?? false;
+    this.watchFiles = options.watch ?? true;
+    this.random = options.random ?? Math.random;
+    this.intervals = options.intervals ?? {};
+    this.fetches = new Semaphore(config.monitor.maxConcurrentFetches);
     for (const repo of config.repositories) this.add(repo);
   }
 
-  private add(repo: RepositoryConfig): void {
-    this.entries.set(repo.id, {
+  // ---- events -------------------------------------------------------------
+
+  subscribe(listener: (event: ServiceEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private emit(event: ServiceEvent): void {
+    for (const listener of this.listeners) listener(event);
+  }
+
+  // ---- lifecycle ----------------------------------------------------------
+
+  private add(repo: RepositoryConfig): Entry {
+    const remotes = cachedRemotes(repo);
+    const entry: Entry = {
       config: repo,
-      inFlight: null,
+      remotes,
+      fetched: new Set(),
+      running: false,
+      pending: false,
+      readsStarted: 0,
+      cacheLock: Promise.resolve(),
+      waiters: [],
+      fingerprint: null,
       details: new Map(),
       lastGraph: null,
+      watch: null,
+      watchedDir: null,
+      debounce: null,
+      remoteTimer: null,
+      remoteFailures: 0,
+      fetchAbort: null,
+      stopped: false,
       view: {
         id: repo.id,
         label: repo.label,
         kind: repo.path === undefined ? "remote" : "local",
         revision: 0,
         snapshot: null,
+        remote:
+          remotes.length > 0
+            ? {
+                state: "pending",
+                lastAttempt: null,
+                lastSuccess: null,
+                nextAttempt: null,
+                diagnostic: null,
+              }
+            : null,
         status: {
           state: "initializing",
           lastAttempt: null,
@@ -110,71 +273,329 @@ export class RepositoryService {
           diagnostic: null,
         },
       },
+    };
+    this.entries.set(repo.id, entry);
+    return entry;
+  }
+
+  /**
+   * Serialize everything that touches one repository's cache: a read never
+   * sees a fetch half-applied, and two fetches never write at once.
+   */
+  private async withCache<T>(entry: Entry, task: () => Promise<T>): Promise<T> {
+    const previous = entry.cacheLock;
+    let release = (): void => undefined;
+    entry.cacheLock = new Promise<void>((resolve) => {
+      release = resolve;
     });
+    await previous;
+    try {
+      return await task();
+    } finally {
+      release();
+    }
+  }
+
+  /** Read through a call: stop() can run while a fetch or read is awaited. */
+  private isStopped(entry: Entry): boolean {
+    return entry.stopped;
+  }
+
+  private stopEntry(entry: Entry): void {
+    entry.stopped = true;
+    entry.watch?.close();
+    entry.watch = null;
+    if (entry.debounce) clearTimeout(entry.debounce);
+    if (entry.remoteTimer) clearTimeout(entry.remoteTimer);
+    entry.fetchAbort?.abort();
+  }
+
+  /**
+   * Initial read of every source (remembered remote state first), then, with
+   * `background`, start watchers and timers.
+   */
+  async start(): Promise<void> {
+    await Promise.all(
+      [...this.entries.values()].map((e) => this.restoreRemotes(e)),
+    );
+    await this.refreshAll();
+    if (!this.background) return;
+    this.startTimers();
+    let stagger = 0;
+    for (const entry of this.entries.values()) {
+      // Stagger first fetches so a large garden does not hit the network at once.
+      if (entry.remotes.length > 0) this.scheduleFetch(entry, stagger);
+      stagger += 250;
+    }
+  }
+
+  stop(): void {
+    if (this.reconcileTimer) clearInterval(this.reconcileTimer);
+    if (this.windowTimer) clearTimeout(this.windowTimer);
+    this.reconcileTimer = null;
+    this.windowTimer = null;
+    for (const entry of this.entries.values()) this.stopEntry(entry);
+  }
+
+  private startTimers(): void {
+    if (this.reconcileTimer) clearInterval(this.reconcileTimer);
+    const reconcileMs =
+      this.intervals.reconcileMs ??
+      this.config.monitor.localReconcileSeconds * 1000;
+    this.reconcileTimer = setInterval(() => {
+      // Local sources only; remote-only sources change only when fetched.
+      for (const entry of this.entries.values()) {
+        if (entry.config.path !== undefined) void this.refresh(entry.config.id);
+      }
+      this.checkWindow();
+    }, reconcileMs);
+    this.reconcileTimer.unref();
+    this.scheduleWindowTimer();
+  }
+
+  /** Recompute at the next local midnight, and on every tick in case the clock jumped. */
+  private scheduleWindowTimer(): void {
+    if (this.windowTimer) clearTimeout(this.windowTimer);
+    const now = this.now();
+    const delay = Math.max(
+      1000,
+      nextRecomputeMs(now, this.config.history.timeZone) - now + 1000,
+    );
+    this.windowTimer = setTimeout(
+      () => {
+        this.checkWindow();
+        this.scheduleWindowTimer();
+      },
+      Math.min(delay, 2 ** 31 - 1),
+    );
+    this.windowTimer.unref();
+  }
+
+  /** Publish a "window" event when the recent-history window has moved. */
+  checkWindow(): void {
+    const start = historyWindow(this.config.history, this.now()).startMs;
+    if (this.windowStart !== null && start !== this.windowStart) {
+      this.windowStart = start;
+      this.emit({ type: "window" });
+      return;
+    }
+    this.windowStart = start;
+  }
+
+  windowStartMs(): number {
+    return historyWindow(this.config.history, this.now()).startMs;
+  }
+
+  /** Apply a new valid configuration without restarting unaffected sources. */
+  async applyConfig(next: Config): Promise<void> {
+    const before = this.config;
+    this.config = next;
+    this.fetches.setLimit(next.monitor.maxConcurrentFetches);
+    const nextById = new Map(next.repositories.map((r) => [r.id, r]));
+    const started: string[] = [];
+    for (const [id, entry] of this.entries) {
+      const repo = nextById.get(id);
+      const sameSource =
+        repo !== undefined &&
+        repo.path === entry.config.path &&
+        repo.url === entry.config.url &&
+        repo.remotes.join("\n") === entry.config.remotes.join("\n");
+      if (!sameSource) {
+        this.stopEntry(entry);
+        this.entries.delete(id);
+      } else {
+        entry.config = repo;
+        entry.view = { ...entry.view, label: repo.label };
+        entry.lastGraph = null; // history or display settings may have changed
+      }
+    }
+    // Rebuild in configuration order.
+    const ordered = new Map<string, Entry>();
+    for (const repo of next.repositories) {
+      let entry = this.entries.get(repo.id);
+      if (!entry) {
+        entry = this.add(repo);
+        started.push(repo.id);
+      }
+      ordered.set(repo.id, entry);
+    }
+    this.entries.clear();
+    for (const [id, entry] of ordered) this.entries.set(id, entry);
+
+    const timingChanged =
+      before.monitor.localReconcileSeconds !==
+        next.monitor.localReconcileSeconds ||
+      before.history.timeZone !== next.history.timeZone;
+    if (this.background && timingChanged) this.startTimers();
+    this.windowStart = null;
+    this.checkWindow();
+    this.emit({ type: "repositories" });
+    await Promise.all(
+      started.map(async (id) => {
+        const entry = this.entries.get(id) as Entry;
+        await this.restoreRemotes(entry);
+        await this.refresh(id);
+        if (this.background && entry.remotes.length > 0)
+          this.scheduleFetch(entry, 0);
+      }),
+    );
   }
 
   ids(): string[] {
-    return this.config.repositories.map((r) => r.id);
+    return this.config.repositories
+      .map((r) => r.id)
+      .filter((id) => this.entries.has(id));
   }
 
   view(id: string): RepositoryView | undefined {
     return this.entries.get(id)?.view;
   }
 
-  /** Re-read one repository. Concurrent callers share the same read. */
+  // ---- local reads --------------------------------------------------------
+
+  /**
+   * Re-read one repository. Requests made while a read runs are merged into
+   * one more read after it. Each caller's promise resolves when a read that
+   * *started after its request* completes, so a stream of new requests (e.g.
+   * reconcile ticks on a slow repository) can never keep a caller waiting.
+   */
   refresh(id: string): Promise<RepositoryView> {
     const entry = this.entries.get(id);
     if (!entry) return Promise.reject(new Error(`Unknown repository ${id}`));
-    entry.inFlight ??= this.doRefresh(entry).finally(() => {
-      entry.inFlight = null;
+    entry.pending = true;
+    const target = entry.readsStarted + 1;
+    const done = new Promise<RepositoryView>((resolve) => {
+      entry.waiters.push({ target, resolve });
     });
-    return entry.inFlight;
+    if (!entry.running) void this.runReads(entry);
+    return done;
+  }
+
+  private async runReads(entry: Entry): Promise<void> {
+    entry.running = true;
+    try {
+      while (entry.pending && !this.isStopped(entry)) {
+        entry.pending = false;
+        entry.readsStarted++;
+        const started = entry.readsStarted;
+        await this.doRefresh(entry);
+        this.settle(entry, started);
+      }
+    } finally {
+      entry.running = false;
+      // A stopped entry resolves everyone with its last view.
+      this.settle(entry, Number.POSITIVE_INFINITY);
+    }
+  }
+
+  private settle(entry: Entry, completed: number): void {
+    const remaining: Entry["waiters"] = [];
+    for (const waiter of entry.waiters) {
+      if (waiter.target <= completed) waiter.resolve(entry.view);
+      else remaining.push(waiter);
+    }
+    entry.waiters = remaining;
   }
 
   refreshAll(): Promise<RepositoryView[]> {
     return Promise.all(this.ids().map((id) => this.refresh(id)));
   }
 
-  private async doRefresh(entry: Entry): Promise<RepositoryView> {
+  private setView(entry: Entry, view: RepositoryView): void {
+    const before = entry.view;
+    entry.view = view;
+    const changed =
+      before.revision !== view.revision ||
+      before.status.state !== view.status.state ||
+      before.status.diagnostic !== view.status.diagnostic ||
+      JSON.stringify(before.remote) !== JSON.stringify(view.remote);
+    if (changed && !entry.stopped)
+      this.emit({ type: "repository", id: entry.config.id });
+  }
+
+  private async doRefresh(entry: Entry): Promise<void> {
     const attempt = this.now();
-    const previous = entry.view;
-    if (entry.config.path === undefined) {
-      entry.view = {
-        ...previous,
-        status: {
-          state: "error",
-          lastAttempt: attempt,
-          lastSuccess: previous.status.lastSuccess,
-          diagnostic:
-            "Remote-only sources are not monitored yet (roadmap P1-D).",
-        },
-      };
-      return entry.view;
-    }
+    const repo = entry.config;
     try {
-      // A missing working directory makes spawn report "git ENOENT", which
-      // reads like Git is not installed; check the path first.
-      const info = await stat(entry.config.path).catch(() => null);
-      if (!info?.isDirectory())
-        throw new Error(`Path not found: ${entry.config.path}`);
-      const snapshot = await this.read(entry.config.path, { now: this.now });
+      let snapshot: RepositorySnapshot | null;
+      if (repo.path !== undefined) {
+        // A missing working directory makes spawn report "git ENOENT", which
+        // reads like Git is not installed; check the path first.
+        const info = await stat(repo.path).catch(() => null);
+        if (!info?.isDirectory())
+          throw new Error(`Path not found: ${repo.path}`);
+        snapshot =
+          entry.remotes.length > 0 && entry.fetched.size > 0
+            ? await this.withCache(entry, () =>
+                readLocalWithRemotes(
+                  repo.path as string,
+                  objectsDir(this.cacheRoot, repo.id),
+                  entry.remotes,
+                  { now: this.now, fetched: entry.fetched },
+                ),
+              )
+            : await this.read(repo.path, { now: this.now });
+      } else {
+        const remote = entry.remotes[0] as CachedRemote;
+        snapshot = entry.fetched.has(remote.key)
+          ? await this.withCache(entry, () =>
+              readRemoteOnlySnapshot(
+                objectsDir(this.cacheRoot, repo.id),
+                remote,
+                {
+                  now: this.now,
+                },
+              ),
+            )
+          : null;
+      }
+      if (entry.stopped) return;
+      // Read the view at write time: a fetch may have updated it meanwhile.
+      const previous = entry.view;
+      if (snapshot === null) {
+        // Remote-only source that has never been fetched.
+        this.setView(entry, {
+          ...previous,
+          status: {
+            state:
+              previous.remote?.state === "error" ? "offline" : "initializing",
+            lastAttempt: attempt,
+            lastSuccess: null,
+            diagnostic:
+              previous.remote?.state === "error"
+                ? previous.remote.diagnostic
+                : "Waiting for the first fetch from the remote.",
+          },
+        });
+        return;
+      }
+      if (repo.path !== undefined) this.ensureWatch(entry, snapshot);
+      const fingerprint = snapshotFingerprint(snapshot);
+      const changed = fingerprint !== entry.fingerprint;
+      entry.fingerprint = fingerprint;
       const problems = describeIncomplete(snapshot);
-      entry.view = {
+      const remoteNote = remoteStaleNote(
+        entry.view.remote,
+        repo.path === undefined,
+      );
+      this.setView(entry, {
         ...previous,
-        revision: previous.revision + 1,
-        snapshot,
+        revision: changed ? previous.revision + 1 : previous.revision,
+        snapshot: changed ? snapshot : (previous.snapshot ?? snapshot),
         status: {
-          state: problems ? "incomplete" : "ready",
+          state: problems ? "incomplete" : remoteNote ? "stale" : "ready",
           lastAttempt: attempt,
           lastSuccess: this.now(),
-          diagnostic: problems,
+          diagnostic: [problems, remoteNote].filter(Boolean).join("; ") || null,
         },
-      };
+      });
     } catch (error) {
+      if (this.isStopped(entry)) return;
+      const previous = entry.view;
       const message = redactCredentials(
         error instanceof Error ? error.message : String(error),
       );
-      entry.view = {
+      this.setView(entry, {
         ...previous,
         status: {
           state: previous.snapshot ? "stale" : "error",
@@ -182,10 +603,168 @@ export class RepositoryService {
           lastSuccess: previous.status.lastSuccess,
           diagnostic: friendly(message),
         },
+      });
+    }
+  }
+
+  private ensureWatch(entry: Entry, snapshot: RepositorySnapshot): void {
+    if (!this.background || !this.watchFiles || entry.stopped) return;
+    const dir = snapshot.location.commonDir;
+    if (entry.watch && entry.watchedDir === dir) return;
+    entry.watch?.close();
+    entry.watchedDir = dir;
+    entry.watch = watchRepository(
+      { commonDir: dir, gitDirs: [snapshot.location.gitDir] },
+      () => {
+        this.hint(entry);
+      },
+      () => {
+        // Watching failed (e.g. network filesystem): reconciliation carries on.
+        entry.watch?.close();
+        entry.watch = null;
+        entry.watchedDir = null;
+      },
+    );
+  }
+
+  private hint(entry: Entry): void {
+    if (entry.stopped) return;
+    if (entry.debounce) clearTimeout(entry.debounce);
+    entry.debounce = setTimeout(() => {
+      entry.debounce = null;
+      void this.refresh(entry.config.id);
+    }, this.intervals.debounceMs ?? 250);
+    entry.debounce.unref();
+  }
+
+  // ---- remotes ------------------------------------------------------------
+
+  /** Use cache contents from a previous run as last-known state. */
+  private async restoreRemotes(entry: Entry): Promise<void> {
+    if (entry.remotes.length === 0) return;
+    const dir = objectsDir(this.cacheRoot, entry.config.id);
+    const exists = await access(dir).then(
+      () => true,
+      () => false,
+    );
+    if (!exists) return;
+    const meta = await readMeta(this.cacheRoot, entry.config.id);
+    let lastSuccess: number | null = null;
+    for (const remote of entry.remotes) {
+      const known = meta.remotes[remote.key]?.lastSuccess ?? null;
+      if (known !== null) {
+        entry.fetched.add(remote.key);
+        lastSuccess = Math.max(lastSuccess ?? 0, known);
+      }
+    }
+    if (lastSuccess !== null && entry.view.remote) {
+      entry.view = {
+        ...entry.view,
+        remote: {
+          ...entry.view.remote,
+          lastSuccess,
+          diagnostic: "Checking the remote for changes…",
+        },
       };
     }
+  }
+
+  private scheduleFetch(entry: Entry, delayMs: number): void {
+    if (entry.stopped) return;
+    if (entry.remoteTimer) clearTimeout(entry.remoteTimer);
+    const nextAttempt = this.now() + delayMs;
+    if (entry.view.remote) {
+      entry.view = {
+        ...entry.view,
+        remote: { ...entry.view.remote, nextAttempt },
+      };
+    }
+    entry.remoteTimer = setTimeout(() => {
+      entry.remoteTimer = null;
+      void this.fetchRemotes(entry.config.id).finally(() => {
+        this.scheduleFetch(entry, this.nextFetchDelay(entry));
+      });
+    }, delayMs);
+    entry.remoteTimer.unref();
+  }
+
+  /** Poll interval ±10% jitter; after failures, exponential backoff to 15 minutes. */
+  private nextFetchDelay(entry: Entry): number {
+    const base =
+      this.intervals.remotePollMs ??
+      this.config.monitor.remotePollSeconds * 1000;
+    const delay =
+      entry.remoteFailures === 0
+        ? base
+        : Math.min(
+            MAX_BACKOFF_MS,
+            base * 2 ** Math.min(entry.remoteFailures, 16),
+          );
+    return Math.round(delay * (0.9 + this.random() * 0.2));
+  }
+
+  /** Fetch every monitored remote of one repository now (also used for manual retry). */
+  async fetchRemotes(id: string): Promise<RepositoryView | undefined> {
+    const entry = this.entries.get(id);
+    if (!entry || entry.remotes.length === 0 || entry.stopped)
+      return entry?.view;
+    const attempt = this.now();
+    const dir = objectsDir(this.cacheRoot, entry.config.id);
+    const errors: string[] = [];
+    const meta = await readMeta(this.cacheRoot, entry.config.id);
+    for (const remote of entry.remotes) {
+      const abort = new AbortController();
+      entry.fetchAbort = abort;
+      try {
+        const url =
+          entry.config.url ??
+          (await remoteUrl(entry.config.path as string, remote.name));
+        await mkdir(dir, { recursive: true });
+        await ensureCache(dir);
+        await this.withCache(entry, () =>
+          this.fetches.run(() =>
+            fetchIntoCache(dir, remote.key, url, {
+              timeoutMs: this.config.monitor.fetchTimeoutSeconds * 1000,
+              signal: abort.signal,
+            }),
+          ),
+        );
+        if (this.isStopped(entry)) return entry.view;
+        meta.remotes[remote.key] = {
+          url: redactCredentials(url),
+          lastSuccess: this.now(),
+        };
+        entry.fetched.add(remote.key);
+      } catch (error) {
+        if (this.isStopped(entry)) return entry.view;
+        const message = redactCredentials(
+          error instanceof Error ? error.message : String(error),
+        );
+        errors.push(`${remote.name}: ${fetchDiagnostic(message)}`);
+      } finally {
+        entry.fetchAbort = null;
+      }
+    }
+    await writeMeta(this.cacheRoot, entry.config.id, meta).catch(
+      () => undefined,
+    );
+    entry.remoteFailures = errors.length > 0 ? entry.remoteFailures + 1 : 0;
+    const previous = entry.view.remote as RemoteStatus;
+    this.setView(entry, {
+      ...entry.view,
+      remote: {
+        state: errors.length > 0 ? "error" : "ok",
+        lastAttempt: attempt,
+        lastSuccess: errors.length > 0 ? previous.lastSuccess : this.now(),
+        nextAttempt: previous.nextAttempt,
+        diagnostic: errors.length > 0 ? errors.join("; ") : null,
+      },
+    });
+    await this.refresh(id);
     return entry.view;
   }
+
+  // ---- graph --------------------------------------------------------------
 
   /** Visible graph, layout, labels, and subjects for the current snapshot and clock. */
   async graph(
@@ -210,6 +789,7 @@ export class RepositoryService {
       revealed.join(","),
     ].join("|");
     if (entry.lastGraph?.key === key) return entry.lastGraph.view;
+
     const graph = buildVisibleGraph(
       snapshotGraphInput(snapshot, window, revealed),
     );
@@ -218,10 +798,11 @@ export class RepositoryService {
       (oid) => !entry.details.has(oid),
     );
     if (missing.length > 0) {
-      const cwd = snapshot.location.workTree ?? snapshot.location.gitDir;
-      // Commit objects are immutable, so details are cached by OID for good.
-      for (const [oid, d] of await readCommitDetails(cwd, missing))
-        entry.details.set(oid, d);
+      // Commit objects are immutable, so details are cached by OID.
+      const read = await readCommitDetails(snapshot.objects.cwd, missing, {
+        alternates: snapshot.objects.alternates,
+      });
+      for (const [oid, d] of read) entry.details.set(oid, d);
     }
     const details = new Map(
       [...graph.nodes.keys()].flatMap((oid) => {
@@ -268,6 +849,22 @@ export class RepositoryService {
   }
 }
 
+/** What the graph depends on: ref and worktree targets, topology size, completeness. */
+function snapshotFingerprint(snapshot: RepositorySnapshot): string {
+  return JSON.stringify([
+    snapshot.refs.map((r) => [r.name, r.oid, r.commitOid]),
+    snapshot.worktrees.map((w) => [
+      w.path,
+      w.headOid,
+      w.branch,
+      w.locked,
+      w.prunable,
+    ]),
+    snapshot.topology.commits.size,
+    snapshot.completeness,
+  ]);
+}
+
 function describeIncomplete(snapshot: RepositorySnapshot): string | null {
   const c = snapshot.completeness;
   const notes: string[] = [];
@@ -279,6 +876,33 @@ function describeIncomplete(snapshot: RepositorySnapshot): string | null {
   if (c.missingTips.length > 0)
     notes.push(`${String(c.missingTips.length)} ref target(s) unavailable`);
   return notes.length > 0 ? notes.join("; ") : null;
+}
+
+/** Remote-only sources are stale when their remote cannot be reached. */
+function remoteStaleNote(
+  remote: RemoteStatus | null,
+  remoteOnly: boolean,
+): string | null {
+  if (!remoteOnly || !remote || remote.state !== "error") return null;
+  return `remote unreachable; showing the state fetched ${remote.lastSuccess ? "earlier" : "previously"}`;
+}
+
+function fetchDiagnostic(message: string): string {
+  if (
+    /terminal prompts disabled|could not read Username|Authentication failed|Permission denied \(publickey\)|401|403/i.test(
+      message,
+    )
+  ) {
+    return `authentication needed. Check that \`git ls-remote\` works for this remote in a terminal, using your credential helper or SSH agent. (${message})`;
+  }
+  if (
+    /Could not resolve host|unable to access|Connection (refused|timed out)|does not appear to be a git repository|not found/i.test(
+      message,
+    )
+  ) {
+    return `remote unreachable (${message})`;
+  }
+  return message;
 }
 
 function friendly(message: string): string {

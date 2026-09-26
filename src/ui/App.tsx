@@ -8,6 +8,7 @@ import {
 import type {
   GraphJson,
   GraphNodeJson,
+  RemoteStatusJson,
   RepositoryStatusJson,
 } from "../api/types.ts";
 import { useGardenData } from "./api.ts";
@@ -15,6 +16,7 @@ import { Details } from "./Details.tsx";
 import { FocusGraph } from "./FocusGraph.tsx";
 import {
   describeNode,
+  durationText,
   reasonText,
   relativeTime,
   shortOid,
@@ -121,10 +123,31 @@ export function App() {
         )}
         <Legend />
       </header>
+      {repositories && repositories.configErrors.length > 0 && (
+        <div className="banner" role="alert">
+          <strong>
+            The configuration file has problems; the last valid configuration is
+            still in use.
+          </strong>
+          <ul>
+            {repositories.configErrors.map((e) => (
+              <li key={e}>
+                <code>{e}</code>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {repositories && repositories.restartNeeded.length > 0 && (
+        <div className="banner" role="status">
+          Restart git-garden to apply changes to{" "}
+          {repositories.restartNeeded.join(", ")}.
+        </div>
+      )}
       {connectionError && (
         <div className="banner" role="status">
-          Cannot reach the git-garden service ({connectionError}). Showing the
-          last known state.
+          Live updates interrupted ({connectionError}). Showing the last known
+          state.
         </div>
       )}
       {!repositories ? (
@@ -248,6 +271,43 @@ function StatusLine({
       )}
       {repo.status.diagnostic && (
         <div className="diagnostic">{repo.status.diagnostic}</div>
+      )}
+      {repo.remote && <RemoteLine remote={repo.remote} now={now} />}
+    </div>
+  );
+}
+
+/** Remote freshness, reported separately from the local repository's state. */
+function RemoteLine({
+  remote,
+  now,
+}: {
+  remote: RemoteStatusJson;
+  now: number;
+}) {
+  const checked =
+    remote.lastSuccess === null
+      ? "never fetched"
+      : `fetched ${relativeTime(remote.lastSuccess, now)}`;
+  const next =
+    remote.nextAttempt !== null && remote.nextAttempt > now
+      ? ` · next check in ${durationText(remote.nextAttempt - now)}`
+      : "";
+  return (
+    <div className={`remote remote-${remote.state}`}>
+      <span aria-hidden="true" className="glyph">
+        {remote.state === "error" ? "✕" : remote.state === "ok" ? "⇅" : "…"}
+      </span>{" "}
+      Remote:{" "}
+      {remote.state === "error"
+        ? "unreachable"
+        : remote.state === "pending"
+          ? "checking"
+          : "up to date"}{" "}
+      · {checked}
+      {next}
+      {remote.state === "error" && remote.diagnostic && (
+        <div className="diagnostic">{remote.diagnostic}</div>
       )}
     </div>
   );

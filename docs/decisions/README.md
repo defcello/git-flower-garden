@@ -19,5 +19,6 @@ supersedes the old one and update the roadmap, examples, schema, and tests toget
 | [0009](0009-visible-graph-and-static-svg.md) | Visible graph, reduced edges, layout, and static SVG | Accepted |
 | [0010](0010-quiet-history-and-pipeline-benchmark.md) | Evidence: quiet repositories and graph pipeline cost | Accepted |
 | [0011](0011-interactive-technical-renderer.md) | Interactive technical renderer and browser tests | Accepted |
+| [0012](0012-continuous-monitoring.md) | Continuous local and remote monitoring, SSE, config reload | Accepted |
 
 Benchmark and probe evidence (roadmap P0-B onward) also belongs in this directory.

@@ -13,12 +13,22 @@ export interface SourceStatusJson {
   diagnostic: string | null;
 }
 
+export interface RemoteStatusJson {
+  state: "pending" | "ok" | "error";
+  lastAttempt: number | null;
+  lastSuccess: number | null;
+  nextAttempt: number | null;
+  diagnostic: string | null;
+}
+
 export interface RepositoryStatusJson {
   id: string;
   label: string;
   kind: "local" | "remote";
   revision: number;
   status: SourceStatusJson;
+  /** Freshness of monitored remotes, reported separately from local state. */
+  remote: RemoteStatusJson | null;
   counts: { refs: number; worktrees: number; reachableCommits: number } | null;
 }
 
@@ -26,12 +36,18 @@ export interface DisplayJson {
   timeZone: string;
   businessDays: number;
   reducedMotion: boolean;
+  /** Start of the recent-history window; when it moves, graphs change. */
+  windowStartMs: number;
 }
 
 export interface RepositoriesJson {
   apiVersion: number;
   display: DisplayJson;
   repositories: RepositoryStatusJson[];
+  /** Problems in the configuration file; the last valid configuration stays active. */
+  configErrors: string[];
+  /** Settings that need a restart to take effect. */
+  restartNeeded: string[];
 }
 
 export type InclusionReasonJson =

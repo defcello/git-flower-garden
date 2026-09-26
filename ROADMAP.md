@@ -1,6 +1,6 @@
 # git-garden roadmap
 
-Status: P0, P1-A, P1-B, and P1-C complete; next is P1-D continuous monitoring (watchers, remote caches, server-sent events). Updated: 2026-09-26.
+Status: P0 and P1-A through P1-D complete (P1-D's private-GitHub rehearsal is left to the maintainer); next is P1-E hardening and the v0.1.0 functional preview. Updated: 2026-09-26.
 
 This document is the implementation contract for future sessions and contributors. It takes the repository from its initial README and MIT license to a reliable, beautiful, continuously updated garden of Git repositories. Checkboxes describe future work, not completed capabilities. Milestones are dependency gates, not calendar promises.
 
@@ -388,12 +388,12 @@ Exit: browser tests reproduce every interaction in Section 7, multiple badges re
 
 Dependencies: P1-C; this is the first complete functional vertical slice.
 
-- [ ] Add watchers, debounced scheduling, periodic reconciliation, and business-window rollover without ref changes.
-- [ ] Add remote-only sources and optional remote monitoring for local plots through app-owned bare caches.
-- [ ] Implement full ref reconciliation, tag movement/deletion, force pushes, stale/error states, per-repo isolation, and bounded retry/concurrency.
-- [ ] Connect versioned snapshots to UI through SSE, including disconnect/reconnect and stale-response prevention.
-- [ ] Support config reload and clean source removal. Restart from last known cache with honest freshness and a new verification pass.
-- [ ] Test with a local bare remote for automation, then manually rehearse a public and a private GitHub repo using user-managed credentials.
+- [x] Add watchers, debounced scheduling, periodic reconciliation, and business-window rollover without ref changes.
+- [x] Add remote-only sources and optional remote monitoring for local plots through app-owned bare caches.
+- [x] Implement full ref reconciliation, tag movement/deletion, force pushes, stale/error states, per-repo isolation, and bounded retry/concurrency.
+- [x] Connect versioned snapshots to UI through SSE, including disconnect/reconnect and stale-response prevention.
+- [x] Support config reload and clean source removal. Restart from last known cache with honest freshness and a new verification pass.
+- [ ] Test with a local bare remote for automation, then manually rehearse a public and a private GitHub repo using user-managed credentials. *(Automated and public rehearsal done; private rehearsal is for the maintainer, steps in ADR 0012.)*
 
 Exit: a live two-repository demonstration covers local commit, branch create/delete, merge, tag create/delete, worktree add/remove, remote push, remote deletion/force-push, offline mode, reconnect, and midnight window expiry. Each source recovers independently without page reload. No user repository mutations occur.
 
@@ -617,7 +617,7 @@ Open choices intentionally deferred: exact dependency versions, layout-library a
 | --- | --- | --- |
 | Design baseline | Documented | This roadmap |
 | P0 foundation and risk probes | Done | P0-A: ADRs 0001–0006 in `docs/decisions/`; `npm run check` passes locally on Windows and in CI run 36222369361 on Ubuntu, Windows, and macOS (26 tests each, Git 2.55; golden fixture OID matched everywhere); fixture topology verified against `git merge-base` in `tests/fixtures/builder.test.ts`. Open: browser-test command (deferred to first UI). P0-B: ancestor selector matches an exhaustive oracle (2,000 random DAGs) and `git merge-base` (demo fixtures and 12 random repositories), green in CI run 36244010015 on all three OSes (43 tests each); deliberate bugs are caught; stress case (1M commits, 1,000 heads) takes about 3.5 s and 650 MiB on a 4 GB Core m3 ([ADR 0007](docs/decisions/0007-ancestor-selector-evidence.md)). Git readers (refs, peeled tags, worktrees, topology, length-framed commits) verified against fixture truth and independent Git commands; app-owned cache fetch leaves the user's clone byte-identical ([ADR 0008](docs/decisions/0008-git-read-and-fetch-evidence.md)). Static SVG of `gardenTour` through the full read-only pipeline, with reduced edges and layout checked by independent oracles ([ADR 0009](docs/decisions/0009-visible-graph-and-static-svg.md)). P0-B complete. |
-| P1 functional visualization | In progress | P1-A done: strict config with line/column errors, validated against the JSON Schema via Ajv; `init-config`/`validate-config`/`serve`; loopback server with Host/Origin checks and a local SVG preview; isolated per-source status. P1-B core landed early for the SVG probe. P1-B done: every checklist item has an oracle-checked test or measurement; quiet repositories keep a compact skeleton (100k-commit history renders 7 commits in 300 px; cold read and selection about 3.3 s) ([ADR 0010](docs/decisions/0010-quiet-history-and-pipeline-benchmark.md)). P1-C done: React UI with the section 7 interaction contract, verified by 10 Playwright browser tests on real Git fixtures (desktop and touch); the tests found and fixed three interaction bugs ([ADR 0011](docs/decisions/0011-interactive-technical-renderer.md)). Next: P1-D continuous monitoring. |
+| P1 functional visualization | In progress | P1-A done: strict config with line/column errors, validated against the JSON Schema via Ajv; `init-config`/`validate-config`/`serve`; loopback server with Host/Origin checks and a local SVG preview; isolated per-source status. P1-B core landed early for the SVG probe. P1-B done: every checklist item has an oracle-checked test or measurement; quiet repositories keep a compact skeleton (100k-commit history renders 7 commits in 300 px; cold read and selection about 3.3 s) ([ADR 0010](docs/decisions/0010-quiet-history-and-pipeline-benchmark.md)). P1-C done: React UI with the section 7 interaction contract, verified by 10 Playwright browser tests on real Git fixtures (desktop and touch); the tests found and fixed three interaction bugs ([ADR 0011](docs/decisions/0011-interactive-technical-renderer.md)). P1-D done except the maintainer's private-GitHub rehearsal: watchers + reconciliation, remote caches with backoff, SSE, config reload, restart from cache; a live multi-repository test covers every exit item, and found and fixed a refresh livelock, a lost update, and a cache race ([ADR 0012](docs/decisions/0012-continuous-monitoring.md)). Next: P1-E hardening. |
 | P2 living garden | Not started | Art proof after functional release, then scene/environment |
 | P3 public stable release | Not started | Installation rehearsal and release gates |
 

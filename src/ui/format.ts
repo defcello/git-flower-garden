@@ -56,3 +56,11 @@ export function hiddenText(hidden: number | null): string {
     ? "Hidden ancestry: multiple paths"
     : `Hidden ancestry: ${String(hidden)} commit${hidden === 1 ? "" : "s"}`;
 }
+
+/** A short duration such as "45 s", "3 min", or "2 h". */
+export function durationText(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${String(s)} s`;
+  if (s < 3600) return `${String(Math.round(s / 60))} min`;
+  return `${String(Math.round(s / 3600))} h`;
+}

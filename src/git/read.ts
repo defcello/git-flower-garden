@@ -1,3 +1,4 @@
+import { delimiter } from "node:path";
 import { runGit, runGitRaw, type RunGitOptions } from "./run-git.ts";
 
 /**
@@ -16,14 +17,33 @@ export const READ_ONLY_ENV = {
   GIT_NO_REPLACE_OBJECTS: "1",
 } as const;
 
-export type ReadGitOptions = Omit<RunGitOptions, "env">;
+export interface ReadGitOptions extends Omit<RunGitOptions, "env"> {
+  /**
+   * Extra object directories visible to this one process only, through
+   * GIT_ALTERNATE_OBJECT_DIRECTORIES. Nothing is written to any repository's
+   * `objects/info/alternates`, so a later `git gc` in either repository can
+   * never leave the other corrupt.
+   */
+  alternates?: readonly string[];
+}
+
+function envFor(options: ReadGitOptions): Record<string, string> {
+  const alternates = options.alternates ?? [];
+  return alternates.length === 0
+    ? READ_ONLY_ENV
+    : {
+        ...READ_ONLY_ENV,
+        GIT_ALTERNATE_OBJECT_DIRECTORIES: alternates.join(delimiter),
+      };
+}
 
 /** Run a read-only Git command against a user-owned repository. */
 export function readGit(
   args: readonly string[],
   options: ReadGitOptions,
 ): Promise<string> {
-  return runGit(args, { ...options, env: READ_ONLY_ENV });
+  // runGit ignores the extra "alternates" key; it only reads its own options.
+  return runGit(args, { ...options, env: envFor(options) });
 }
 
 /** Like {@link readGit}, but resolve with raw bytes for length-framed output. */
@@ -31,7 +51,7 @@ export function readGitRaw(
   args: readonly string[],
   options: ReadGitOptions,
 ): Promise<Buffer> {
-  return runGitRaw(args, { ...options, env: READ_ONLY_ENV });
+  return runGitRaw(args, { ...options, env: envFor(options) });
 }
 
 /** Split NUL- or newline-terminated output into records, dropping the final empty one. */

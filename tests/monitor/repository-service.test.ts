@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseConfig } from "../../src/config/config.ts";
 import { readSnapshot } from "../../src/git/snapshot.ts";
 import { RepositoryService } from "../../src/monitor/repository-service.ts";
-import { buildFixture } from "../fixtures/builder.ts";
+import { buildFixture, fixtureGit } from "../fixtures/builder.ts";
 import { gardenTour } from "../fixtures/demo.ts";
 import { useTempDirs } from "../helpers/temp-dir.ts";
 
@@ -46,15 +46,27 @@ async function setup() {
 }
 
 describe("RepositoryService", () => {
-  it("shares one read among concurrent refreshes", async () => {
+  it("merges refresh requests that arrive during a read into one more read", async () => {
     const t = await setup();
     const views = await Promise.all([
       t.service.refresh("tour"),
       t.service.refresh("tour"),
       t.service.refresh("tour"),
     ]);
-    expect(t.reads()).toBe(1);
+    // The first read, plus exactly one follow-up for the requests made while
+    // it ran (the repository may have changed after the first read began).
+    expect(t.reads()).toBe(2);
     expect(new Set(views.map((v) => v.revision))).toEqual(new Set([1]));
+  });
+
+  it("changes the revision only when the repository changed", async () => {
+    const t = await setup();
+    await t.service.refresh("tour");
+    await t.service.refresh("tour");
+    expect(t.service.view("tour")?.revision).toBe(1);
+    await fixtureGit(t.fixture.dir, ["branch", "new-bed", t.fixture.oid("m3")]);
+    await t.service.refresh("tour");
+    expect(t.service.view("tour")?.revision).toBe(2);
   });
 
   it("reuses the graph until the snapshot, window, minute, or reveal set changes", async () => {
@@ -68,6 +80,7 @@ describe("RepositoryService", () => {
     const b = await t.service.graph("tour");
     expect(b).not.toBe(a);
     expect(await t.service.graph("tour", [t.fixture.oid("a4")])).not.toBe(b);
+    await fixtureGit(t.fixture.dir, ["tag", "watered", t.fixture.oid("m3")]);
     await t.service.refresh("tour");
     const c = await t.service.graph("tour");
     expect(c?.revision).toBe(2);

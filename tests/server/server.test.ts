@@ -116,7 +116,11 @@ describe("loopback server", () => {
       state: "error",
       diagnostic: expect.stringMatching(/Not a Git repository/i) as unknown,
     });
-    expect(byId.remote?.status.state).toBe("error");
+    // Without background monitoring nothing has been fetched yet.
+    expect(byId.remote?.status).toMatchObject({
+      state: "initializing",
+      diagnostic: "Waiting for the first fetch from the remote.",
+    });
   });
 
   it("serves the visible graph as JSON and escaped SVG", async () => {

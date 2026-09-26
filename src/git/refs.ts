@@ -27,16 +27,39 @@ const NAMESPACES = ["refs/heads/", "refs/remotes/", "refs/tags/"];
 const FORMAT = "%(refname)%00%(objectname)%00%(symref)";
 
 /**
+ * A namespace read with fixed classification, e.g. an app-owned cache's
+ * `refs/garden/<key>/heads/` read as one remote's branches.
+ */
+export interface RefNamespace {
+  prefix: string;
+  kind: RefKind;
+  remote?: string;
+}
+
+/**
  * Enumerate local branches, remote-tracking branches, and tags. Symbolic refs
  * such as `refs/remotes/origin/HEAD` are aliases, not branches, and are skipped.
  * Stash, notes, replace, and other namespaces are outside the default scope.
  * A ref whose object is unavailable is reported with objectType "missing"
  * rather than failing the whole read.
+ *
+ * With `namespaces`, only those prefixes are read, classified as given.
  */
-export async function readRefs(cwd: string): Promise<GitRef[]> {
+export async function readRefs(
+  cwd: string,
+  options: { namespaces?: readonly RefNamespace[] } = {},
+): Promise<GitRef[]> {
+  const fixed = options.namespaces;
   const [refOutput, remoteOutput] = await Promise.all([
-    readGit(["for-each-ref", `--format=${FORMAT}`, ...NAMESPACES], { cwd }),
-    readGit(["remote"], { cwd }),
+    readGit(
+      [
+        "for-each-ref",
+        `--format=${FORMAT}`,
+        ...(fixed ? fixed.map((n) => n.prefix) : NAMESPACES),
+      ],
+      { cwd },
+    ),
+    fixed ? Promise.resolve("") : readGit(["remote"], { cwd }),
   ]);
   // Longest first, so remote `a/b` wins over remote `a` for `refs/remotes/a/b/x`.
   const remotes = records(remoteOutput, "\n").sort(
@@ -47,7 +70,9 @@ export async function readRefs(cwd: string): Promise<GitRef[]> {
   for (const line of records(refOutput, "\n")) {
     const [name, oid, symref] = line.split("\0");
     if (!name || !oid || symref) continue;
-    const classified = classify(name, remotes);
+    const classified = fixed
+      ? classifyFixed(name, fixed)
+      : classify(name, remotes);
     if (!classified) continue;
     refs.push({
       name,
@@ -97,6 +122,19 @@ export async function readRefs(cwd: string): Promise<GitRef[]> {
     });
   }
   return refs;
+}
+
+function classifyFixed(
+  name: string,
+  namespaces: readonly RefNamespace[],
+): Pick<GitRef, "kind" | "remote" | "shortName"> | null {
+  const ns = namespaces.find((n) => name.startsWith(n.prefix));
+  if (!ns) return null;
+  return {
+    kind: ns.kind,
+    shortName: name.slice(ns.prefix.length),
+    ...(ns.remote === undefined ? {} : { remote: ns.remote }),
+  };
 }
 
 function classify(
