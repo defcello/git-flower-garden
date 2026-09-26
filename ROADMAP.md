@@ -1,6 +1,6 @@
 # git-garden roadmap
 
-Status: P0-A foundation in progress (toolchain, ADRs, fixtures); no graph functionality yet. Updated: 2026-09-26.
+Status: P0-A foundation done except browser tests; P0-B risk probes in progress (ancestor selector validated); no graph UI yet. Updated: 2026-09-26.
 
 This document is the implementation contract for future sessions and contributors. It takes the repository from its initial README and MIT license to a reliable, beautiful, continuously updated garden of Git repositories. Checkboxes describe future work, not completed capabilities. Milestones are dependency gates, not calendar promises.
 
@@ -337,7 +337,7 @@ Exit: a fresh clone can install, build, and run one meaningful test on each CI O
 
 - [ ] Demonstrate machine-readable refs, annotated tags, detached/unborn worktrees, and ordered parents using installed Git.
 - [x] Build fixtures for a fork/merge, old branch heads, three-head ancestry, and a criss-cross merge with multiple bases.
-- [ ] Prototype the bitset ancestor selector and an independent exhaustive oracle; record correctness and memory/time observations.
+- [x] Prototype the bitset ancestor selector and an independent exhaustive oracle; record correctness and memory/time observations.
 - [ ] Prove app-owned fetch sees a remote update without changing user refs, index, working files, or Git configuration.
 - [ ] Show one static upward SVG DAG with merged edges and a collapsed old path.
 
@@ -616,7 +616,7 @@ Open choices intentionally deferred: exact dependency versions, layout-library a
 | Gate | Status | Evidence / next step |
 | --- | --- | --- |
 | Design baseline | Documented | This roadmap |
-| P0 foundation and risk probes | In progress | P0-A: ADRs 0001–0006 in `docs/decisions/`; `npm run check` passes locally on Windows and in CI run 36222369361 on Ubuntu, Windows, and macOS (26 tests each, Git 2.55; golden fixture OID matched everywhere); fixture topology verified against `git merge-base` in `tests/fixtures/builder.test.ts`. Open: browser-test command (deferred to first UI). Next: rest of P0-B, starting with the bitset selector and exhaustive oracle. |
+| P0 foundation and risk probes | In progress | P0-A: ADRs 0001–0006 in `docs/decisions/`; `npm run check` passes locally on Windows and in CI run 36222369361 on Ubuntu, Windows, and macOS (26 tests each, Git 2.55; golden fixture OID matched everywhere); fixture topology verified against `git merge-base` in `tests/fixtures/builder.test.ts`. Open: browser-test command (deferred to first UI). P0-B: ancestor selector matches an exhaustive oracle (2,000 random DAGs) and `git merge-base` (demo fixtures and 12 random repositories); deliberate bugs are caught; stress case (1M commits, 1,000 heads) takes about 3.5 s and 650 MiB on a 4 GB Core m3 ([ADR 0007](docs/decisions/0007-ancestor-selector-evidence.md)). Remaining P0-B: Git machine-format probe (refs, annotated tags, detached/unborn worktrees, parents), app-owned fetch isolation proof, static upward SVG DAG. |
 | P1 functional visualization | Not started | P1-A through P1-E; optional P1-F event acceleration |
 | P2 living garden | Not started | Art proof after functional release, then scene/environment |
 | P3 public stable release | Not started | Installation rehearsal and release gates |

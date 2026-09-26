@@ -1,6 +1,6 @@
 # 0003: "Every common ancestor" means best common ancestors of every head subset
 
-- Status: Accepted; algorithm correctness to be proven in P0-B
+- Status: Accepted; prototype validated in P0-B ([0007](0007-ancestor-selector-evidence.md))
 - Date: 2026-09-26
 - Roadmap: sections 4.3, 4.4
 
@@ -28,7 +28,12 @@ The intended exact algorithm propagates, from children toward parents, the bitse
 Heads that are also bases remain one node. Disconnected histories get no invented
 common root.
 
-## Evidence so far
+## Evidence
+
+[ADR 0007](0007-ancestor-selector-evidence.md) records the P0-B prototype
+(`src/core/ancestor-anchors.ts`). It agrees with an independent exhaustive oracle
+on 2,000 random DAGs and with `git merge-base` on the demo fixtures and on random
+repositories. It also records time and memory at the roadmap's workload sizes.
 
 The demo fixtures in `tests/fixtures/demo.ts` pin cases where this matters, and
 `tests/fixtures/builder.test.ts` checks them against Git itself:

@@ -14,6 +14,7 @@ real-time technical view to a living garden.
 | Toolchain and CI | TypeScript, lint, format, unit tests on Windows, macOS, and Linux |
 | Git subprocess wrapper | `src/git/`: shell-free Git calls with timeouts, output limits, and redacted errors; Git version check |
 | Demo fixtures | `tests/fixtures/`: deterministic repositories (fork/merge, old branch, three heads, criss-cross) |
+| Ancestor selection prototype | `src/core/ancestor-anchors.ts`: exact common-ancestor anchors, checked against an independent oracle and Git ([evidence](docs/decisions/0007-ancestor-selector-evidence.md)) |
 | Graph selection, monitoring, UI, garden art | Planned; see roadmap Phases 1 and 2 |
 
 ## Contributor setup
@@ -36,6 +37,7 @@ Individual commands:
 | `npm run build` | Compile `src/` to `dist/` |
 | `npm run format` | Apply Prettier formatting |
 | `npm run fixture -- <name> [dir]` | Write a demo repository to `tmp/fixtures/<name>` (or `dir`) to look at |
+| `npm run bench:ancestors` | Benchmark the ancestor selector (`-- --quick` for a smoke run) |
 
 Demo fixture names: `forkMerge`, `oldBranchHead`, `threeHeads`, `crissCross`. For
 example, `npm run fixture -- crissCross` followed by

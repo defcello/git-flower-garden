@@ -1,3 +1,5 @@
+import { readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { runGit } from "../../src/git/run-git.ts";
 
 /** One commit in a fixture, named so tests can refer to it without knowing its OID. */
@@ -51,6 +53,9 @@ const FIXTURE_ENV = {
   GIT_COMMITTER_EMAIL: "fern@example.invalid",
 } as const;
 
+/** Every commit is created on this ref, which is deleted once real refs exist. */
+const SCRATCH_REF = "refs/git-garden-fixture/build";
+
 const ISO_WITH_OFFSET =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
@@ -75,15 +80,12 @@ export async function buildFixture(
 ): Promise<BuiltFixture> {
   validateSpec(spec);
   const head = spec.head ?? "main";
-  const git = (
-    args: readonly string[],
-    extra: { input?: string; env?: Record<string, string> } = {},
-  ) =>
+  const git = (args: readonly string[], input?: string) =>
     runGit(args, {
       cwd: dir,
-      env: { ...FIXTURE_ENV, ...extra.env },
-      ...(extra.input === undefined ? {} : { input: extra.input }),
-    }).then((out) => out.trim());
+      env: FIXTURE_ENV,
+      ...(input === undefined ? {} : { input }),
+    });
 
   await runGit(
     [
@@ -96,41 +98,86 @@ export async function buildFixture(
     { cwd: process.cwd(), env: FIXTURE_ENV },
   );
 
+  // A single fast-import process writes every object and ref, which keeps
+  // large generated fixtures fast even where process creation is slow.
+  const marksFile = join(dir, ".git", "git-garden-fixture-marks");
+  await git(
+    ["fast-import", "--quiet", "--done", `--export-marks=${marksFile}`],
+    fastImportStream(spec),
+  );
+  const marks = await readFile(marksFile, "utf8");
+  await rm(marksFile);
+  await git(["update-ref", "-d", SCRATCH_REF]);
+
   const oids = new Map<string, string>();
-  for (const commit of spec.commits) {
-    // Each commit gets a distinct one-file tree so its content identifies it.
-    const blob = await git(["hash-object", "-w", "--stdin"], {
-      input: `${commit.name}\n`,
-    });
-    const tree = await git(["mktree"], {
-      input: `100644 blob ${blob}\tplant.txt\n`,
-    });
-    const parentArgs = (commit.parents ?? []).flatMap((parent) => [
-      "-p",
-      oidOf(oids, parent),
-    ]);
-    const oid = await git(["commit-tree", tree, ...parentArgs, "-F", "-"], {
-      input: `${commit.message ?? commit.name}\n`,
-      env: {
-        GIT_AUTHOR_DATE: toGitDate(commit.authored ?? commit.committed),
-        GIT_COMMITTER_DATE: toGitDate(commit.committed),
-      },
-    });
-    oids.set(commit.name, oid);
+  for (const line of marks.split("\n")) {
+    const match = /^:(\d+) ([0-9a-f]+)$/.exec(line);
+    const commit = match?.[1] && spec.commits[Number(match[1]) - 1];
+    if (commit && match[2]) oids.set(commit.name, match[2]);
+  }
+  if (oids.size !== spec.commits.length) {
+    throw new Error(
+      `fast-import reported ${String(oids.size)} of ${String(spec.commits.length)} commits`,
+    );
   }
 
-  for (const [branch, target] of Object.entries(spec.branches)) {
-    await git(["update-ref", `refs/heads/${branch}`, oidOf(oids, target)]);
-  }
-  for (const [tag, target] of Object.entries(spec.tags ?? {})) {
-    await git(["update-ref", `refs/tags/${tag}`, oidOf(oids, target)]);
-  }
   if (head in spec.branches) {
     // Populate the index and working tree so the clone looks freshly checked out.
     await git(["read-tree", "--reset", "-u", "HEAD"]);
   }
 
   return { dir, oids, oid: (name) => oidOf(oids, name) };
+}
+
+function data(text: string): string {
+  return `data ${String(Buffer.byteLength(text, "utf8"))}\n${text}\n`;
+}
+
+/**
+ * Serialize a validated spec as a `git fast-import` stream. Commit i has mark
+ * :i+1. Each commit gets a distinct one-file tree so its content identifies it.
+ */
+function fastImportStream(spec: FixtureSpec): string {
+  const marks = new Map(
+    spec.commits.map((commit, i) => [commit.name, `:${String(i + 1)}`]),
+  );
+  const mark = (name: string): string => oidOf(marks, name);
+  const identity = `${FIXTURE_ENV.GIT_AUTHOR_NAME} <${FIXTURE_ENV.GIT_AUTHOR_EMAIL}>`;
+  const out: string[] = [];
+
+  spec.commits.forEach((commit, i) => {
+    const [first, ...rest] = commit.parents ?? [];
+    out.push(
+      // Reset first so a root commit does not inherit the scratch ref's tip.
+      `reset ${SCRATCH_REF}\n`,
+      `commit ${SCRATCH_REF}\n`,
+      `mark :${String(i + 1)}\n`,
+      `author ${identity} ${toGitDate(commit.authored ?? commit.committed)}\n`,
+      `committer ${identity} ${toGitDate(commit.committed)}\n`,
+      data(`${commit.message ?? commit.name}\n`),
+      first === undefined ? "" : `from ${mark(first)}\n`,
+      ...rest.map((parent) => `merge ${mark(parent)}\n`),
+      "deleteall\n",
+      "M 100644 inline plant.txt\n",
+      data(`${commit.name}\n`),
+      "\n",
+    );
+  });
+
+  const refs: [ref: string, target: string][] = [
+    ...Object.entries(spec.branches).map(([name, target]): [string, string] => [
+      `refs/heads/${name}`,
+      target,
+    ]),
+    ...Object.entries(spec.tags ?? {}).map(
+      ([name, target]): [string, string] => [`refs/tags/${name}`, target],
+    ),
+  ];
+  for (const [ref, target] of refs) {
+    out.push(`reset ${ref}\nfrom ${mark(target)}\n\n`);
+  }
+  out.push("done\n");
+  return out.join("");
 }
 
 function oidOf(oids: ReadonlyMap<string, string>, name: string): string {
