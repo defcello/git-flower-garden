@@ -24,4 +24,15 @@ jobs:
           cache: npm
       - run: git --version
       - run: npm ci
+      # Browser tests use the runner's preinstalled Chrome (Edge on Windows);
+      # no Playwright browser download is needed.
       - run: npm run check
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ matrix.os }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore

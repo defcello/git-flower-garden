@@ -1,0 +1,626 @@
+:root {
+  --bg: #fbfaf7;
+  --card: #ffffff;
+  --ink: #1f2a22;
+  --muted: #56645a;
+  --line: #d9d4c7;
+  --edge: #4a5a4f;
+  --head: #2f7d4f;
+  --recent: #7fb08a;
+  --worktree: #c28a2c;
+  --boundary: #9a3b2a;
+  --accent: #245f3d;
+  --hover-row: rgba(47, 125, 79, 0.08);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #151a17;
+    --card: #1d2420;
+    --ink: #e7ede8;
+    --muted: #a3b1a7;
+    --line: #34403a;
+    --edge: #9fb3a6;
+    --head: #5fbf85;
+    --recent: #3f7d56;
+    --worktree: #e0a948;
+    --boundary: #e07a64;
+    --accent: #8fd6a9;
+    --hover-row: rgba(95, 191, 133, 0.12);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    14px/1.45 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+code,
+.oid-full {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.92em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.summary {
+  color: var(--muted);
+}
+
+.legend {
+  margin-left: auto;
+  position: relative;
+}
+
+.legend summary {
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.legend ul {
+  position: absolute;
+  right: 0;
+  top: 32px;
+  width: 360px;
+  margin: 0;
+  padding: 12px 12px 4px;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.legend p {
+  position: absolute;
+  right: 0;
+  top: 300px;
+  display: none;
+}
+
+.banner {
+  margin: 12px 20px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--boundary);
+  border-radius: 6px;
+}
+
+.loading,
+.welcome {
+  padding: 40px 20px;
+  max-width: 680px;
+}
+
+.garden {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 20px;
+  padding: 20px;
+}
+
+.plot {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  /* Room above the tree for the circular focus button. */
+  padding: 56px 16px 16px;
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.plot h2 {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  margin: 0;
+  font-size: 15px;
+  max-width: calc(100% - 100px);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  font-size: 12.5px;
+  margin-bottom: 8px;
+}
+
+.status .glyph {
+  display: inline-block;
+  width: 1em;
+  text-align: center;
+}
+
+.state-error .glyph,
+.state-stale .glyph,
+.state-incomplete .glyph {
+  color: var(--boundary);
+}
+
+.diagnostic {
+  color: var(--muted);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.placeholder {
+  color: var(--muted);
+  padding: 24px 0;
+}
+
+.plot-graph {
+  max-height: 460px;
+  overflow: auto;
+}
+
+.focus-button {
+  position: absolute;
+  top: 6px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--card);
+  color: var(--accent);
+  font-size: 26px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.plot:hover .focus-button,
+.plot:focus-within .focus-button,
+.focus-button.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Touch screens have no hover: keep the focus control visible. */
+@media (hover: none) {
+  .focus-button {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.focus-button.static {
+  position: static;
+  margin: 12px 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:not(.reduce-motion) .focus-button {
+    transition: opacity 120ms ease-out;
+  }
+}
+
+/* Graph drawing */
+.graph {
+  display: block;
+  font-size: 12px;
+  user-select: none;
+}
+
+.graph .edge,
+.legend .edge {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 2;
+}
+
+.graph .edge.collapsed,
+.legend .edge.collapsed {
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+  stroke-width: 2.5;
+}
+
+.graph .tail line {
+  stroke: var(--edge);
+  stroke-width: 2;
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+}
+
+.graph .tail.boundary line,
+.legend .tail-line.boundary {
+  stroke: var(--boundary);
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
+
+.boundary-mark {
+  fill: none;
+  stroke: var(--boundary);
+  stroke-width: 1.5;
+}
+
+.node {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.node.head {
+  fill: var(--head);
+}
+
+.node.recent {
+  fill: var(--recent);
+}
+
+.node.ancestor,
+.node.other {
+  fill: var(--card);
+}
+
+.ring {
+  fill: none;
+  stroke: var(--head);
+  stroke-width: 1.5;
+}
+
+.worktree {
+  fill: var(--worktree);
+  stroke: var(--ink);
+}
+
+.badge rect {
+  fill: var(--card);
+  stroke: var(--edge);
+  stroke-dasharray: 2 2;
+}
+
+.badge text {
+  fill: var(--ink);
+  font-size: 9px;
+  text-anchor: middle;
+}
+
+.commit {
+  cursor: pointer;
+}
+
+.commit .hit {
+  fill: transparent;
+}
+
+.commit:hover .hit {
+  fill: var(--hover-row);
+}
+
+.commit .selection {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.commit.selected .hit {
+  fill: var(--hover-row);
+}
+
+.commit text {
+  fill: var(--muted);
+}
+
+.commit .refs {
+  fill: var(--ink);
+  font-weight: 600;
+}
+
+.commit .oid {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  max-width: 320px;
+  padding: 8px 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  font-size: 12.5px;
+}
+
+.tooltip .refs {
+  font-weight: 600;
+}
+
+/* Details */
+.drawer {
+  position: fixed;
+  top: 52px;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 100vw);
+  overflow: auto;
+  background: var(--card);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  z-index: 30;
+}
+
+.details {
+  padding: 16px;
+}
+
+.details-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.details h2 {
+  font-size: 16px;
+  margin: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.details h3 {
+  font-size: 13px;
+  margin: 16px 0 6px;
+}
+
+.close {
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.details dl {
+  margin: 12px 0 0;
+}
+
+.details dl > div {
+  margin-bottom: 10px;
+}
+
+.details dt {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.details dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.chips,
+.plain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chips li {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+.message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+/* Focus view */
+.focus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(440px, 40vw);
+  height: calc(100vh - 52px);
+}
+
+.focus-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 12px 16px 16px;
+}
+
+.focus-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.focus-graph-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.toolbar button,
+.offscreen {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.focus-graph {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.focus-graph .graph {
+  position: absolute;
+  inset: 0;
+}
+
+.exit-slot {
+  position: absolute;
+  top: 8px;
+  z-index: 5;
+}
+
+.exit-slot .focus-button {
+  position: static;
+}
+
+.offscreen {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+}
+
+.focus-side {
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: var(--card);
+}
+
+.commit-list {
+  padding: 8px 16px 16px;
+}
+
+.commit-list h3 {
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+.commit-list ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.commit-list button {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  text-align: left;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.commit-list button:hover,
+.commit-list button[aria-pressed="true"] {
+  background: var(--hover-row);
+  border-color: var(--line);
+}
+
+@media (max-width: 900px) {
+  .focus {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(60vh, 1fr) auto;
+    height: auto;
+  }
+
+  .focus-graph {
+    min-height: 60vh;
+  }
+
+  .focus-side {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+
+  .garden {
+    grid-template-columns: 1fr;
+  }
+}

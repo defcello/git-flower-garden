@@ -1,6 +1,6 @@
 # git-garden roadmap
 
-Status: P0 complete except browser tests (deferred to first UI); P1-A/P1-B in progress; static SVG pipeline works end to end; no interactive UI yet. Updated: 2026-09-26.
+Status: P0, P1-A, P1-B, and P1-C complete; next is P1-D continuous monitoring (watchers, remote caches, server-sent events). Updated: 2026-09-26.
 
 This document is the implementation contract for future sessions and contributors. It takes the repository from its initial README and MIT license to a reliable, beautiful, continuously updated garden of Git repositories. Checkboxes describe future work, not completed capabilities. Milestones are dependency gates, not calendar promises.
 
@@ -326,7 +326,7 @@ Dependencies: none. Outcome: reproducible contributor environment and small Git 
 ### P0-A: Project foundation
 
 - [x] Record ADRs for local browser architecture, read-only source policy, exact ancestor interpretation, time-window semantics, and initial rendering stack.
-- [ ] Pin supported Node/Git versions after capability checks; establish TypeScript strict mode, formatting, lint, build, unit-test, and browser-test commands. *(All but browser tests done, see ADR 0006. Browser tests arrive with the first UI, per ADR 0005.)*
+- [x] Pin supported Node/Git versions after capability checks; establish TypeScript strict mode, formatting, lint, build, unit-test, and browser-test commands. *(Browser tests: `npm run test:e2e`, ADR 0011.)*
 - [x] Add README contributor setup, `.gitignore`, lockfile, config/cache exclusions, and minimal CI for Windows, macOS, Linux.
 - [x] Preserve MIT licensing; add contribution and security-reporting guidance without suggesting affiliation with an employer or animation studio.
 - [x] Add deterministic demo fixtures, with fictional names/messages and no private repository metadata.
@@ -376,11 +376,11 @@ Exit: independent oracle agrees for generated small cases, all required nodes ar
 
 Dependencies: P1-B. Suggested release label: local preview.
 
-- [ ] Implement upward layout, distinct edge types, repository plots, legends, and source status.
-- [ ] Add tooltip and pinned details for commits, all head names, tags, and worktree markers.
-- [ ] Implement circular `+`/`-`, hover continuity, focus transitions, camera restoration, Escape, touch, and keyboard equivalents.
-- [ ] Keep selection stable during updates; handle disappearing nodes and removed repositories gracefully.
-- [ ] Add empty/incomplete/stale states and an accessible semantic graph list.
+- [x] Implement upward layout, distinct edge types, repository plots, legends, and source status.
+- [x] Add tooltip and pinned details for commits, all head names, tags, and worktree markers.
+- [x] Implement circular `+`/`-`, hover continuity, focus transitions, camera restoration, Escape, touch, and keyboard equivalents.
+- [x] Keep selection stable during updates; handle disappearing nodes and removed repositories gracefully.
+- [x] Add empty/incomplete/stale states and an accessible semantic graph list.
 
 Exit: browser tests reproduce every interaction in Section 7, multiple badges remain discoverable, and a person can explain the displayed fork and merge by inspecting actual parent relationships.
 
@@ -616,8 +616,8 @@ Open choices intentionally deferred: exact dependency versions, layout-library a
 | Gate | Status | Evidence / next step |
 | --- | --- | --- |
 | Design baseline | Documented | This roadmap |
-| P0 foundation and risk probes | Done (browser tests deferred) | P0-A: ADRs 0001–0006 in `docs/decisions/`; `npm run check` passes locally on Windows and in CI run 36222369361 on Ubuntu, Windows, and macOS (26 tests each, Git 2.55; golden fixture OID matched everywhere); fixture topology verified against `git merge-base` in `tests/fixtures/builder.test.ts`. Open: browser-test command (deferred to first UI). P0-B: ancestor selector matches an exhaustive oracle (2,000 random DAGs) and `git merge-base` (demo fixtures and 12 random repositories), green in CI run 36244010015 on all three OSes (43 tests each); deliberate bugs are caught; stress case (1M commits, 1,000 heads) takes about 3.5 s and 650 MiB on a 4 GB Core m3 ([ADR 0007](docs/decisions/0007-ancestor-selector-evidence.md)). Git readers (refs, peeled tags, worktrees, topology, length-framed commits) verified against fixture truth and independent Git commands; app-owned cache fetch leaves the user's clone byte-identical ([ADR 0008](docs/decisions/0008-git-read-and-fetch-evidence.md)). Static SVG of `gardenTour` through the full read-only pipeline, with reduced edges and layout checked by independent oracles ([ADR 0009](docs/decisions/0009-visible-graph-and-static-svg.md)). P0-B complete. |
-| P1 functional visualization | In progress | P1-A done: strict config with line/column errors, validated against the JSON Schema via Ajv; `init-config`/`validate-config`/`serve`; loopback server with Host/Origin checks and a local SVG preview; isolated per-source status. P1-B core landed early for the SVG probe. P1-B done: every checklist item has an oracle-checked test or measurement; quiet repositories keep a compact skeleton (100k-commit history renders 7 commits in 300 px; cold read and selection about 3.3 s) ([ADR 0010](docs/decisions/0010-quiet-history-and-pipeline-benchmark.md)). Next: P1-C interactive technical renderer. |
+| P0 foundation and risk probes | Done | P0-A: ADRs 0001–0006 in `docs/decisions/`; `npm run check` passes locally on Windows and in CI run 36222369361 on Ubuntu, Windows, and macOS (26 tests each, Git 2.55; golden fixture OID matched everywhere); fixture topology verified against `git merge-base` in `tests/fixtures/builder.test.ts`. Open: browser-test command (deferred to first UI). P0-B: ancestor selector matches an exhaustive oracle (2,000 random DAGs) and `git merge-base` (demo fixtures and 12 random repositories), green in CI run 36244010015 on all three OSes (43 tests each); deliberate bugs are caught; stress case (1M commits, 1,000 heads) takes about 3.5 s and 650 MiB on a 4 GB Core m3 ([ADR 0007](docs/decisions/0007-ancestor-selector-evidence.md)). Git readers (refs, peeled tags, worktrees, topology, length-framed commits) verified against fixture truth and independent Git commands; app-owned cache fetch leaves the user's clone byte-identical ([ADR 0008](docs/decisions/0008-git-read-and-fetch-evidence.md)). Static SVG of `gardenTour` through the full read-only pipeline, with reduced edges and layout checked by independent oracles ([ADR 0009](docs/decisions/0009-visible-graph-and-static-svg.md)). P0-B complete. |
+| P1 functional visualization | In progress | P1-A done: strict config with line/column errors, validated against the JSON Schema via Ajv; `init-config`/`validate-config`/`serve`; loopback server with Host/Origin checks and a local SVG preview; isolated per-source status. P1-B core landed early for the SVG probe. P1-B done: every checklist item has an oracle-checked test or measurement; quiet repositories keep a compact skeleton (100k-commit history renders 7 commits in 300 px; cold read and selection about 3.3 s) ([ADR 0010](docs/decisions/0010-quiet-history-and-pipeline-benchmark.md)). P1-C done: React UI with the section 7 interaction contract, verified by 10 Playwright browser tests on real Git fixtures (desktop and touch); the tests found and fixed three interaction bugs ([ADR 0011](docs/decisions/0011-interactive-technical-renderer.md)). Next: P1-D continuous monitoring. |
 | P2 living garden | Not started | Art proof after functional release, then scene/environment |
 | P3 public stable release | Not started | Installation rehearsal and release gates |
 

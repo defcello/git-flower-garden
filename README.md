@@ -16,8 +16,9 @@ real-time technical view to a living garden.
 | Demo fixtures | `tests/fixtures/`: deterministic repositories (fork/merge, old branch, three heads, criss-cross) |
 | Ancestor selection prototype | `src/core/ancestor-anchors.ts`: exact common-ancestor anchors, checked against an independent oracle and Git ([evidence](docs/decisions/0007-ancestor-selector-evidence.md)) |
 | Graph selection and static rendering | `src/core/`, `src/render/`: business-day window, visible commits with honest compressed edges, deterministic layout, technical SVG ([example](docs/decisions/assets/garden-tour.svg)) |
-| Configuration and local preview | `git-garden init-config`, `validate-config`, `serve`: strict versioned config ([schema](git-garden.schema.json), [example](git-garden.example.json)); a loopback-only server shows each repository's static graph |
-| Live monitoring, interactive UI, garden art | Planned; see roadmap Phases 1 and 2 |
+| Configuration and service | `git-garden init-config`, `validate-config`, `serve`: strict versioned config ([schema](git-garden.schema.json), [example](git-garden.example.json)); a loopback-only server that re-reads repositories every few seconds |
+| Interactive technical view | Browser UI: garden of repository plots, circular `+`/`−` focus, hover tooltips, pinned commit details, pan/zoom, keyboard and touch support ([ADR 0011](docs/decisions/0011-interactive-technical-renderer.md)) |
+| Remote monitoring, server-sent events, garden art | Planned; see roadmap Phases 1 and 2 |
 
 ## Trying it
 
@@ -25,6 +26,7 @@ real-time technical view to a living garden.
 npm ci
 node src/cli.ts init-config --config my-garden.json   # then add repositories
 node src/cli.ts validate-config --config my-garden.json
+npm run build                                         # builds the browser UI into dist/ui
 node src/cli.ts serve --config my-garden.json         # open http://127.0.0.1:4783/
 ```
 
@@ -32,9 +34,8 @@ Each repository entry has an `id` and either a local `path` or a remote `url`.
 Relative paths are resolved against the configuration file. Without `--config`,
 git-garden uses the per-user file (`%APPDATA%\git-garden\config.json` on Windows,
 `~/Library/Application Support/git-garden/config.json` on macOS,
-`$XDG_CONFIG_HOME/git-garden/config.json` on Linux). The preview is a static
-snapshot taken at startup; live updates and the interactive view come in later
-Phase 1 milestones. Remote-only sources are not monitored yet.
+`$XDG_CONFIG_HOME/git-garden/config.json` on Linux).
+Local repositories are re-read every `monitor.localReconcileSeconds` (default 5 s) and the page updates on its own. Remote-only sources are not monitored yet (P1-D). A static view without JavaScript is at `/preview`.
 
 ## Contributor setup
 
@@ -51,6 +52,8 @@ Individual commands:
 | Command | Purpose |
 | --- | --- |
 | `npm test` | Run unit and Git fixture tests once (`npm run test:watch` to watch) |
+| `npm run test:e2e` | Browser tests with Playwright, using installed Chrome or Edge (build first) |
+| `npm run dev:ui` | Vite dev server for the UI, proxying `/api` to a running service |
 | `npm run lint` | ESLint with type-aware rules |
 | `npm run typecheck` | TypeScript over sources and tests |
 | `npm run build` | Compile `src/` to `dist/` |

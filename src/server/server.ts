@@ -6,7 +6,10 @@
  * - A cross-origin Origin is refused; no CORS headers are ever sent.
  * - Cross-Origin-Resource-Policy: same-origin blocks no-cors embedding.
  * - Only GET and HEAD exist; no request can choose a path, command, or URL.
+ * - Static UI files come from a fixed map built at startup, so request paths
+ *   never reach the filesystem.
  */
+import { readdir, readFile } from "node:fs/promises";
 import {
   createServer,
   type IncomingMessage,
@@ -14,6 +17,14 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { AddressInfo } from "node:net";
+import { extname, join, relative } from "node:path";
+import type {
+  GraphJson,
+  GraphNodeJson,
+  RepositoriesJson,
+  RepositoryStatusJson,
+  WorktreeJson,
+} from "../api/types.ts";
 import type {
   GraphView,
   RepositoryService,
@@ -31,13 +42,29 @@ const SECURITY_HEADERS = {
   "X-Frame-Options": "DENY",
   "Cache-Control": "no-store",
   "Content-Security-Policy":
-    "default-src 'none'; img-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 } as const;
+
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".json": "application/json; charset=utf-8",
+};
 
 export interface StartedServer {
   server: Server;
   url: string;
   close(): Promise<void>;
+}
+
+export interface ServerOptions {
+  /** Built UI directory (dist/ui). Without it, "/" serves the static preview. */
+  uiDir?: string | null;
 }
 
 /** Hosts a browser may legitimately send for this server. */
@@ -50,7 +77,7 @@ function send(
   res: ServerResponse,
   status: number,
   type: string,
-  body: string,
+  body: string | Buffer,
   extra: Record<string, string> = {},
 ): void {
   res.writeHead(status, {
@@ -66,7 +93,7 @@ function sendJson(res: ServerResponse, status: number, value: unknown): void {
   send(res, status, "application/json; charset=utf-8", JSON.stringify(value));
 }
 
-export function statusJson(view: RepositoryView) {
+export function statusJson(view: RepositoryView): RepositoryStatusJson {
   return {
     id: view.id,
     label: view.label,
@@ -83,8 +110,55 @@ export function statusJson(view: RepositoryView) {
   };
 }
 
-export function graphJson(view: GraphView) {
+export function graphJson(view: GraphView): GraphJson {
   const { graph, layout } = view;
+  const worktreesAt = new Map<string, WorktreeJson[]>();
+  for (const w of view.worktrees) {
+    if (!w.headOid) continue;
+    const list = worktreesAt.get(w.headOid) ?? [];
+    list.push({
+      path: w.path,
+      branch: w.branch,
+      detached: w.detached,
+      locked: w.locked,
+      prunable: w.prunable,
+      main: w.main,
+    });
+    worktreesAt.set(w.headOid, list);
+  }
+  const signature = (s: {
+    name: string;
+    email: string;
+    time: number;
+    timezone: string;
+  }) => ({
+    name: s.name,
+    email: s.email,
+    time: s.time,
+    timezone: s.timezone,
+  });
+  const nodes: GraphNodeJson[] = [...layout.nodes.values()].map((n) => {
+    const node = graph.nodes.get(n.oid);
+    const d = view.details.get(n.oid);
+    return {
+      oid: n.oid,
+      lane: n.lane,
+      row: n.row,
+      x: n.x,
+      y: n.y,
+      reasons: node?.reasons ?? [],
+      anchorFor: node?.anchorFor ?? [],
+      futureDated: node?.futureDated ?? false,
+      boundary: node?.boundary ?? false,
+      refs: view.labels.get(n.oid) ?? [],
+      subject: d?.subject ?? "",
+      message: d?.message ?? "",
+      parents: d?.parents ?? [],
+      author: d ? signature(d.author) : null,
+      committer: d ? signature(d.committer) : null,
+      worktrees: worktreesAt.get(n.oid) ?? [],
+    };
+  });
   return {
     id: view.id,
     revision: view.revision,
@@ -92,40 +166,7 @@ export function graphJson(view: GraphView) {
     reachableCount: graph.reachableCount,
     completeness: view.completeness,
     revealed: view.revealed,
-    nodes: [...layout.nodes.values()].map((n) => {
-      const node = graph.nodes.get(n.oid);
-      const d = view.details.get(n.oid);
-      return {
-        oid: n.oid,
-        lane: n.lane,
-        row: n.row,
-        x: n.x,
-        y: n.y,
-        reasons: node?.reasons ?? [],
-        anchorFor: node?.anchorFor ?? [],
-        futureDated: node?.futureDated ?? false,
-        boundary: node?.boundary ?? false,
-        refs: view.labels.get(n.oid) ?? [],
-        subject: d?.subject ?? "",
-        parents: d?.parents ?? [],
-        author: d
-          ? {
-              name: d.author.name,
-              email: d.author.email,
-              time: d.author.time,
-              timezone: d.author.timezone,
-            }
-          : null,
-        committer: d
-          ? {
-              name: d.committer.name,
-              email: d.committer.email,
-              time: d.committer.time,
-              timezone: d.committer.timezone,
-            }
-          : null,
-      };
-    }),
+    nodes,
     edges: layout.edges,
     tails: layout.tails,
     size: {
@@ -159,7 +200,39 @@ function previewHtml(service: RepositoryService): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>git-garden</title><link rel="stylesheet" href="/preview.css"></head><body><header><h1>git-garden <small>local preview</small></h1></header>${body}</body></html>`;
 }
 
-export function createHandler(service: RepositoryService, port: () => number) {
+/** Load every file of the built UI into memory, keyed by URL path. */
+export async function loadUi(
+  uiDir: string,
+): Promise<Map<string, { type: string; body: Buffer }> | null> {
+  const files = new Map<string, { type: string; body: Buffer }>();
+  const walk = async (dir: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else {
+        const type = MIME[extname(entry.name).toLowerCase()];
+        if (type) {
+          files.set(`/${relative(uiDir, full).replaceAll("\\", "/")}`, {
+            type,
+            body: await readFile(full),
+          });
+        }
+      }
+    }
+  };
+  try {
+    await walk(uiDir);
+  } catch {
+    return null;
+  }
+  return files.has("/index.html") ? files : null;
+}
+
+export function createHandler(
+  service: RepositoryService,
+  port: () => number,
+  ui: Map<string, { type: string; body: Buffer }> | null = null,
+) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const host = req.headers.host ?? "";
     if (!allowedHosts(port()).has(host.toLowerCase())) {
@@ -181,7 +254,13 @@ export function createHandler(service: RepositoryService, port: () => number) {
     const url = new URL(req.url ?? "/", `http://${host}`);
     const path = url.pathname;
     try {
-      if (path === "/") {
+      if (path === "/" || path === "/index.html") {
+        const index = ui?.get("/index.html");
+        if (index) send(res, 200, index.type, index.body);
+        else send(res, 200, "text/html; charset=utf-8", previewHtml(service));
+        return;
+      }
+      if (path === "/preview") {
         send(res, 200, "text/html; charset=utf-8", previewHtml(service));
         return;
       }
@@ -189,17 +268,28 @@ export function createHandler(service: RepositoryService, port: () => number) {
         send(res, 200, "text/css; charset=utf-8", PREVIEW_CSS);
         return;
       }
+      const asset = ui?.get(path);
+      if (asset) {
+        send(res, 200, asset.type, asset.body);
+        return;
+      }
       if (path === "/api/health") {
         sendJson(res, 200, { ok: true, apiVersion: API_VERSION });
         return;
       }
       if (path === "/api/repositories") {
-        sendJson(res, 200, {
+        const body: RepositoriesJson = {
           apiVersion: API_VERSION,
+          display: {
+            timeZone: service.config.history.timeZone,
+            businessDays: service.config.history.businessDays,
+            reducedMotion: service.config.display.reducedMotion,
+          },
           repositories: service
             .ids()
             .map((id) => statusJson(service.view(id) as RepositoryView)),
-        });
+        };
+        sendJson(res, 200, body);
         return;
       }
       const match =
@@ -278,14 +368,17 @@ export class PortInUseError extends Error {
 }
 
 /** Listen on the configured loopback host. Port 0 picks a free port (tests). */
-export function startServer(
+export async function startServer(
   service: RepositoryService,
   host: string,
   port: number,
+  options: ServerOptions = {},
 ): Promise<StartedServer> {
+  const ui = options.uiDir ? await loadUi(options.uiDir) : null;
   let actualPort = port;
+  const handler = createHandler(service, () => actualPort, ui);
   const server = createServer((req, res) => {
-    void createHandler(service, () => actualPort)(req, res);
+    void handler(req, res);
   });
   return new Promise((resolve, reject) => {
     server.once("error", (error: NodeJS.ErrnoException) => {

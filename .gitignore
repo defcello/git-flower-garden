@@ -4,6 +4,10 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# Browser test output
+playwright-report/
+test-results/
+
 # Logs
 *.log
 npm-debug.log*

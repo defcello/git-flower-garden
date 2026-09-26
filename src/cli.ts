@@ -23,9 +23,8 @@ import {
   isSupportedGitVersion,
   MINIMUM_GIT_VERSION,
 } from "./git/version.ts";
-import { RepositoryService } from "./monitor/repository-service.ts";
 import { inspectSources } from "./monitor/sources.ts";
-import { startServer } from "./server/server.ts";
+import { startApp } from "./server/app.ts";
 
 export interface Io {
   out: (line: string) => void;
@@ -185,26 +184,20 @@ export async function main(
         }
         config.server.port = port;
       }
-      const service = new RepositoryService(config);
-      await service.refreshAll();
-      let started;
+      let app;
       try {
-        started = await startServer(
-          service,
-          config.server.host,
-          config.server.port,
-        );
+        app = await startApp(config);
       } catch (error) {
         io.err(error instanceof Error ? error.message : String(error));
         return 1;
       }
       io.out(
-        `git-garden is serving ${String(config.repositories.length)} repositories at ${started.url}`,
+        `git-garden is serving ${String(config.repositories.length)} repositories at ${app.url}`,
       );
       io.out("Press Ctrl+C to stop.");
       await new Promise<void>((done) => {
         const stop = () => {
-          void started.close().then(done);
+          void app.close().then(done);
         };
         process.once("SIGINT", stop);
         process.once("SIGTERM", stop);

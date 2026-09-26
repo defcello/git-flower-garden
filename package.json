@@ -12,28 +12,40 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json && vite build",
+    "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json && tsc -p tests/e2e/tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "start": "node src/cli.ts serve",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm test",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm test && npm run test:e2e",
     "fixture": "node tests/fixtures/materialize.ts",
     "bench:ancestors": "node scripts/bench-ancestors.ts",
     "render:fixture": "node scripts/render-fixture.ts",
-    "bench:graph": "node --max-old-space-size=4096 scripts/bench-graph.ts"
+    "bench:graph": "node --max-old-space-size=4096 scripts/bench-graph.ts",
+    "dev:ui": "vite",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "@types/node": "24.19.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
     "ajv": "8.20.0",
     "eslint": "10.11.0",
+    "eslint-plugin-react-hooks": "7.1.1",
     "prettier": "3.9.9",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",
+    "vite": "8.3.1",
     "vitest": "5.0.2"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   }
 }

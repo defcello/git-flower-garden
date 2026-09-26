@@ -17,6 +17,7 @@ import { buildVisibleGraph, type VisibleGraph } from "../core/visible-graph.ts";
 import { readCommitDetails, type CommitDetails } from "../git/commits.ts";
 import { redactCredentials } from "../git/run-git.ts";
 import { readSnapshot, type RepositorySnapshot } from "../git/snapshot.ts";
+import type { GitWorktree } from "../git/worktrees.ts";
 import { layoutGraph, type Layout } from "../render/layout.ts";
 
 export type SourceState =
@@ -51,6 +52,7 @@ export interface GraphView {
   completeness: RepositorySnapshot["completeness"];
   /** Commits revealed for inspection that exist in this repository. */
   revealed: string[];
+  worktrees: GitWorktree[];
 }
 
 export interface TagSummary {
@@ -238,6 +240,7 @@ export class RepositoryService {
       details,
       completeness: snapshot.completeness,
       revealed,
+      worktrees: snapshot.worktrees,
     };
     entry.lastGraph = { key, view };
     return view;
