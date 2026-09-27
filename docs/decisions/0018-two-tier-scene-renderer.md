@@ -248,7 +248,19 @@ decision:
   in that backdrop does not follow the Sun, which is what step 2 addresses.
   The UI now bundles astronomy-engine; its notice ships in
   `THIRD-PARTY-NOTICES.md` (ADR 0019, condition 3).
-- **Next: step 2, the art spike**, which needs the maintainer.
+- **Step 2, art spike: built, awaiting the maintainer's decision**
+  (2026-09-27). [spikes/relight](../../spikes/relight/README.md) (`npm run
+  spike:relight`) draws one ridge layer, the hill, and the four sprites,
+  generated flat-lit with Codex together with Codex normal maps, side by side
+  as WebGL2 relit and Canvas 2D keyframed, with normals derived by script as
+  the alternative. Findings so far: flat-lit generation works; the image tool
+  caps sizes (1672×941 layers) and keys transparency with noisy alpha; Codex
+  normal maps are plausible but one came back with its X axis inverted, so
+  every map needs a convention check. The spike also raises an art-direction
+  question: real light from a southern Sun backlights the south-facing scene
+  most of the day, so it offers light mirrored to the viewer's side. Still
+  open: the maintainer's judgment and measurements on the dedicated monitor
+  and the Surface Pro.
 
 ## Verification
 

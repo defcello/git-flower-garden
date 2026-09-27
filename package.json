@@ -46,7 +46,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && vite build",
-    "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json && tsc -p tests/e2e/tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json && tsc -p tests/e2e/tsconfig.json && tsc -p spikes/relight/tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -57,6 +57,7 @@
     "fixture": "node tests/fixtures/materialize.ts",
     "bench:ancestors": "node scripts/bench-ancestors.ts",
     "render:fixture": "node scripts/render-fixture.ts",
+    "spike:relight": "vite spikes/relight",
     "bench:graph": "node --max-old-space-size=4096 scripts/bench-graph.ts",
     "dev:ui": "vite",
     "test:e2e": "playwright test",

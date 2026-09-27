@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Relighting spike</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body data-view="split">
+    <canvas
+      id="gpu"
+      aria-label="WebGL2, relit from the Sun each frame"
+    ></canvas>
+    <canvas id="software" aria-label="Canvas 2D, blended keyframes"></canvas>
+    <div
+      id="divider"
+      role="separator"
+      aria-label="Drag to move the split"
+    ></div>
+    <div class="tag tag-gpu">Relit · WebGL2</div>
+    <div class="tag tag-software">Keyframed · Canvas 2D</div>
+    <p id="status" role="status"></p>
+
+    <form id="panel" onsubmit="return false;">
+      <h1>ADR 0018 step 2 · relighting spike</h1>
+      <div class="row" role="group" aria-label="View">
+        <button type="button" data-view="split">Split <kbd>1</kbd></button>
+        <button type="button" data-view="gpu">Relit <kbd>2</kbd></button>
+        <button type="button" data-view="software">
+          Keyframed <kbd>3</kbd>
+        </button>
+      </div>
+      <label>
+        Sky
+        <select id="sky">
+          <option value="custom">Custom date and time (Blue Ridge)</option>
+        </select>
+      </label>
+      <div class="row">
+        <input id="date" type="date" aria-label="Date" />
+        <input
+          id="time"
+          type="range"
+          min="0"
+          max="1439"
+          step="1"
+          aria-label="Local time"
+        />
+        <output id="time-label"></output>
+      </div>
+      <div class="row">
+        <button type="button" id="play">Play a day</button>
+        <label>
+          Normals
+          <select id="normals">
+            <option value="derived">Derived (script)</option>
+            <option value="codex">Codex-generated</option>
+          </select>
+        </label>
+        <label><input id="inspect" type="checkbox" /> Large sprites</label>
+        <label>
+          Light from
+          <select id="side">
+            <option value="physical">
+              Real direction (south Sun backlights)
+            </option>
+            <option value="viewer">Viewer's side (front-lit)</option>
+          </select>
+        </label>
+        <label>
+          Relit shows
+          <select id="mode">
+            <option value="lit">Lighting</option>
+            <option value="normals">Normal map</option>
+            <option value="albedo">Flat albedo</option>
+          </select>
+        </label>
+      </div>
+      <p id="readout"></p>
+      <p id="stats"></p>
+      <details>
+        <summary>Keys and notes</summary>
+        <p>
+          <kbd>X</kbd> flip relit/keyframed full screen · <kbd>←</kbd
+          ><kbd>→</kbd> ±10 min · <kbd>Space</kbd> play · <kbd>N</kbd> normals ·
+          <kbd>I</kbd> large sprites · <kbd>L</kbd> light side ·
+          <kbd>H</kbd> hide this panel.
+        </p>
+        <p>
+          Keyframes are authored once, on the March equinox (<span
+            id="keyframes"
+          ></span
+          >), and know nothing of the season or where the Sun is; the relit half
+          uses the real Sun and Moon. Sky, stars, Sun, Moon, and ground shadows
+          are the same code in both halves; only the shading of the art differs.
+        </p>
+      </details>
+    </form>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
