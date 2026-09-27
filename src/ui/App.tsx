@@ -26,6 +26,11 @@ import {
   STATE_TEXT,
 } from "./format.ts";
 import { GraphSvg, graphWidth } from "./GraphSvg.tsx";
+import {
+  HILLSIDE_SLOTS,
+  hillsideSlots,
+  type HillsideSlot,
+} from "./hillside.ts";
 
 interface Selection {
   repoId: string;
@@ -56,10 +61,11 @@ export function App() {
   const repos = repositories?.repositories ?? [];
   const timeZone = repositories?.display.timeZone ?? "UTC";
   const focused = repos.find((r) => r.id === focusedId);
-  // The hillside composition has room for a fixed number of plants; larger
-  // gardens use the card layout (with the same artwork) so nothing overlaps.
+  // The hillside has 64 fixed plant slots; dense planting is intended (focus
+  // view isolates one plant). Larger gardens use the card layout.
   const sceneMode =
-    renderer !== "technical" && repos.length <= SCENE_POSITIONS.length;
+    renderer !== "technical" && repos.length <= HILLSIDE_SLOTS.length;
+  const sceneSlots = sceneMode ? hillsideSlots(repos.length) : [];
   // A focused repository that disappears from the configuration shows the garden.
   const activeFocusId = focused ? focusedId : null;
 
@@ -271,7 +277,11 @@ export function App() {
                 setSelection({ repoId: repo.id, oid });
               }}
               onHover={onHover}
-              sceneIndex={sceneMode ? index : null}
+              slot={
+                sceneMode
+                  ? (HILLSIDE_SLOTS[sceneSlots[index] ?? 0] ?? null)
+                  : null
+              }
             />
           ))}
         </main>
@@ -430,20 +440,11 @@ interface PlotProps {
   onFocus: () => void;
   onSelect: (oid: string) => void;
   onHover: (node: GraphNodeJson | null, event?: React.PointerEvent) => void;
-  /** Position on the hillside, or null when plots are laid out as cards. */
-  sceneIndex: number | null;
+  /** Fixed hillside slot, or null when plots are laid out as cards. */
+  slot: HillsideSlot | null;
 }
 
-const SCENE_POSITIONS = [
-  { x: 13, y: 78, scale: 0.84 },
-  { x: 27, y: 75, scale: 0.76 },
-  { x: 45, y: 74, scale: 0.94 },
-  { x: 65, y: 64, scale: 0.74 },
-  { x: 84, y: 71, scale: 0.86 },
-  { x: 19, y: 92, scale: 1.32 },
-  { x: 49, y: 89, scale: 1.22 },
-  { x: 77, y: 93, scale: 1.38 },
-] as const;
+const noHover = () => undefined;
 
 function Plot({
   renderer,
@@ -454,7 +455,7 @@ function Plot({
   onFocus,
   onSelect,
   onHover,
-  sceneIndex,
+  slot,
 }: PlotProps) {
   const Drawing = renderer === "technical" ? GraphSvg : BotanicalGraph;
   const titleId = `plot-title-${repo.id}`;
@@ -462,20 +463,24 @@ function Plot({
   const buttonLeft = graph
     ? Math.max(4, PLOT_PADDING + graph.size.width / 2 - FOCUS_BUTTON / 2)
     : PLOT_PADDING;
-  const position =
-    sceneIndex === null ? undefined : SCENE_POSITIONS[sceneIndex];
-  const sceneStyle = position
+  // On the hillside the plant grows from its slot, centered on its lanes.
+  const lanes = graph?.size.width ?? 0;
+  const sceneStyle = slot
     ? ({
-        "--plant-x": `${String(position.x)}%`,
-        "--plant-y": `${String(position.y)}%`,
-        "--plant-scale": String(position.scale),
-        "--plant-z": String(Math.round(position.y * 10)),
-        "--button-left": `${String(buttonLeft)}px`,
+        "--slot-x": `${String(slot.x)}%`,
+        "--slot-y": `${String(slot.y)}%`,
+        "--icon-x": `${String(slot.iconX)}%`,
+        "--icon-y": `${String(slot.iconY)}%`,
+        "--plant-scale": String(slot.scale),
+        "--plant-z": String(Math.round(slot.y * 10)),
+        "--anchor-x": `${String(lanes / 2)}px`,
+        "--hit-w": `${String(lanes + 16)}px`,
       } as CSSProperties)
     : undefined;
+  const state = repo.status.state;
   return (
     <section
-      className={`plot${position && (repo.status.state === "stale" || repo.status.state === "incomplete") ? " wilting" : ""}${position && position.x >= 60 ? " cards-left" : ""}`}
+      className={`plot${slot && (state === "stale" || state === "incomplete") ? " wilting" : ""}${slot && slot.iconX >= 60 ? " cards-left" : ""}`}
       data-plot={repo.id}
       tabIndex={0}
       aria-labelledby={titleId}
@@ -493,34 +498,41 @@ function Plot({
         type="button"
         className="focus-button"
         aria-label={`Focus ${repo.label}`}
-        style={{ left: buttonLeft }}
+        style={slot ? undefined : { left: buttonLeft }}
         onClick={onFocus}
       >
         <span aria-hidden="true">+</span>
       </button>
-      <h2 id={titleId}>{repo.label}</h2>
-      <StatusLine repo={repo} graph={graph} now={now} />
-      {position && (
-        <PlantMarker
-          repo={repo}
-          drawable={graph !== undefined && repo.counts?.reachableCommits !== 0}
-          center={buttonLeft + FOCUS_BUTTON / 2}
-        />
-      )}
-      <PlotBody repo={repo} graph={graph}>
-        {graph && (
-          <div className="plot-graph">
-            <Drawing
-              compositor={renderer === "svg" ? "svg" : "canvas"}
-              graph={graph}
-              label={repo.label}
-              selectedOid={selectedOid}
-              onHover={onHover}
-              onSelect={onSelect}
-            />
-          </div>
+      <div className="plot-card">
+        <h2 id={titleId}>{repo.label}</h2>
+        <StatusLine repo={repo} graph={graph} now={now} />
+      </div>
+      {/* On the hillside a plant is one target: clicking any part focuses it. */}
+      <div className="plant" onClick={slot ? onFocus : undefined}>
+        {slot && (
+          <PlantMarker
+            repo={repo}
+            drawable={
+              graph !== undefined && repo.counts?.reachableCommits !== 0
+            }
+            center={lanes / 2}
+          />
         )}
-      </PlotBody>
+        <PlotBody repo={repo} graph={graph}>
+          {graph && (
+            <div className="plot-graph">
+              <Drawing
+                compositor={renderer === "svg" ? "svg" : "canvas"}
+                graph={graph}
+                label={repo.label}
+                selectedOid={selectedOid}
+                onHover={slot ? noHover : onHover}
+                onSelect={slot ? onFocus : onSelect}
+              />
+            </div>
+          )}
+        </PlotBody>
+      </div>
     </section>
   );
 }
@@ -637,8 +649,10 @@ function FocusView(props: FocusViewProps) {
             />
           )}
         </PlotBody>
-        {!graph && (
+        {/* Nothing drawn (unreadable or empty): the exit control stands alone. */}
+        {(!graph || repo.counts?.reachableCommits === 0) && (
           <button
+            ref={exitButton}
             type="button"
             className="focus-button visible static"
             aria-label="Show all repositories"

@@ -155,6 +155,12 @@ code,
   min-width: 0;
 }
 
+/* Layers used only by the garden view's hillside; boxless in the card layout. */
+.plot-card,
+.plant {
+  display: contents;
+}
+
 .plot h2 {
   position: absolute;
   top: 14px;
@@ -755,83 +761,142 @@ code,
   border-color: #ffffff80;
   backdrop-filter: blur(12px);
 }
+/* In the sky, clear of every hillside slot and focus icon, and never a
+   pointer target. */
 .botanical .art-notice {
   position: fixed;
   z-index: 12;
   left: 20px;
-  bottom: 18px;
+  top: 76px;
+  pointer-events: none;
   width: min(720px, calc(100vw - 40px));
   margin: 0;
   background: #fffef8dc;
   backdrop-filter: blur(12px);
 }
+/* The hillside is the viewport, like the fixed backdrop it is planted on,
+   so slot percentages land on the same grass at any scroll or bar height. */
 .botanical .garden-scene {
-  position: relative;
+  position: fixed;
+  inset: 0;
+  z-index: 1;
   display: block;
-  height: calc(100vh - 1px);
-  min-height: 680px;
   padding: 0;
   overflow: hidden;
-  perspective: 1100px;
 }
+/*
+ * Garden-view overview (roadmap section 7). Each repository is a full-scene
+ * layer that places its plant at a fixed hillside slot and its focus icon at
+ * that slot's fixed icon position (src/ui/hillside.ts). The layer takes no
+ * pointer input and makes no stacking context, so every icon rises above
+ * every plant. Names, status, and icons appear only on hover, keyboard
+ * focus, or tap, so the unattended scene stays a natural garden: this is the
+ * maintainer's design, not a defect.
+ */
 .botanical .garden-scene .plot {
   position: absolute;
-  z-index: var(--plant-z);
-  left: var(--plant-x);
-  top: var(--plant-y);
-  width: 150px;
+  inset: 0;
   max-width: none;
+  min-width: 0;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  transform: translate(-25%, -100%) scale(var(--plant-scale));
-  transform-origin: center bottom;
+  pointer-events: none;
+}
+/* The cyan highlight below is the focus indicator. */
+.botanical .garden-scene .plot:focus {
+  outline: none;
+}
+.botanical .garden-scene .plant {
+  display: block;
+  position: absolute;
+  z-index: var(--plant-z);
+  left: var(--slot-x);
+  top: var(--slot-y);
+  width: max-content;
+  /* Grow from the slot: the tree's center at the base sits on the point. */
+  transform: translate(calc(-1 * var(--anchor-x)), -100%)
+    scale(var(--plant-scale));
+  transform-origin: var(--anchor-x) 100%;
   filter: drop-shadow(8px 11px 7px #152d1738);
-  transition:
-    filter 180ms ease-out,
-    transform 220ms ease-out;
+  transition: filter 150ms ease-out;
 }
-.botanical .garden-scene .plot:hover,
-.botanical .garden-scene .plot:focus-within {
-  z-index: 1000;
-  filter: drop-shadow(10px 15px 10px #152d174d);
-  transform: translate(-25%, -100%) scale(calc(var(--plant-scale) * 1.06));
+/* Hovering a plant or its icon (or keyboard focus on either) outlines it in
+   cyan, so it is unambiguous which one a click will focus. Focus left behind
+   by a mouse click does not count, so only one plant is ever outlined. */
+.botanical .garden-scene .plot:hover .plant,
+.botanical .garden-scene .plot:focus-visible .plant,
+.botanical .garden-scene .plot:has(:focus-visible) .plant {
+  z-index: 1500;
+  filter: drop-shadow(0 0 1px #00e5ff) drop-shadow(0 0 1px #00e5ff)
+    drop-shadow(0 0 5px #00e5ffcc);
 }
-.botanical .garden-scene .plot h2,
-.botanical .garden-scene .plot .status {
+.botanical .garden-scene .focus-button {
+  z-index: 2000;
+  left: var(--icon-x);
+  top: var(--icon-y);
+  width: 44px;
+  height: 44px;
+  background: #fffef8e8;
+  backdrop-filter: blur(9px);
+  transform: translate(-50%, -50%);
+  /* Invisible but reachable: hovering the icon itself reveals it. */
+  opacity: 0;
+  pointer-events: auto;
+}
+.botanical .garden-scene .plot:hover .focus-button,
+.botanical .garden-scene .plot:focus-visible .focus-button,
+.botanical .garden-scene .plot:has(:focus-visible) .focus-button {
+  opacity: 1;
+}
+/* Name and status, beside the icon (mirrored near the right edge). */
+.botanical .garden-scene .plot-card {
+  position: absolute;
+  z-index: 2100;
+  left: calc(var(--icon-x) + 28px);
+  bottom: calc(100% - var(--icon-y) - 22px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   opacity: 0;
   pointer-events: none;
   transition: opacity 150ms ease-out;
 }
-.botanical .garden-scene .plot h2 {
-  z-index: 7;
-  top: 2px;
-  right: 8px;
+.botanical .garden-scene .plot.cards-left .plot-card {
+  left: auto;
+  right: calc(100% - var(--icon-x) + 28px);
+  align-items: flex-end;
+}
+.botanical .garden-scene .plot:hover .plot-card,
+.botanical .garden-scene .plot:focus-visible .plot-card,
+.botanical .garden-scene .plot:has(:focus-visible) .plot-card {
+  opacity: 1;
+}
+.botanical .garden-scene .plot-card h2 {
+  position: static;
+  max-width: 330px;
   padding: 8px 12px;
   border-radius: 10px 10px 0 0;
   background: #fffef8e8;
   backdrop-filter: blur(9px);
 }
-.botanical .garden-scene .plot .status {
-  position: absolute;
-  z-index: 7;
-  top: 39px;
-  right: 8px;
+.botanical .garden-scene .plot-card .status {
+  width: max-content;
   max-width: 330px;
+  margin: 0;
   padding: 7px 12px;
-  border-radius: 10px 0 10px 10px;
+  border-radius: 0 10px 10px 10px;
   background: #fffef8e8;
   box-shadow: 0 8px 22px #213f2524;
   backdrop-filter: blur(9px);
 }
-.botanical .garden-scene .plot:hover h2,
-.botanical .garden-scene .plot:focus-within h2,
-.botanical .garden-scene .plot:hover .status,
-.botanical .garden-scene .plot:focus-within .status {
-  opacity: 1;
-  pointer-events: auto;
+.botanical .garden-scene .plot.cards-left .plot-card h2 {
+  text-align: right;
+}
+.botanical .garden-scene .plot.cards-left .plot-card .status {
+  border-radius: 10px 0 10px 10px;
 }
 .botanical .garden-scene .plot-graph {
   max-height: none;
@@ -844,26 +909,27 @@ code,
 }
 .botanical .garden-scene .commit .hit {
   pointer-events: all;
+  cursor: pointer;
 }
 .botanical .garden-scene .botanical-overlay .commit text {
   display: none;
 }
 .botanical .garden-scene .botanical-overlay .commit .hit {
-  /* The normal row spans the label column. In the landscape that invisible
-     rectangle must not cover a neighboring plant. */
-  width: 150px;
+  /* The normal row spans the label column. On the hillside the plant's
+     target is its lanes, so it does not cover neighboring plants. */
+  width: var(--hit-w);
 }
-.botanical .garden-scene .focus-button {
-  background: #fffef8e8;
-  backdrop-filter: blur(9px);
-}
+/* Placeholder text stays for assistive technology; the status card carries
+   the same explanation on hover. */
 .botanical .garden-scene .placeholder {
-  min-width: 260px;
-  padding: 24px;
-  border-radius: 14px;
-  background: #fffef8d9;
-  opacity: 0;
-  transition: opacity 150ms ease-out;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .botanical .drawer,
 .botanical .focus-side,
@@ -896,17 +962,14 @@ code,
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .botanical .garden-scene .plot,
+  .botanical .garden-scene .plant,
+  .botanical .garden-scene .plot-card,
   .botanical .topbar,
   .botanical .art-notice {
     transition: none;
   }
 }
 @media (max-width: 700px) {
-  .botanical .garden-scene {
-    min-height: 760px;
-    overflow-x: hidden;
-  }
   .botanical .garden-scene .plot {
     --plant-scale: 0.52 !important;
   }
@@ -976,43 +1039,9 @@ code,
   }
 }
 
-/*
- * Garden-view overview (roadmap section 7): names and status appear only on
- * hover, keyboard focus, or tap, so the unattended scene stays a natural
- * garden. This is the maintainer's design, not a defect. Health is shown
- * without text instead.
- */
-/* Revealed name and status cards sit beside the focus button, never over it,
-   at their full width; plants near the right edge mirror them leftward. */
-.botanical .garden-scene .plot h2,
-.botanical .garden-scene .plot .status {
-  left: calc(var(--button-left) + 44px / min(1, var(--plant-scale)) + 6px);
-  right: auto;
-  width: max-content;
-  max-width: 330px;
-  text-align: left;
-}
-.botanical .garden-scene .plot .status {
-  top: 41px;
-  border-radius: 0 10px 10px 10px;
-}
-.botanical .garden-scene .plot.cards-left h2,
-.botanical .garden-scene .plot.cards-left .status {
-  left: auto;
-  right: calc(100% - var(--button-left) + 6px);
-  text-align: right;
-}
-.botanical .garden-scene .plot.cards-left .status {
-  border-radius: 10px 0 10px 10px;
-}
-/* Placeholder text stays for assistive technology; on hover, the status card
-   (which carries the same explanation) is the one visible card. */
-.botanical .garden-scene .placeholder {
-  opacity: 0;
-}
+/* Health without text in the garden view (roadmap section 7). */
 .botanical .garden-scene .plant-marker {
   position: absolute;
-  left: 50%;
   bottom: 0;
   width: 0;
   height: 0;
@@ -1037,6 +1066,11 @@ code,
     0 2px 4px #1f2a1c40;
 }
 /* A garden marker stake carrying the state glyph. */
+.botanical .garden-scene .plant-bed,
+.botanical .garden-scene .plant-stake {
+  pointer-events: auto;
+  cursor: pointer;
+}
 .botanical .garden-scene .plant-stake {
   position: absolute;
   left: 20px;
@@ -1069,9 +1103,4 @@ code,
 /* Last-known state: the plant fades like a wilting one. */
 .botanical .garden-scene .plot.wilting .plot-graph {
   filter: saturate(0.45) brightness(0.92);
-}
-/* The focus control keeps a 44 x 44 CSS px target after plant scaling. */
-.botanical .garden-scene .focus-button {
-  width: calc(44px / min(1, var(--plant-scale)));
-  height: calc(44px / min(1, var(--plant-scale)));
 }

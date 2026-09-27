@@ -21,6 +21,14 @@ test("garden compositors retain graph truth, selection, and focus camera", async
       })),
     );
   const truth = await semantic();
+  // Pinning details from the overview is a technical-view interaction; on
+  // the garden hillside a click focuses the whole plant (section 7).
+  const fork = page.locator('[data-plot="fork"]');
+  await fork.locator("g.commit", { hasText: "main, release" }).click();
+  const details = page.getByRole("complementary", { name: "Commit details" });
+  await expect(details.locator(".chips li")).toHaveText(["main", "release"]);
+  await expect(details).toContainText("Worktrees");
+  await page.keyboard.press("Escape");
   for (const compositor of ["canvas", "svg"]) {
     await page.getByLabel("Renderer", { exact: true }).selectOption(compositor);
     await expect(
@@ -30,12 +38,6 @@ test("garden compositors retain graph truth, selection, and focus camera", async
       await expect(page.locator('canvas[data-ready="true"]')).toHaveCount(7);
     expect(await semantic()).toEqual(truth);
   }
-  const fork = page.locator('[data-plot="fork"]');
-  await fork.locator("g.commit", { hasText: "main, release" }).click();
-  const details = page.getByRole("complementary", { name: "Commit details" });
-  await expect(details.locator(".chips li")).toHaveText(["main", "release"]);
-  await expect(details).toContainText("Worktrees");
-  await page.keyboard.press("Escape");
   await fork.focus();
   await page.keyboard.press("Enter");
   await expect(page.locator(".focus-graph")).toHaveAttribute(

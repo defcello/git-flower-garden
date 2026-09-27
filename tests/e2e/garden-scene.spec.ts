@@ -1,60 +1,174 @@
 /*
- * The hillside layout under the section 7 contract: technical stays the
- * default, the unattended garden scene carries no text (names and status on
- * hover, focus, or tap, by maintainer design), empty and broken repositories
- * stay visible through soil beds and marker stakes, focus controls keep a
- * 44 px target after scaling, and the viewer's renderer choice is
- * remembered. Uses its own small garden (the shared fixture server has more
- * repositories than the hillside holds).
+ * The garden view's hillside under the section 7 contract, at a small (5)
+ * and a full (64) garden, at 1920x1080:
+ * - technical stays the default; the viewer's choice is remembered;
+ * - the unattended scene carries no text, icons, or highlight (maintainer
+ *   design); hovering a plant or its icon reveals that plant's icon and
+ *   name card and outlines that plant, and only that plant, in cyan;
+ * - clicking the plant or its icon focuses exactly that repository;
+ * - plants grow from their fixed hillside slots, and every one of the 64
+ *   fixed icons is reachable (never covered);
+ * - empty and broken repositories stay visible without text.
  */
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { parseConfig } from "../../src/config/config.ts";
 import { buildFixture, fixtureGit } from "../../src/demo/builder.ts";
-import { artProof, forkMerge } from "../../src/demo/fixtures.ts";
+import {
+  artProof,
+  crissCross,
+  forkMerge,
+  threeHeads,
+} from "../../src/demo/fixtures.ts";
 import { startApp, type RunningApp } from "../../src/server/app.ts";
+import { HILLSIDE_SLOTS, hillsideSlots } from "../../src/ui/hillside.ts";
 
-let app: RunningApp;
+const CYAN = "rgb(0, 229, 255)";
+
+let small: RunningApp;
+let full: RunningApp;
 let root: string;
 
-test.beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), "git-garden-scene-"));
-  await buildFixture(artProof, join(root, "tour"));
-  await buildFixture(forkMerge, join(root, "fork"));
-  await mkdir(join(root, "empty"));
-  await fixtureGit(root, ["init", "--quiet", join(root, "empty")]);
+interface Entry {
+  id: string;
+  label: string;
+  path: string;
+}
+
+const SMALL: Entry[] = [
+  { id: "tour", label: "Garden tour", path: "tour" },
+  { id: "fork", label: "Fork and merge", path: "fork" },
+  { id: "three", label: "Three heads", path: "three" },
+  { id: "empty", label: "Empty repository", path: "empty" },
+  { id: "missing", label: "Missing path", path: "nowhere" },
+];
+
+// 64 plants from a few real repositories (paths may repeat; ids may not).
+const REAL = ["tour", "fork", "three", "criss"];
+const FULL: Entry[] = Array.from({ length: 64 }, (_, i) => ({
+  id: `r${String(i)}`,
+  label: `Repository ${String(i)}`,
+  path: i === 17 ? "empty" : i === 40 ? "nowhere" : (REAL[i % 4] ?? "tour"),
+}));
+
+async function start(repositories: Entry[]) {
   const parsed = parseConfig(
     JSON.stringify({
       version: 1,
       history: { timeZone: "America/New_York" },
-      repositories: [
-        { id: "tour", label: "Garden tour", path: "tour" },
-        { id: "fork", label: "Fork and merge", path: "fork" },
-        { id: "empty", label: "Empty repository", path: "empty" },
-        { id: "missing", label: "Missing path", path: "nowhere" },
-      ],
+      repositories,
     }),
     root,
   );
   if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
-  app = await startApp(parsed.config, {
+  return startApp(parsed.config, {
     now: () => Date.parse("2026-09-22T15:00:00-04:00"),
     port: 0,
     cacheRoot: join(root, ".cache"),
   });
+}
+
+test.beforeAll(async () => {
+  test.setTimeout(120_000);
+  root = await mkdtemp(join(tmpdir(), "git-garden-scene-"));
+  await buildFixture(artProof, join(root, "tour"));
+  await buildFixture(forkMerge, join(root, "fork"));
+  await buildFixture(threeHeads, join(root, "three"));
+  await buildFixture(crissCross, join(root, "criss"));
+  await mkdir(join(root, "empty"));
+  await fixtureGit(root, ["init", "--quiet", join(root, "empty")]);
+  small = await start(SMALL);
+  full = await start(FULL);
 });
 
 test.afterAll(async () => {
-  await app.close();
+  await small.close();
+  await full.close();
   await rm(root, { recursive: true, force: true, maxRetries: 5 });
 });
+
+test.use({ viewport: { width: 1920, height: 1080 } });
+
+async function openScene(page: Page, url: string, plants: number) {
+  await page.goto(url);
+  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+  await expect(page.locator(".garden-scene [data-plot]")).toHaveCount(plants);
+  await expect(
+    page.locator(".garden-scene .status", { hasText: "Loading" }),
+  ).toHaveCount(0);
+  await page.mouse.move(2, 2);
+}
+
+/** Which plots are revealed (icon shown) and outlined in cyan. */
+async function lit(page: Page) {
+  return page.locator("[data-plot]").evaluateAll(
+    (plots, cyan) =>
+      plots
+        .filter((plot) => {
+          const plant = plot.querySelector(".plant");
+          const icon = plot.querySelector(".focus-button");
+          return (
+            plant !== null &&
+            icon !== null &&
+            getComputedStyle(plant).filter.includes(cyan) &&
+            getComputedStyle(icon).opacity === "1"
+          );
+        })
+        .map((plot) => plot.getAttribute("data-plot")),
+    CYAN,
+  );
+}
+
+/** A point on the plant not under any other element (an icon or another plant). */
+async function exposedPoint(page: Page, id: string) {
+  return page.evaluate((plotId) => {
+    const plant = document.querySelector(`[data-plot="${plotId}"] .plant`);
+    if (!plant) return null;
+    const targets = plant.querySelectorAll(
+      ".commit .hit, .plant-bed, .plant-stake",
+    );
+    for (const target of targets) {
+      const box = target.getBoundingClientRect();
+      for (const fy of [0.5, 0.3, 0.7, 0.1, 0.9]) {
+        for (const fx of [0.5, 0.3, 0.7, 0.1, 0.9]) {
+          const x = box.left + box.width * fx;
+          const y = box.top + box.height * fy;
+          const hit = document.elementFromPoint(x, y);
+          if (hit && plant.contains(hit)) return { x, y };
+        }
+      }
+    }
+    return null;
+  }, id);
+}
+
+async function iconCenter(page: Page, id: string) {
+  const box = await page
+    .locator(`[data-plot="${id}"] .focus-button`)
+    .boundingBox();
+  if (!box) throw new Error(`no icon for ${id}`);
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/** Where each plant's anchor (tree center at its base) lands in the viewport. */
+async function basePoints(page: Page) {
+  return page.locator("[data-plot] .plant").evaluateAll((plants) =>
+    plants.map((plant) => {
+      const box = plant.getBoundingClientRect();
+      const style = getComputedStyle(plant);
+      const scale = Number(style.getPropertyValue("--plant-scale"));
+      const anchor = parseFloat(style.getPropertyValue("--anchor-x"));
+      return { x: box.left + anchor * scale, y: box.bottom };
+    }),
+  );
+}
 
 test("technical is the default; the garden choice is remembered", async ({
   page,
 }) => {
-  await page.goto(app.url);
+  await page.goto(small.url);
   await expect(page.getByLabel("Renderer", { exact: true })).toHaveValue(
     "technical",
   );
@@ -68,115 +182,198 @@ test("technical is the default; the garden choice is remembered", async ({
   await expect(page.locator(".garden-scene")).toHaveCount(1);
 });
 
-test("the unattended scene has no text; hover and focus reveal each plant's name and state", async ({
+test("the unattended scene has no text, icons, or highlight", async ({
   page,
 }) => {
-  await page.goto(app.url);
-  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
-  await page.mouse.move(2, 2);
-  // By maintainer design, the overview in the garden renderer is a natural
-  // scene: no always-visible names, status lines, or placeholder text.
-  for (const id of ["tour", "fork", "empty", "missing"]) {
+  await openScene(page, small.url, 5);
+  expect(await lit(page)).toEqual([]);
+  for (const { id } of SMALL) {
     const plot = page.locator(`[data-plot="${id}"]`);
-    await expect(plot.locator("h2"), id).toHaveCSS("opacity", "0");
-    await expect(plot.locator(".status"), id).toHaveCSS("opacity", "0");
+    await expect(plot.locator(".plot-card"), id).toHaveCSS("opacity", "0");
+    await expect(plot.locator(".focus-button"), id).toHaveCSS("opacity", "0");
   }
   for (const id of ["empty", "missing"]) {
-    await expect(
-      page.locator(`[data-plot="${id}"] .placeholder`),
-      id,
-    ).toHaveCSS("opacity", "0");
+    const box = await page
+      .locator(`[data-plot="${id}"] .placeholder`)
+      .boundingBox();
+    expect(box?.width ?? 0, id).toBeLessThanOrEqual(1);
   }
-  // Hover reveals the name and state.
-  const missing = page.locator('[data-plot="missing"]');
-  await missing.hover();
-  await expect(missing.locator("h2")).toHaveCSS("opacity", "1");
-  await expect(missing.locator(".status")).toContainText("Error");
-  await expect(missing.locator(".status")).toContainText("Path not found");
-  // The whole name is readable, not cut to a letter by the card layout.
-  const name = missing.locator("h2");
-  expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
-    true,
-  );
-  // The cards sit beside the circular +, never over it.
-  for (const id of ["missing", "tour"]) {
-    const plot = page.locator(`[data-plot="${id}"]`);
-    await plot.hover();
-    await expect(plot.locator("h2")).toHaveCSS("opacity", "1");
-    const button = plot.locator(".focus-button");
-    const box = await button.boundingBox();
-    if (!box) throw new Error(`no focus button for ${id}`);
-    const hit = await button.evaluate(
-      (el, [x, y]) => el.contains(document.elementFromPoint(x ?? 0, y ?? 0)),
-      [box.x + box.width / 2, box.y + box.height / 2],
-    );
-    expect(hit, id).toBe(true);
-  }
-  await missing.hover();
-  // One card: the placeholder text stays for assistive technology only.
-  await expect(missing.locator(".placeholder")).toHaveCSS("opacity", "0");
-  await expect(missing.locator(".placeholder")).toHaveText(/could not be read/);
-  const empty = page.locator('[data-plot="empty"]');
-  await empty.hover();
-  await expect(empty.locator(".status")).toContainText("no commits yet");
-  // So does keyboard focus.
-  await page.mouse.move(2, 2);
-  const tour = page.locator('[data-plot="tour"]');
-  await tour.focus();
-  await expect(tour.locator("h2")).toHaveCSS("opacity", "1");
-  await expect(tour.locator(".status")).toContainText("Up to date");
 });
 
-test("empty and broken repositories stay visible without text", async ({
+test("hovering a plant reveals its icon and name and outlines it in cyan; clicking it focuses", async ({
   page,
 }) => {
-  await page.goto(app.url);
-  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
-  await page.mouse.move(2, 2);
-  // Healthy plants carry no marker at all.
-  for (const id of ["tour", "fork"]) {
+  await openScene(page, small.url, 5);
+  const point = await exposedPoint(page, "fork");
+  if (!point) throw new Error("fork plant is not exposed");
+  await page.mouse.move(point.x, point.y);
+  await expect.poll(() => lit(page)).toEqual(["fork"]);
+  const fork = page.locator('[data-plot="fork"]');
+  await expect(fork.locator(".plot-card")).toHaveCSS("opacity", "1");
+  await expect(fork.locator("h2")).toHaveText("Fork and merge");
+  expect(
+    await fork.locator("h2").evaluate((el) => el.scrollWidth <= el.clientWidth),
+  ).toBe(true);
+  await expect(fork.locator(".status")).toContainText("Up to date");
+  // No commit tooltip competes with the card on the hillside.
+  await expect(page.locator(".tooltip")).toHaveCount(0);
+  // The revealed icon is not covered by the card or any plant.
+  const icon = await iconCenter(page, "fork");
+  expect(
+    await fork
+      .locator(".focus-button")
+      .evaluate(
+        (el, p) => el.contains(document.elementFromPoint(p.x, p.y)),
+        icon,
+      ),
+  ).toBe(true);
+  // Clicking the plant itself focuses exactly this repository.
+  await page.mouse.click(point.x, point.y);
+  await expect(
+    page.getByRole("button", { name: "Show all repositories" }),
+  ).toBeVisible();
+  await expect(page.locator(".focus-head h2")).toHaveText("Fork and merge");
+  await page.getByRole("button", { name: "Show all repositories" }).click();
+  await expect(page.locator(".garden-scene")).toHaveCount(1);
+});
+
+test("hovering an icon reveals it and outlines its own plant; clicking it focuses", async ({
+  page,
+}) => {
+  await openScene(page, small.url, 5);
+  const icon = await iconCenter(page, "tour");
+  await page.mouse.move(icon.x, icon.y);
+  await expect.poll(() => lit(page)).toEqual(["tour"]);
+  await page.mouse.click(icon.x, icon.y);
+  await expect(page.locator(".focus-head h2")).toHaveText("Garden tour");
+});
+
+test("keyboard focus reveals and outlines a plant; Enter focuses it", async ({
+  page,
+}) => {
+  await openScene(page, small.url, 5);
+  await page.locator('[data-plot="three"]').focus();
+  await expect.poll(() => lit(page)).toEqual(["three"]);
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Show all repositories" }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator('[data-plot="three"]')).toBeFocused();
+});
+
+test("empty and broken repositories stay visible without text, and are targets too", async ({
+  page,
+}) => {
+  await openScene(page, small.url, 5);
+  for (const id of ["tour", "fork", "three"]) {
     await expect(
       page.locator(`[data-plot="${id}"] .plant-marker`),
       id,
     ).toHaveCount(0);
   }
-  // An empty repository is a bare soil bed, with no warning stake.
   const empty = page.locator('[data-plot="empty"]');
   await expect(empty.locator(".plant-bed")).toBeVisible();
   await expect(empty.locator(".stake-tag")).toHaveCount(0);
-  // An unreadable one is a soil bed with a marker stake showing its state.
   const missing = page.locator('[data-plot="missing"]');
   await expect(missing.locator(".plant-bed")).toBeVisible();
-  await expect(missing.locator(".stake-tag")).toBeVisible();
   await expect(missing.locator(".stake-tag")).toHaveText("✕");
-  const tag = await missing
-    .locator(".stake-tag")
-    .evaluate((el) => el.getBoundingClientRect().width);
-  expect(tag).toBeGreaterThanOrEqual(10);
+  // Hovering the bed explains it; clicking it focuses.
+  const point = await exposedPoint(page, "missing");
+  if (!point) throw new Error("missing bed is not exposed");
+  await page.mouse.move(point.x, point.y);
+  await expect.poll(() => lit(page)).toEqual(["missing"]);
+  await expect(missing.locator(".status")).toContainText("Path not found");
+  const bed = await exposedPoint(page, "empty");
+  if (!bed) throw new Error("empty bed is not exposed");
+  await page.mouse.move(bed.x, bed.y);
+  await expect.poll(() => lit(page)).toEqual(["empty"]);
+  await expect(empty.locator(".status")).toContainText("no commits yet");
+  await page.mouse.click(bed.x, bed.y);
+  await expect(page.locator(".focus-head h2")).toHaveText("Empty repository");
+  await page.getByRole("button", { name: "Show all repositories" }).click();
   // The technical renderer keeps names and status always visible.
   await page.getByLabel("Renderer", { exact: true }).selectOption("technical");
   await page.mouse.move(2, 2);
   await expect(page.locator(".plant-marker")).toHaveCount(0);
   await expect(missing.locator("h2")).toBeVisible();
-  await expect(missing.locator("h2")).toHaveCSS("opacity", "1");
   await expect(missing.locator(".status")).toContainText("Error");
 });
 
-test("focus controls keep a 44 px target after plant scaling", async ({
+test("small gardens are spread evenly over the fixed hillside slots", async ({
   page,
 }) => {
-  await page.goto(app.url);
-  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
-  for (const id of ["tour", "fork", "empty", "missing"]) {
-    const plot = page.locator(`[data-plot="${id}"]`);
-    await plot.focus();
-    const box = await plot.locator(".focus-button").boundingBox();
-    expect(box?.width ?? 0, id).toBeGreaterThanOrEqual(43.5);
-    expect(box?.height ?? 0, id).toBeGreaterThanOrEqual(43.5);
+  await openScene(page, small.url, 5);
+  const expected = hillsideSlots(5).map((s) => HILLSIDE_SLOTS[s]);
+  const bases = await basePoints(page);
+  expect(bases).toHaveLength(5);
+  for (const [i, base] of bases.entries()) {
+    const slot = expected[i];
+    if (!slot) throw new Error("slot");
+    const id = SMALL[i]?.id;
+    expect(Math.abs(base.x - (slot.x / 100) * 1920), id).toBeLessThan(2);
+    expect(Math.abs(base.y - (slot.y / 100) * 1080), id).toBeLessThan(2);
   }
-  await page.locator('[data-plot="tour"]').focus();
-  await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("button", { name: "Show all repositories" }),
-  ).toBeFocused();
+});
+
+test("64 plants: each grows from its own slot, and all 64 icons are reachable", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await openScene(page, full.url, 64);
+  const bases = await basePoints(page);
+  for (const [i, base] of bases.entries()) {
+    const slot = HILLSIDE_SLOTS[i];
+    if (!slot) throw new Error("slot");
+    const id = `r${String(i)}`;
+    expect(Math.abs(base.x - (slot.x / 100) * 1920), id).toBeLessThan(2);
+    expect(Math.abs(base.y - (slot.y / 100) * 1080), id).toBeLessThan(2);
+  }
+  // Every icon is at its fixed position and on top: hovering it reveals it
+  // and outlines exactly its own plant.
+  for (let i = 0; i < 64; i++) {
+    const id = `r${String(i)}`;
+    const slot = HILLSIDE_SLOTS[i];
+    if (!slot) throw new Error("slot");
+    const icon = await iconCenter(page, id);
+    expect(Math.abs(icon.x - (slot.iconX / 100) * 1920), id).toBeLessThan(2);
+    expect(Math.abs(icon.y - (slot.iconY / 100) * 1080), id).toBeLessThan(2);
+    await page.mouse.move(icon.x, icon.y);
+    await expect.poll(() => lit(page), { message: id }).toEqual([id]);
+  }
+  // Clicking icons, back and front, focuses exactly that repository.
+  for (const i of [0, 27, 63]) {
+    await page.mouse.move(2, 2);
+    const icon = await iconCenter(page, `r${String(i)}`);
+    await page.mouse.click(icon.x, icon.y);
+    await expect(page.locator(".focus-head h2")).toHaveText(
+      `Repository ${String(i)}`,
+    );
+    await page.getByRole("button", { name: "Show all repositories" }).click();
+    await expect(page.locator(".garden-scene [data-plot]")).toHaveCount(64);
+  }
+  // Clicking an exposed part of a front plant focuses that plant.
+  await page.mouse.move(2, 2);
+  const point = await exposedPoint(page, "r60");
+  if (!point) throw new Error("r60 is not exposed");
+  await page.mouse.move(point.x, point.y);
+  await expect.poll(() => lit(page)).toEqual(["r60"]);
+  await page.mouse.click(point.x, point.y);
+  await expect(page.locator(".focus-head h2")).toHaveText("Repository 60");
+});
+
+test("more than 64 repositories use the card layout", async ({ page }) => {
+  test.setTimeout(120_000);
+  const extra = await start([
+    ...FULL,
+    { id: "r64", label: "Repository 64", path: "tour" },
+  ]);
+  try {
+    await page.goto(extra.url);
+    await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+    await expect(page.locator("[data-plot]")).toHaveCount(65);
+    await expect(page.locator(".garden-scene")).toHaveCount(0);
+  } finally {
+    await extra.close();
+  }
 });
