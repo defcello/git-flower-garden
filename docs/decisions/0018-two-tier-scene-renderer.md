@@ -15,6 +15,10 @@ a static low-power mode, and a budget of under 10% machine CPU at 30 fps on
 the reference machine, a 2017 Surface Pro (Core m3, Intel HD 615) (P2-E,
 section 12).
 
+The dedicated monitor runs on an integrated NVIDIA GPU with 4 GB of video
+memory. **The design target is 1920×1080**, adapting to other resolutions
+and aspect ratios (roadmap P2-C).
+
 Today the garden is one flattened daytime backdrop and a four-sprite atlas,
 both with upper-left light painted in. The four lighting studies are CSS
 color grades of that one image (ADR 0015).
@@ -23,10 +27,12 @@ The maintainer's constraints (2026-09-27):
 
 1. **Hardware acceleration stays optional.** Every feature must have a path
    that runs without a GPU.
-2. **No new third-party runtime code.** npm stays for development tools and
-   installation, but nothing new is shipped to users from a package
-   registry, given the rate of supply-chain attacks. "Runtime" includes
-   anything Vite bundles into `dist/ui`; React is the existing exception.
+2. **No runtime code from a package registry.** npm stays for development
+   tools and installation, but nothing new is shipped to users from npm,
+   given the rate of supply-chain attacks. "Runtime" includes anything Vite
+   bundles into `dist/ui`; React is the existing exception. Third-party code
+   may ship only as a reviewed, pinned, checksummed file committed to this
+   repository (see "Astronomy" below).
 3. **Lighting should follow the sun**: shading and shadows respond to the
    actual sun direction, not only a time-of-day tint.
 4. **A reduced software tier is acceptable**: without a GPU, fewer particles,
@@ -105,9 +111,13 @@ measured need appears.
 - The sky is a Canvas gradient from the same `LightingState` stops, so the
   sky color matches the GPU tier exactly; only the shading of sprites and
   layers is approximated.
-- Particles, sway, and frame rate follow a lower cap (initially 15 fps while
+- Particles and frame rate follow a lower cap (initially 15 fps while
   animating; exact caps are set by the measurements below). Only the regions
   that change are redrawn over the cached layers.
+- **Sway stays in the software tier** (maintainer decision, 2026-09-27): a
+  slow, low-amplitude sway at the tier's frame rate, drawn by offsetting
+  pre-lit sprites along the stem. It is the first effect the frame-time probe
+  reduces, and it is off under reduced motion as in every tier.
 
 ### Choosing a tier
 
@@ -125,6 +135,55 @@ measured need appears.
 4. `prefers-reduced-motion` turns off sway and particles in every tier;
    lighting still changes, gradually.
 5. Nothing draws while the page is hidden (existing behavior).
+
+### Resolution
+
+Art and layout are designed at **1920×1080 CSS pixels** and adapt from
+there:
+
+- Backdrop layers are authored at 1920×1080 with bleed for wider and taller
+  aspect ratios (portrait, ultrawide), anchored like today's center-bottom
+  `cover` backdrop; the hillside slot table (ADR 0015) keeps its
+  proportional positions.
+- Sprites are authored at 2× their largest 1080p on-screen size, so they stay
+  sharp at device pixel ratio 2 (a 4K display at 200% scaling) and scale
+  down cleanly.
+- Both tiers render at the display's device pixel ratio, capped at 2, with
+  the existing Canvas area limits (ADR 0015). The GPU tier may render its
+  backdrop at a lower internal resolution under the Low preset.
+- Above 1080p, layers are upscaled rather than re-authored; native 4K art is
+  not a goal of this ADR. On the dedicated monitor's 4 GB GPU, texture
+  memory is not a constraint at this size: about five layers at 1080p plus
+  bleed, each with albedo and normals, come to roughly 100–150 MB
+  uncompressed, before atlases. The Surface Pro shares system memory with
+  its GPU, so there it is measured, and the Low preset halves layer
+  resolution.
+
+### Astronomy: vendored astronomy-engine
+
+Sun and moon positions come from
+[astronomy-engine](https://github.com/cosinekitty/astronomy) (Don Cross),
+decided by the maintainer on 2026-09-27:
+
+- **License**: MIT, the same as this project; the copyright and permission
+  notice ship with it. No licensing concern found.
+- **Form**: the single TypeScript source file (`source/js/astronomy.ts`) from
+  release **v2.1.19**, committed under `vendor/astronomy-engine/` with its
+  `LICENSE`, the upstream URL, the release tag, and a SHA-256 of the file.
+  It is never installed from npm. Vite tree-shakes it, so only the
+  functions used are bundled.
+- **Dependencies**: none. It computes offline from published models, with
+  no network access, which matches P2-D's offline requirement.
+- **Maintenance**: the last release is from December 2023 (last repository
+  activity January 2025). It is mature, computational code with no external
+  interfaces, so low churn is acceptable; our own reference-case tests
+  (Verification) guard against errors, and upgrading means replacing the
+  file, re-reviewing the diff, and updating the checksum.
+- **Where it runs**: in the browser, beside `LightingState`, so the scene
+  can animate time smoothly without polling the service. It covers P2-D's
+  sun altitude and azimuth, rise and set times, moon altitude, illuminated
+  fraction, and phase angle; limb orientation is derived from the sun and
+  moon positions it returns.
 
 ### Art pipeline
 
@@ -148,19 +207,21 @@ decision:
   script (a rounded shape from the sprite's silhouette plus detail from
   luminance). The script is deterministic and needs no model.
 - The P2-A tool returned images smaller than requested (1672×941 for a 4K
-  backdrop). Native 4K layers may need generation in tiles or at reduced
-  detail per layer; the spike records what Codex actually returns.
+  backdrop). At the 1080p target, layers need at least 1920×1080 plus bleed;
+  where Codex returns less, the spike records it and generates in tiles or
+  upscales with review.
 
 ## Delivery order
 
 1. **Lighting model**: `EnvironmentSnapshot` to `LightingState`, with the
    developer overrides P2-D asks for (sunrise, sunset, night, moon phases,
-   and so on). This is pure code and needs no art. It starts with the
-   astronomy question below.
+   and so on). This is pure code and needs no art. It starts by vendoring
+   astronomy-engine.
 2. **Art spike** (gate): one ridge layer, the hill, and the four sprites,
    each as flat albedo plus normals, generated with Codex. Build a throwaway
    comparison page: Canvas 2D keyframed against WebGL2 relit, at dawn, noon,
-   dusk, and night, on the dedicated monitor and on the reference machine.
+   dusk, and night, at 1920×1080 on the dedicated monitor and on the
+   reference machine.
    **The maintainer decides whether sun relighting reads clearly better than
    keyframes.** If it does not, the GPU tier is dropped, this ADR is
    rewritten as Canvas 2D only, and the art needs no normal maps.
@@ -171,17 +232,20 @@ decision:
 
 ## Verification
 
-- Unit tests: `LightingState` against published reference cases (via the
-  astronomy work), and `SceneDescription` stability (same inputs, same scene).
+- Unit tests: astronomy results against published reference cases
+  (sunrise and sunset tables, moon phase dates, a high-latitude polar day and
+  night), a check that the vendored file matches its recorded SHA-256, and
+  `SceneDescription` stability (same inputs, same scene).
 - Browser tests force each tier with the View-menu override. In Chromium
   run with `--disable-gpu`, **Auto** must choose Canvas 2D. Both tiers must
   keep the existing graph-fidelity and hit-target tests passing unchanged.
 - The screenshot matrix gains lighting (dawn, noon, dusk, night, polar day)
   and weather cases for each tier, as review evidence rather than pixel
   goldens (as in ADR 0015).
-- Measurements on the reference machine at 1080p (and the dedicated monitor's
-  resolution): CPU and GPU use while animating and while idle for GPU,
-  Software, and Static, recorded in this record before it is accepted.
+- Measurements at 1920×1080 on the dedicated monitor (integrated NVIDIA,
+  4 GB) and on the reference machine (Surface Pro): CPU and GPU use while
+  animating and while idle for GPU, Software, and Static, plus one
+  non-16:9 viewport, recorded in this record before it is accepted.
 
 ## Consequences
 
@@ -193,19 +257,16 @@ decision:
   baking keep the difference to how pixels are shaded.
 - The art library roughly doubles in files (albedo and normals, layered
   backdrop). Generation stays reproducible through recorded prompts.
-- No new runtime dependency is shipped.
+- No npm runtime dependency is added. One vendored, pinned file
+  (astronomy-engine, MIT) is shipped, with its notice and checksum.
 
-## Open questions for the maintainer
+## Maintainer answers (2026-09-27)
 
-1. **Dedicated monitor**: its resolution and GPU, if it is not the Surface
-   Pro. This sets the native art size and the second measurement target.
-2. **Astronomy**: write our own sun and moon routines (NOAA solar
-   equations and a Meeus-style lunar model, about 300 lines, tested against
-   published tables), or vendor one pinned, checksummed file from an
-   MIT-licensed library such as astronomy-engine? Either satisfies
-   constraint 2; the first avoids third-party code entirely.
-3. **Software-tier sway**: keep a slow sway at 15 fps, or reserve sway for
-   the GPU tier?
+1. **Dedicated monitor**: integrated NVIDIA GPU with 4 GB of video memory.
+   Target 1920×1080, adapting to other resolutions (see "Resolution").
+2. **Astronomy**: use astronomy-engine unless licensing is a concern. It is
+   MIT, with no concern found (see "Astronomy").
+3. **Software-tier sway**: keep it (see "Software tier").
 
 ## On acceptance
 
