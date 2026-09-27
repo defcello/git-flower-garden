@@ -234,6 +234,8 @@ export async function startApp(
       service.stop();
       await receiver?.close();
       await server.close();
+      // No Git process may outlive close() holding files in a repository.
+      await service.drain();
     },
   };
 }

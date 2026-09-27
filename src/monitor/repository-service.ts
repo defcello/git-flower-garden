@@ -251,6 +251,8 @@ export class RepositoryService {
   private readonly fetches: Semaphore;
   /** Bounds concurrent local reads so a large garden does not thrash a small machine. */
   private readonly readSlots: Semaphore;
+  /** Reads and fetches in progress (each may run Git child processes). */
+  private readonly inflight = new Set<Promise<unknown>>();
   private reconcileTimer: ReturnType<typeof setInterval> | null = null;
   private webhooksActive = false;
   private windowTimer: ReturnType<typeof setTimeout> | null = null;
@@ -412,6 +414,23 @@ export class RepositoryService {
     for (const entry of this.entries.values()) this.stopEntry(entry);
   }
 
+  /**
+   * Resolves once reads and fetches in progress have finished, so no Git
+   * process still holds files in a repository or cache (call after stop()).
+   */
+  async drain(): Promise<void> {
+    while (this.inflight.size > 0) await Promise.allSettled([...this.inflight]);
+  }
+
+  private track<T>(work: Promise<T>): Promise<T> {
+    this.inflight.add(work);
+    void work.then(
+      () => this.inflight.delete(work),
+      () => this.inflight.delete(work),
+    );
+    return work;
+  }
+
   private startTimers(): void {
     if (this.reconcileTimer) clearInterval(this.reconcileTimer);
     const reconcileMs =
@@ -549,7 +568,7 @@ export class RepositoryService {
     const done = new Promise<RepositoryView>((resolve) => {
       entry.waiters.push({ target, resolve });
     });
-    if (!entry.running) void this.runReads(entry);
+    if (!entry.running) void this.track(this.runReads(entry));
     return done;
   }
 
@@ -819,7 +838,7 @@ export class RepositoryService {
     entry.remoteTimer = setTimeout(() => {
       entry.remoteTimer = null;
       entry.fetching = true;
-      void this.fetchRemotes(entry.config.id).finally(() => {
+      void this.track(this.fetchRemotes(entry.config.id)).finally(() => {
         entry.fetching = false;
         // A notification during the fetch may describe a newer push: fetch again now.
         const again = entry.fetchAgain;

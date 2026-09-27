@@ -46,6 +46,34 @@ async function setup() {
 }
 
 describe("RepositoryService", () => {
+  it("drain() waits for a read in progress after stop()", async () => {
+    const dir = await tempDir();
+    const fixture = await buildFixture(gardenTour, join(dir, "repo"));
+    const result = parseConfig(
+      JSON.stringify({
+        version: 1,
+        repositories: [{ id: "tour", path: fixture.dir }],
+      }),
+      dir,
+    );
+    if (!result.ok) throw new Error("bad config");
+    let finished = false;
+    const service = new RepositoryService(result.config, {
+      readSnapshot: async (path, options) => {
+        const snapshot = await readSnapshot(path, options);
+        await new Promise((r) => setTimeout(r, 300));
+        finished = true;
+        return snapshot;
+      },
+    });
+    void service.refresh("tour");
+    await new Promise((r) => setTimeout(r, 50));
+    service.stop();
+    expect(finished).toBe(false);
+    await service.drain();
+    expect(finished).toBe(true);
+  });
+
   it("merges refresh requests that arrive during a read into one more read", async () => {
     const t = await setup();
     const views = await Promise.all([

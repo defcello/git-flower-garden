@@ -7,7 +7,7 @@
  * without mutating the user's repository.
  */
 import { request } from "node:http";
-import { rename, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -21,7 +21,7 @@ import {
 } from "../../src/demo/builder.ts";
 import { forkMerge, gardenTour } from "../../src/demo/fixtures.ts";
 import { snapshotTree } from "../helpers/snapshot.ts";
-import { useTempDirs } from "../helpers/temp-dir.ts";
+import { renameWhenFree, useTempDirs } from "../helpers/temp-dir.ts";
 import { runGit } from "../../src/git/run-git.ts";
 
 const tempDir = useTempDirs();
@@ -264,7 +264,7 @@ describe("live monitoring", () => {
 
   it("keeps last known state while a remote is offline, backs off, and recovers", async () => {
     const hidden = `${server}.offline`;
-    await rename(server, hidden);
+    await renameWhenFree(server, hidden);
     const offline = await waitFor("remote error and stale state", () => {
       const v = app.service.view("remote");
       return v?.remote?.state === "error" && v.status.state === "stale"
@@ -286,7 +286,7 @@ describe("live monitoring", () => {
       (await oidOfLabel("solo", "main")) === commit ? true : undefined,
     );
 
-    await rename(hidden, server);
+    await renameWhenFree(hidden, server);
     await waitFor(
       "remote recovered",
       () => {
@@ -413,7 +413,7 @@ describe("live monitoring", () => {
 describe("restart from cache", () => {
   it("shows last known remote state immediately, marked stale while the remote is unreachable", async () => {
     await app.close();
-    await rename(server, `${server}.gone`);
+    await renameWhenFree(server, `${server}.gone`);
     const parsed = parseConfig(
       config([{ id: "remote", url: pathToFileURL(server).href }]),
       root,

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll } from "vitest";
@@ -19,4 +19,22 @@ export function useTempDirs(): () => Promise<string> {
     created.push(dir);
     return dir;
   };
+}
+
+/**
+ * Rename, retrying while Windows reports the directory busy: a Git process
+ * the monitor runs at that moment (a fetch from a "remote" being taken
+ * offline) briefly holds handles in it.
+ */
+export async function renameWhenFree(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if ((code !== "EBUSY" && code !== "EPERM") || attempt >= 50) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
 }
