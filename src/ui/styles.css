@@ -865,9 +865,6 @@ code,
   opacity: 0;
   transition: opacity 150ms ease-out;
 }
-.botanical .garden-scene .plot:focus-within .placeholder {
-  opacity: 1;
-}
 .botanical .drawer,
 .botanical .focus-side,
 .botanical .focus-head,
@@ -979,48 +976,99 @@ code,
   }
 }
 
-/* Review fixes (roadmap section 7) for the hillside layout. */
-.botanical .garden-scene .plant-label {
+/*
+ * Garden-view overview (roadmap section 7): names and status appear only on
+ * hover, keyboard focus, or tap, so the unattended scene stays a natural
+ * garden. This is the maintainer's design, not a defect. Health is shown
+ * without text instead.
+ */
+/* Revealed name and status cards sit beside the focus button, never over it,
+   at their full width; plants near the right edge mirror them leftward. */
+.botanical .garden-scene .plot h2,
+.botanical .garden-scene .plot .status {
+  left: calc(var(--button-left) + 44px / min(1, var(--plant-scale)) + 6px);
+  right: auto;
+  width: max-content;
+  max-width: 330px;
+  text-align: left;
+}
+.botanical .garden-scene .plot .status {
+  top: 41px;
+  border-radius: 0 10px 10px 10px;
+}
+.botanical .garden-scene .plot.cards-left h2,
+.botanical .garden-scene .plot.cards-left .status {
+  left: auto;
+  right: calc(100% - var(--button-left) + 6px);
+  text-align: right;
+}
+.botanical .garden-scene .plot.cards-left .status {
+  border-radius: 10px 0 10px 10px;
+}
+/* Placeholder text stays for assistive technology; on hover, the status card
+   (which carries the same explanation) is the one visible card. */
+.botanical .garden-scene .placeholder {
+  opacity: 0;
+}
+.botanical .garden-scene .plant-marker {
   position: absolute;
   left: 50%;
-  top: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1px;
-  margin-top: 4px;
-  padding: 3px 9px;
-  border-radius: 9px;
-  background: #fffef8e0;
-  box-shadow: 0 3px 10px #213f2520;
-  white-space: nowrap;
-  /* Counter the plant's scale so the text stays at a readable size. */
-  font-size: calc(12px / var(--plant-scale));
-  transform: translateX(-50%);
+  bottom: 0;
+  width: 0;
+  height: 0;
   pointer-events: none;
 }
-.botanical .garden-scene .plant-name {
-  font-weight: 600;
+/* A soil bed: the plot exists, and nothing grows in it yet. */
+.botanical .garden-scene .plant-bed {
+  position: absolute;
+  left: -34px;
+  bottom: -10px;
+  width: 68px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at 50% 35%,
+    #8a6a48,
+    #5b432c 70%,
+    #4a3824
+  );
+  box-shadow:
+    inset 0 3px 5px #00000030,
+    0 2px 4px #1f2a1c40;
 }
-.botanical .garden-scene .plant-state {
+/* A garden marker stake carrying the state glyph. */
+.botanical .garden-scene .plant-stake {
+  position: absolute;
+  left: 20px;
+  bottom: -6px;
+  width: 3px;
+  height: 34px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #a07a52, #6f5236);
+}
+.botanical .garden-scene .stake-tag {
+  position: absolute;
+  left: 50%;
+  top: -12px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #6f5236;
+  background: #f6efdd;
+  color: #7a2f22;
+  font-size: 12px;
+  line-height: 1;
+  transform: translateX(-50%);
+  box-shadow: 0 2px 4px #1f2a1c40;
+}
+.botanical .garden-scene .marker-initializing .stake-tag {
   color: var(--muted);
-  font-size: 0.9em;
 }
-.botanical .garden-scene .plant-label.state-error .glyph,
-.botanical .garden-scene .plant-label.state-stale .glyph,
-.botanical .garden-scene .plant-label.state-incomplete .glyph {
-  color: var(--boundary);
-}
-.botanical .garden-scene .plot:hover .plant-label,
-.botanical .garden-scene .plot:focus-within .plant-label {
-  visibility: hidden;
-}
-/* An empty or unreadable repository must never be an invisible plot. */
-.botanical .garden-scene .placeholder {
-  opacity: 1;
-  min-width: 200px;
-  padding: 12px 16px;
-  font-size: calc(13px / var(--plant-scale));
+/* Last-known state: the plant fades like a wilting one. */
+.botanical .garden-scene .plot.wilting .plot-graph {
+  filter: saturate(0.45) brightness(0.92);
 }
 /* The focus control keeps a 44 x 44 CSS px target after plant scaling. */
 .botanical .garden-scene .focus-button {

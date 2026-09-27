@@ -1,9 +1,11 @@
 /*
  * The hillside layout under the section 7 contract: technical stays the
- * default, every plant shows its name and state (including empty and broken
- * repositories), focus controls keep a 44 px target after scaling, and the
- * viewer's renderer choice is remembered. Uses its own small garden (the
- * shared fixture server has more repositories than the hillside holds).
+ * default, the unattended garden scene carries no text (names and status on
+ * hover, focus, or tap, by maintainer design), empty and broken repositories
+ * stay visible through soil beds and marker stakes, focus controls keep a
+ * 44 px target after scaling, and the viewer's renderer choice is
+ * remembered. Uses its own small garden (the shared fixture server has more
+ * repositories than the hillside holds).
  */
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -66,33 +68,98 @@ test("technical is the default; the garden choice is remembered", async ({
   await expect(page.locator(".garden-scene")).toHaveCount(1);
 });
 
-test("every plant shows its name and state, including empty and broken repositories", async ({
+test("the unattended scene has no text; hover and focus reveal each plant's name and state", async ({
   page,
 }) => {
   await page.goto(app.url);
   await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
   await page.mouse.move(2, 2);
-  const labels = page.locator(".plant-label");
-  await expect(labels).toHaveCount(4);
-  for (const [name, state] of [
-    ["Garden tour", "Up to date"],
-    ["Fork and merge", "Up to date"],
-    ["Empty repository", "Up to date"],
-    ["Missing path", "Error"],
-  ] as const) {
-    const label = labels.filter({ hasText: name });
-    await expect(label).toBeVisible();
-    await expect(label).toContainText(state);
-    // Readable at any plant scale.
-    const size = await label
-      .locator(".plant-name")
-      .evaluate((el) => el.getBoundingClientRect().height);
-    expect(size).toBeGreaterThanOrEqual(12);
+  // By maintainer design, the overview in the garden renderer is a natural
+  // scene: no always-visible names, status lines, or placeholder text.
+  for (const id of ["tour", "fork", "empty", "missing"]) {
+    const plot = page.locator(`[data-plot="${id}"]`);
+    await expect(plot.locator("h2"), id).toHaveCSS("opacity", "0");
+    await expect(plot.locator(".status"), id).toHaveCSS("opacity", "0");
   }
-  await expect(page.locator('[data-plot="empty"] .placeholder')).toBeVisible();
-  await expect(
-    page.locator('[data-plot="missing"] .placeholder'),
-  ).toBeVisible();
+  for (const id of ["empty", "missing"]) {
+    await expect(
+      page.locator(`[data-plot="${id}"] .placeholder`),
+      id,
+    ).toHaveCSS("opacity", "0");
+  }
+  // Hover reveals the name and state.
+  const missing = page.locator('[data-plot="missing"]');
+  await missing.hover();
+  await expect(missing.locator("h2")).toHaveCSS("opacity", "1");
+  await expect(missing.locator(".status")).toContainText("Error");
+  await expect(missing.locator(".status")).toContainText("Path not found");
+  // The whole name is readable, not cut to a letter by the card layout.
+  const name = missing.locator("h2");
+  expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+    true,
+  );
+  // The cards sit beside the circular +, never over it.
+  for (const id of ["missing", "tour"]) {
+    const plot = page.locator(`[data-plot="${id}"]`);
+    await plot.hover();
+    await expect(plot.locator("h2")).toHaveCSS("opacity", "1");
+    const button = plot.locator(".focus-button");
+    const box = await button.boundingBox();
+    if (!box) throw new Error(`no focus button for ${id}`);
+    const hit = await button.evaluate(
+      (el, [x, y]) => el.contains(document.elementFromPoint(x ?? 0, y ?? 0)),
+      [box.x + box.width / 2, box.y + box.height / 2],
+    );
+    expect(hit, id).toBe(true);
+  }
+  await missing.hover();
+  // One card: the placeholder text stays for assistive technology only.
+  await expect(missing.locator(".placeholder")).toHaveCSS("opacity", "0");
+  await expect(missing.locator(".placeholder")).toHaveText(/could not be read/);
+  const empty = page.locator('[data-plot="empty"]');
+  await empty.hover();
+  await expect(empty.locator(".status")).toContainText("no commits yet");
+  // So does keyboard focus.
+  await page.mouse.move(2, 2);
+  const tour = page.locator('[data-plot="tour"]');
+  await tour.focus();
+  await expect(tour.locator("h2")).toHaveCSS("opacity", "1");
+  await expect(tour.locator(".status")).toContainText("Up to date");
+});
+
+test("empty and broken repositories stay visible without text", async ({
+  page,
+}) => {
+  await page.goto(app.url);
+  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+  await page.mouse.move(2, 2);
+  // Healthy plants carry no marker at all.
+  for (const id of ["tour", "fork"]) {
+    await expect(
+      page.locator(`[data-plot="${id}"] .plant-marker`),
+      id,
+    ).toHaveCount(0);
+  }
+  // An empty repository is a bare soil bed, with no warning stake.
+  const empty = page.locator('[data-plot="empty"]');
+  await expect(empty.locator(".plant-bed")).toBeVisible();
+  await expect(empty.locator(".stake-tag")).toHaveCount(0);
+  // An unreadable one is a soil bed with a marker stake showing its state.
+  const missing = page.locator('[data-plot="missing"]');
+  await expect(missing.locator(".plant-bed")).toBeVisible();
+  await expect(missing.locator(".stake-tag")).toBeVisible();
+  await expect(missing.locator(".stake-tag")).toHaveText("✕");
+  const tag = await missing
+    .locator(".stake-tag")
+    .evaluate((el) => el.getBoundingClientRect().width);
+  expect(tag).toBeGreaterThanOrEqual(10);
+  // The technical renderer keeps names and status always visible.
+  await page.getByLabel("Renderer", { exact: true }).selectOption("technical");
+  await page.mouse.move(2, 2);
+  await expect(page.locator(".plant-marker")).toHaveCount(0);
+  await expect(missing.locator("h2")).toBeVisible();
+  await expect(missing.locator("h2")).toHaveCSS("opacity", "1");
+  await expect(missing.locator(".status")).toContainText("Error");
 });
 
 test("focus controls keep a 44 px target after plant scaling", async ({

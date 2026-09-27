@@ -343,7 +343,10 @@ function StatusLine({
       {graph && (
         <span className="muted">
           {" "}
-          · {graph.nodes.length} of {graph.reachableCount} commits shown
+          ·{" "}
+          {graph.reachableCount === 0
+            ? "no commits yet"
+            : `${String(graph.nodes.length)} of ${String(graph.reachableCount)} commits shown`}
         </span>
       )}
       {repo.status.diagnostic && (
@@ -467,11 +470,12 @@ function Plot({
         "--plant-y": `${String(position.y)}%`,
         "--plant-scale": String(position.scale),
         "--plant-z": String(Math.round(position.y * 10)),
+        "--button-left": `${String(buttonLeft)}px`,
       } as CSSProperties)
     : undefined;
   return (
     <section
-      className="plot"
+      className={`plot${position && (repo.status.state === "stale" || repo.status.state === "incomplete") ? " wilting" : ""}${position && position.x >= 60 ? " cards-left" : ""}`}
       data-plot={repo.id}
       tabIndex={0}
       aria-labelledby={titleId}
@@ -497,7 +501,11 @@ function Plot({
       <h2 id={titleId}>{repo.label}</h2>
       <StatusLine repo={repo} graph={graph} now={now} />
       {position && (
-        <PlantLabel repo={repo} center={buttonLeft + FOCUS_BUTTON / 2} />
+        <PlantMarker
+          repo={repo}
+          drawable={graph !== undefined && repo.counts?.reachableCommits !== 0}
+          center={buttonLeft + FOCUS_BUTTON / 2}
+        />
       )}
       <PlotBody repo={repo} graph={graph}>
         {graph && (
@@ -518,28 +526,44 @@ function Plot({
 }
 
 /**
- * On the hillside every plant keeps its name and state in view (roadmap
- * section 7); the full status panel still appears on hover or focus.
+ * Garden-view health without text (roadmap section 7, "Overview in the garden
+ * renderer"). Names and status stay hover/focus-only so the unattended scene
+ * reads as a natural garden; problems are still visible at a glance:
+ * - a soil bed where there is nothing to draw (empty, loading, unreadable),
+ *   so a plot never disappears and an empty bed looks intentional;
+ * - a marker stake carrying the state's glyph (never color alone) for any
+ *   state other than healthy, including an unreachable remote.
+ * Stale and incomplete plants are also desaturated (see .plot.wilting).
  */
-function PlantLabel({
+function PlantMarker({
   repo,
+  drawable,
   center,
 }: {
   repo: RepositoryStatusJson;
+  /** Whether a plant is drawn for this repository. */
+  drawable: boolean;
   /** Horizontal center of the tree's lanes, in the plot's coordinates. */
   center: number;
 }) {
-  const { glyph, word } = STATE_TEXT[repo.status.state];
+  const state = repo.status.state;
+  const remoteDown = repo.remote?.state === "error";
+  const glyph =
+    state !== "ready" ? STATE_TEXT[state].glyph : remoteDown ? "⊘" : null;
+  if (drawable && glyph === null) return null;
   return (
     <div
-      className={`plant-label state-${repo.status.state}`}
+      className={`plant-marker marker-${state}${remoteDown ? " marker-remote-down" : ""}`}
       style={{ left: center }}
+      data-state={state}
       aria-hidden="true"
     >
-      <span className="plant-name">{repo.label}</span>
-      <span className="plant-state">
-        <span className="glyph">{glyph}</span> {word}
-      </span>
+      {!drawable && <span className="plant-bed" />}
+      {glyph !== null && (
+        <span className="plant-stake">
+          <span className="stake-tag">{glyph}</span>
+        </span>
+      )}
     </div>
   );
 }

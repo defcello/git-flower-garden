@@ -30,7 +30,8 @@ Codex built this review candidate; I reviewed and corrected it (below).
 | Finding | Fix |
 | --- | --- |
 | The unreviewed garden preview had become the default view, while the README said Technical remains the default. Four Phase 1 browser tests failed, and the "graph truth" test compared Canvas against Canvas instead of against the technical view | Technical is the default again; a viewer's choice is remembered in that browser (`localStorage`, failure-safe) |
-| On the hillside, every repository's name and status were hidden until hover, and empty or unreadable repositories rendered as nothing at all (roadmap section 7 requires name and compact status per plot, and clear freshness) | Each plant has an always-visible name-and-state label centered under its tree, readable at any plant scale; empty and error placeholders are always visible |
+| On the hillside, empty or unreadable repositories rendered as nothing at all, so a broken source was invisible (roadmap principle 4, clear freshness) | Health is shown without text: a repository with nothing to draw is a soil bed; an unhealthy source or unreachable remote has a marker stake with its state glyph; a last-known plant is desaturated. Names and status stay hover/focus/tap-only (see below) |
+| The hover reveal was hard to read: names were cut to one or two letters (the card layout's `max-width` inside a 150 px plant), the name card covered the circular `+`, and on empty or unreadable plots a second placeholder card overlapped the status card | Name and status cards sit beside the `+` at full width (mirrored for plants near the right edge); the status card is the single card and carries the explanation ("no commits yet", or the error); placeholder text stays for assistive technology |
 | The circular `+` shrank to 33–41 px with plant scaling (section 7 requires at least 44×44) | Counter-scaled to keep an effective 44 px target |
 | Nine or more repositories wrapped around eight fixed positions and overlapped | The hillside is used only up to eight plots; beyond that, cards |
 | The Canvas compositor reloaded the atlas on every pan and zoom frame (asynchronous, one new `Image` per frame) | The atlas is decoded once per page, and frames redraw synchronously |
@@ -38,9 +39,19 @@ Codex built this review candidate; I reviewed and corrected it (below).
 | The npm package shipped the 2.3 MB review screenshot, and listed the manifest by its source path (the install rehearsal rejects sources in the package) | Only `docs/art/*.md` is packaged from `docs/`; the manifest moved to `src/ui/public/`, so the build copies it to `dist/ui/asset-manifest.json`, served beside the artwork |
 | ADR 0015 was referenced but missing | This record |
 
+**Correction (2026-09-27).** The first version of this review (commit
+`0cfc05a`) also treated the hover-only names and status as a defect and added
+always-visible labels. That was wrong: the maintainer intends the unattended
+garden view to read as an uncluttered natural scene. I had applied section 7's
+"name and compact source status" line, written before the garden renderer
+existed, to the botanical overview. The labels are reverted; section 7 now
+states that the technical renderer shows names and status always, and the
+garden renderer only on hover, focus, or tap, with non-text health cues.
+
 `tests/e2e/garden-scene.spec.ts` covers the technical default and remembered
-choice, visible labels and states (including empty and missing repositories),
-and 44 px focus targets on the hillside. Codex's
+choice, a text-free unattended scene with names and status on hover and
+focus, soil beds and marker stakes for empty and missing repositories, and
+44 px focus targets on the hillside. Codex's
 `tests/e2e/botanical.spec.ts` checks graph truth across all three renderers
 (now against the technical view), selection and camera across switches,
 coincident refs and worktrees, atlas-failure fallback, and the lighting and
