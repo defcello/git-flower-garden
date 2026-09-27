@@ -258,9 +258,13 @@ decision:
   normal maps are plausible but one came back with its X axis inverted, so
   every map needs a convention check. The spike also raises an art-direction
   question: real light from a southern Sun backlights the south-facing scene
-  most of the day, so it offers light mirrored to the viewer's side. Still
-  open: the maintainer's judgment and measurements on the dedicated monitor
-  and the Surface Pro.
+  most of the day, so it offers light mirrored to the viewer's side.
+  **Maintainer's decision (2026-09-27): relit, with Codex-generated normal
+  maps**; performance was fine in both tiers, even on a first-generation
+  Surface Pro. Light stays physical, with a translucency term for grass,
+  petals, and leaves lit from behind, and a front fill (bounced light) on the
+  hillside and plants only, never the mountains. Open: the fill power, chosen
+  by the maintainer with a slider in the spike.
 
 ## Verification
 

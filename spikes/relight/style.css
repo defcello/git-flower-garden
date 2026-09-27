@@ -107,3 +107,11 @@ body.bare .tag,
 body.bare #divider::after {
   display: none;
 }
+body:not(.compare) .compare-only,
+body:not(.compare) .tag {
+  display: none;
+}
+#fill,
+#translucency {
+  flex: 1;
+}

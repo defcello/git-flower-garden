@@ -18,7 +18,9 @@ import {
   lightParams,
   shade,
   type LightParams,
-  type LightSide,
+  LAYERS,
+  type Adjustments,
+  type LayerLight,
 } from "./shading.ts";
 import {
   layerQuad,
@@ -54,7 +56,7 @@ function bake(
   albedo: Pixels,
   normals: Pixels,
   p: LightParams,
-  haze: number,
+  light: LayerLight,
 ): OffscreenCanvas {
   const { width, height, data } = albedo;
   const out = new ImageData(width, height);
@@ -69,7 +71,7 @@ function bake(
     a[1] = TO_LINEAR[data[i + 1] ?? 0] ?? 0;
     a[2] = TO_LINEAR[data[i + 2] ?? 0] ?? 0;
     decodeNormal(normals.data, i, n);
-    shade(a, n, p, haze, lit);
+    shade(a, n, p, light, lit);
     for (let c = 0; c < 3; c++)
       o[i + c] =
         TO_SRGB[
@@ -127,22 +129,22 @@ export class SoftwareTier {
   /** Development-time work in production (a script, ADR 0018); here, at load. */
   #bake(
     normals: NormalSource,
-    which: LightSide,
+    adjust: Adjustments,
   ): Record<keyof Art, BakedLayer> {
     const start = performance.now();
-    const params = keyframeStates.map((s) => lightParams(s, which));
-    const layer = (art: LayerArt, haze: number): BakedLayer => {
+    const params = keyframeStates.map((s) => lightParams(s, adjust));
+    const layer = (art: LayerArt, light: LayerLight): BakedLayer => {
       const map = art.normals[normals] ?? art.normals.derived;
       return {
-        keys: params.map((p) => bake(art.albedo, map, p, haze)),
+        keys: params.map((p) => bake(art.albedo, map, p, light)),
         cache: canvasOf(art.albedo.width, art.albedo.height),
         size: art.albedo,
       };
     };
     const layers = {
-      ridge: layer(this.#art.ridge, 0.5),
-      hill: layer(this.#art.hill, 0),
-      sprites: layer(this.#art.sprites, 0),
+      ridge: layer(this.#art.ridge, LAYERS.ridge),
+      hill: layer(this.#art.hill, LAYERS.hill),
+      sprites: layer(this.#art.sprites, LAYERS.sprites),
     };
     this.bakeMs = performance.now() - start;
     this.#cacheKey = "";
@@ -153,12 +155,12 @@ export class SoftwareTier {
   #rebuild(
     layers: Record<keyof Art, BakedLayer>,
     state: LightingState,
-    which: LightSide,
+    adjust: Adjustments,
   ): void {
     const weights = keyframeWeights(state);
-    const current = level(lightParams(state, which));
+    const current = level(lightParams(state, adjust));
     const blended = keyframeStates
-      .map((s) => level(lightParams(s, which)))
+      .map((s) => level(lightParams(s, adjust)))
       .reduce((sum, l, k) => sum + (weights[k] ?? 0) * l, 0);
     // A brightness-only tint: Canvas "multiply" would bleed a colored tint
     // into semi-transparent edges, while darkening with "source-atop" black
@@ -222,13 +224,13 @@ export class SoftwareTier {
   }
 
   draw(state: LightingState, options: Options): void {
-    const baked = `${options.normals}:${options.side}`;
+    const baked = `${options.normals}:${String(options.adjust.fill)}:${String(options.adjust.translucency)}`;
     if (this.#layers === null || this.#baked !== baked) {
-      this.#layers = this.#bake(options.normals, options.side);
+      this.#layers = this.#bake(options.normals, options.adjust);
       this.#baked = baked;
     }
     const layers = this.#layers;
-    this.#rebuild(layers, state, options.side);
+    this.#rebuild(layers, state, options.adjust);
 
     const g = this.#context;
     const W = this.#canvas.width;

@@ -33,7 +33,24 @@ side (`L`), large sprites (`I`), and a normal-map or flat-albedo view of the rel
 the panel. Every setting is also a URL parameter (`view`, `sky`, `date`, `minutes`, `normals`,
 `side`, `inspect`, `mode`, `ui=0`).
 
-## What to judge
+## Maintainer decision (2026-09-27) and the tuning round
+
+**Relit (WebGL2) with Codex-generated normal maps.** Performance was fine in both tiers, even on
+a first-generation Surface Pro. The page now opens relit with Codex normals; `?compare=1` brings
+back the keyframed half and the derived normals.
+
+Light stays physical (a southern Sun backlights the scene), with two terms standing in for what
+ray tracing would give:
+
+- **Translucency** (slider, default 100%): light passing through grass (0.6), petals and leaves
+  (0.9) when lit from behind.
+- **Front fill** (slider, default 40%, `[` `]` ±5%): light bounced back from the field, as the Sun
+  and Moon mirrored to the viewer's side at that fraction of their power. It reaches the hill and
+  the plants only; a fill near the viewer would not visibly brighten the mountains.
+
+Open: the maintainer picks the fill power (and confirms translucency) to carry into the GPU tier.
+
+## What was judged in the first round
 
 1. **Relit vs keyframed** at dawn, noon, dusk, and night (the Sunrise, Noon, Sunset, and Full
    moon previews), and while playing a day. Keyframes cannot know the season or where the Sun is,

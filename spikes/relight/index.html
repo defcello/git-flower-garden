@@ -23,7 +23,7 @@
 
     <form id="panel" onsubmit="return false;">
       <h1>ADR 0018 step 2 · relighting spike</h1>
-      <div class="row" role="group" aria-label="View">
+      <div class="row compare-only" role="group" aria-label="View">
         <button type="button" data-view="split">Split <kbd>1</kbd></button>
         <button type="button" data-view="gpu">Relit <kbd>2</kbd></button>
         <button type="button" data-view="software">
@@ -50,7 +50,7 @@
       </div>
       <div class="row">
         <button type="button" id="play">Play a day</button>
-        <label>
+        <label class="compare-only">
           Normals
           <select id="normals">
             <option value="derived">Derived (script)</option>
@@ -58,15 +58,6 @@
           </select>
         </label>
         <label><input id="inspect" type="checkbox" /> Large sprites</label>
-        <label>
-          Light from
-          <select id="side">
-            <option value="physical">
-              Real direction (south Sun backlights)
-            </option>
-            <option value="viewer">Viewer's side (front-lit)</option>
-          </select>
-        </label>
         <label>
           Relit shows
           <select id="mode">
@@ -76,17 +67,36 @@
           </select>
         </label>
       </div>
+      <div class="row">
+        <label for="fill">Front fill (hill and plants)</label>
+        <input id="fill" type="range" min="0" max="100" step="1" />
+        <output id="fill-label"></output>
+      </div>
+      <div class="row">
+        <label for="translucency">Translucency (grass, petals, leaves)</label>
+        <input id="translucency" type="range" min="0" max="150" step="5" />
+        <output id="translucency-label"></output>
+      </div>
       <p id="readout"></p>
       <p id="stats"></p>
       <details>
         <summary>Keys and notes</summary>
         <p>
-          <kbd>X</kbd> flip relit/keyframed full screen · <kbd>←</kbd
-          ><kbd>→</kbd> ±10 min · <kbd>Space</kbd> play · <kbd>N</kbd> normals ·
-          <kbd>I</kbd> large sprites · <kbd>L</kbd> light side ·
-          <kbd>H</kbd> hide this panel.
+          <kbd>←</kbd><kbd>→</kbd> ±10 min · <kbd>Space</kbd> play · <kbd>[</kbd
+          ><kbd>]</kbd> front fill ±5% · <kbd>I</kbd> large sprites ·
+          <kbd>H</kbd> hide this panel. Add <code>?compare=1</code> for the
+          keyframed comparison (<kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>
+          <kbd>X</kbd> <kbd>N</kbd>).
         </p>
         <p>
+          The Sun and Moon light the scene from their real direction, so a
+          southern Sun backlights it. Translucency lets light through grass,
+          petals, and leaves lit from behind. Front fill stands in for light
+          bounced back from the field: the same Sun and Moon mirrored to the
+          viewer's side, at this fraction of their power, on the hill and the
+          plants only, never the mountains.
+        </p>
+        <p class="compare-only">
           Keyframes are authored once, on the March equinox (<span
             id="keyframes"
           ></span

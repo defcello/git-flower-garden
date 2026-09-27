@@ -23,9 +23,14 @@ export interface LightParams {
   sun: Color;
   moonDir: Vector3;
   moon: Color;
+  /** The same lights mirrored to the viewer's side, for the fill term. */
+  sunFill: Vector3;
+  moonFill: Vector3;
   ambient: Color;
   horizon: Color;
   haze: number;
+  fill: number;
+  translucency: number;
 }
 
 export const toLinear = (c: number) => Math.pow(c, 2.2);
@@ -38,27 +43,57 @@ const linear = (c: Color, gain: number): Color => [
 ];
 
 /**
- * Where the light comes from. "physical": the real direction, so a Sun in
- * the south (in front of a south-facing viewer) backlights the scene.
- * "viewer": the same direction mirrored to the viewer's side, as on a stage.
+ * The light stays physical: a Sun in the south, in front of a south-facing
+ * viewer, backlights the scene. Two terms stand in for what a ray tracer
+ * would give for free:
+ *
+ * - `translucency`: light passing through thin grass blades, petals, and
+ *   leaves when they are lit from behind;
+ * - `fill`: light bounced back toward the viewer from the rest of the field,
+ *   modelled as the Sun and Moon mirrored to the viewer's side. It reaches
+ *   only the hillside and the plants on it; a fill light near the viewer
+ *   would not visibly brighten the distant mountains.
  */
-export type LightSide = "physical" | "viewer";
+export interface Adjustments {
+  /** 0..1: power of the mirrored fill light, relative to the Sun and Moon. */
+  fill: number;
+  /** 0..1.5: scales each layer's translucency. */
+  translucency: number;
+}
 
-const side = (v: Vector3, which: LightSide): Vector3 =>
-  which === "viewer" ? { ...v, z: Math.abs(v.z) } : v;
+export interface LayerLight {
+  /** Depth haze, 0 for the foreground. */
+  haze: number;
+  /** How much light the layer's material lets through, 0..1. */
+  translucency: number;
+  /** Whether the viewer-side fill light reaches it. */
+  fill: boolean;
+}
+
+export const LAYERS = {
+  ridge: { haze: 0.5, translucency: 0, fill: false },
+  hill: { haze: 0, translucency: 0.6, fill: true },
+  sprites: { haze: 0, translucency: 0.9, fill: true },
+} as const satisfies Record<string, LayerLight>;
+
+const mirrored = (v: Vector3): Vector3 => ({ ...v, z: Math.abs(v.z) });
 
 export function lightParams(
   state: LightingState,
-  which: LightSide = "physical",
+  adjust: Adjustments,
 ): LightParams {
   return {
-    sunDir: side(state.sun.direction, which),
+    sunDir: state.sun.direction,
     sun: linear(state.sun.color, state.sun.intensity * SUN_GAIN),
-    moonDir: side(state.moon.direction, which),
+    moonDir: state.moon.direction,
     moon: linear(state.moon.color, state.moon.intensity * MOON_GAIN),
+    sunFill: mirrored(state.sun.direction),
+    moonFill: mirrored(state.moon.direction),
     ambient: linear(state.ambient, AMBIENT_GAIN),
     horizon: linear(state.sky.horizon, 1),
     haze: state.haze,
+    fill: adjust.fill,
+    translucency: adjust.translucency,
   };
 }
 
@@ -67,20 +102,30 @@ function diffuse(n: Vector3, l: Vector3): number {
   return Math.max(0, (d + WRAP) / (1 + WRAP));
 }
 
+/** Light arriving from behind the surface, passing through it. */
+function through(n: Vector3, l: Vector3): number {
+  return Math.max(0, -(n.x * l.x + n.y * l.y + n.z * l.z));
+}
+
 /**
  * Lit linear color for one texel. `albedo` is linear RGB; `n` is a unit
- * normal (x right, y up, z toward the viewer); `haze` is the layer's depth
- * haze, 0 for the foreground. Writes into `out`.
+ * normal (x right, y up, z toward the viewer). Writes into `out`.
  */
 export function shade(
   albedo: Color,
   n: Vector3,
   p: LightParams,
-  haze: number,
+  layer: LayerLight,
   out: [number, number, number],
 ): void {
-  const sun = diffuse(n, p.sunDir);
-  const moon = diffuse(n, p.moonDir);
+  const t = layer.translucency * p.translucency;
+  const f = layer.fill ? p.fill : 0;
+  const sun =
+    diffuse(n, p.sunDir) + t * through(n, p.sunDir) + f * diffuse(n, p.sunFill);
+  const moon =
+    diffuse(n, p.moonDir) +
+    t * through(n, p.moonDir) +
+    f * diffuse(n, p.moonFill);
   // Sky light from above, a little less on faces turned down.
   const hemi = 0.75 + 0.25 * n.y;
   // Backlight catches silhouettes when the light is behind the scene.
@@ -92,7 +137,7 @@ export function shade(
     edge *
     Math.max(0, -p.sunDir.z) *
     Math.max(0, p.sunDir.y + 0.2);
-  const h = haze * p.haze;
+  const h = layer.haze * p.haze;
   for (let c = 0; c < 3; c++) {
     const light =
       (p.ambient[c] ?? 0) * hemi +

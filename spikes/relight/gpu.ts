@@ -4,7 +4,14 @@
  */
 import type { LightingState } from "../../src/environment/lighting.ts";
 import type { LayerArt, NormalSource, Pixels } from "./art.ts";
-import { lightParams, RIM_GAIN, WRAP, type LightSide } from "./shading.ts";
+import {
+  LAYERS,
+  lightParams,
+  RIM_GAIN,
+  WRAP,
+  type Adjustments,
+  type LayerLight,
+} from "./shading.ts";
 import {
   layerQuad,
   MOON_COLOR,
@@ -69,14 +76,15 @@ void main() {
 const LIT_FS = `#version 300 es
 precision highp float;
 uniform sampler2D uAlbedo, uNormal;
-uniform vec3 uSunDir, uSun, uMoonDir, uMoon, uAmbient, uHorizon;
-uniform float uHaze, uLayerHaze;
+uniform vec3 uSunDir, uSun, uMoonDir, uMoon, uSunFill, uMoonFill, uAmbient, uHorizon;
+uniform float uHaze, uLayerHaze, uLayerTranslucency, uLayerFill;
 uniform int uMode; // 0 lit, 1 normals, 2 albedo
 in vec2 vUv;
 out vec4 color;
 const float WRAP = ${WRAP.toFixed(4)};
 const float RIM = ${RIM_GAIN.toFixed(4)};
 float diffuse(vec3 n, vec3 l) { return max(0.0, (dot(n, l) + WRAP) / (1.0 + WRAP)); }
+float through(vec3 n, vec3 l) { return max(0.0, -dot(n, l)); }
 void main() {
   vec4 a = texture(uAlbedo, vUv);
   if (a.a < 0.002) discard;
@@ -84,8 +92,10 @@ void main() {
   vec3 n = normalize(texture(uNormal, vUv).rgb * 2.0 - 1.0);
   if (uMode == 1) { color = vec4((n * 0.5 + 0.5) * a.a, a.a); return; }
   if (uMode == 2) { color = vec4(a.rgb, a.a); return; }
-  float sun = diffuse(n, uSunDir);
-  float moon = diffuse(n, uMoonDir);
+  float t = uLayerTranslucency;
+  float f = uLayerFill;
+  float sun = diffuse(n, uSunDir) + t * through(n, uSunDir) + f * diffuse(n, uSunFill);
+  float moon = diffuse(n, uMoonDir) + t * through(n, uMoonDir) + f * diffuse(n, uMoonFill);
   float hemi = 0.75 + 0.25 * n.y;
   float edge = 1.0 - max(0.0, n.z);
   float rim = RIM * edge * edge * edge * max(0.0, -uSunDir.z) * max(0.0, uSunDir.y + 0.2);
@@ -197,7 +207,7 @@ export interface Options {
   normals: NormalSource;
   /** Debugging: show the normal map or the flat albedo instead of lighting. */
   mode: "lit" | "normals" | "albedo";
-  side: LightSide;
+  adjust: Adjustments;
   inspect: boolean;
 }
 
@@ -367,7 +377,7 @@ export class GpuTier {
     }
 
     // Lit layers and sprites.
-    const p = lightParams(state, options.side);
+    const p = lightParams(state, options.adjust);
     gl.useProgram(this.#lit);
     const lu = (name: string) => gl.getUniformLocation(this.#lit, name);
     gl.uniform2f(lu("uResolution"), W, H);
@@ -375,6 +385,8 @@ export class GpuTier {
     gl.uniform3fv(lu("uSun"), p.sun);
     gl.uniform3f(lu("uMoonDir"), p.moonDir.x, p.moonDir.y, p.moonDir.z);
     gl.uniform3fv(lu("uMoon"), p.moon);
+    gl.uniform3f(lu("uSunFill"), p.sunFill.x, p.sunFill.y, p.sunFill.z);
+    gl.uniform3f(lu("uMoonFill"), p.moonFill.x, p.moonFill.y, p.moonFill.z);
     gl.uniform3fv(lu("uAmbient"), p.ambient);
     gl.uniform3fv(lu("uHorizon"), p.horizon);
     gl.uniform1f(lu("uHaze"), p.haze);
@@ -384,9 +396,18 @@ export class GpuTier {
       lu("uMode"),
       ["lit", "normals", "albedo"].indexOf(options.mode),
     );
-    const drawLit = (layer: LayerTextures, quads: Quad[], haze: number) => {
+    const drawLit = (
+      layer: LayerTextures,
+      quads: Quad[],
+      light: LayerLight,
+    ) => {
       gl.useProgram(this.#lit);
-      gl.uniform1f(lu("uLayerHaze"), haze);
+      gl.uniform1f(lu("uLayerHaze"), light.haze);
+      gl.uniform1f(
+        lu("uLayerTranslucency"),
+        light.translucency * p.translucency,
+      );
+      gl.uniform1f(lu("uLayerFill"), light.fill ? p.fill : 0);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, layer.albedo);
       gl.activeTexture(gl.TEXTURE1);
@@ -403,8 +424,8 @@ export class GpuTier {
       gl.drawArrays(gl.TRIANGLES, 0, count);
     };
     const { ridge, hill, sprites } = this.#layers;
-    drawLit(ridge, [layerQuad(t, ridge.size)], 0.5);
-    drawLit(hill, [layerQuad(t, hill.size)], 0);
+    drawLit(ridge, [layerQuad(t, ridge.size)], LAYERS.ridge);
+    drawLit(hill, [layerQuad(t, hill.size)], LAYERS.hill);
 
     // Ground shadows, then the plants over them.
     const cast = shadows(t, state, options.inspect);
@@ -440,6 +461,10 @@ export class GpuTier {
       ]);
       gl.drawArrays(gl.TRIANGLES, 0, cast.length * 6);
     }
-    drawLit(sprites, spriteQuads(t, sprites.size, options.inspect), 0);
+    drawLit(
+      sprites,
+      spriteQuads(t, sprites.size, options.inspect),
+      LAYERS.sprites,
+    );
   }
 }

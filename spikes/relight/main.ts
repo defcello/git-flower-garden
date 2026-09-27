@@ -42,7 +42,10 @@ const playButton = $("#play", HTMLButtonElement);
 const normalsSelect = $("#normals", HTMLSelectElement);
 const inspectInput = $("#inspect", HTMLInputElement);
 const modeSelect = $("#mode", HTMLSelectElement);
-const sideSelect = $("#side", HTMLSelectElement);
+const fillInput = $("#fill", HTMLInputElement);
+const fillLabel = $("#fill-label", HTMLElement);
+const translucencyInput = $("#translucency", HTMLInputElement);
+const translucencyLabel = $("#translucency-label", HTMLElement);
 
 const BLUE_RIDGE = {
   latitude: 35.5951,
@@ -52,10 +55,14 @@ const BLUE_RIDGE = {
 const ZONE = "America/New_York";
 
 const params = new URLSearchParams(location.search);
+// The maintainer chose relit lighting with Codex normals (2026-09-27); the
+// keyframed comparison stays reachable with ?compare=1.
+const compare = params.get("compare") === "1";
+if (compare) document.body.classList.add("compare");
 let view: View =
   (["split", "gpu", "software"] as const).find(
     (v) => v === params.get("view"),
-  ) ?? "split";
+  ) ?? (compare ? "split" : "gpu");
 let split = 0.5;
 let playing = false;
 let dirty = true;
@@ -70,10 +77,11 @@ const initialSky = params.get("sky") ?? "custom";
 skySelect.value = isPreviewName(initialSky) ? initialSky : "custom";
 dateInput.value = params.get("date") ?? "2024-10-15";
 timeInput.value = params.get("minutes") ?? String(8 * 60);
-normalsSelect.value = params.get("normals") === "codex" ? "codex" : "derived";
+normalsSelect.value = params.get("normals") === "derived" ? "derived" : "codex";
 inspectInput.checked = params.get("inspect") === "1";
 modeSelect.value = params.get("mode") ?? "lit";
-sideSelect.value = params.get("side") === "viewer" ? "viewer" : "physical";
+fillInput.value = params.get("fill") ?? "40";
+translucencyInput.value = params.get("translucency") ?? "100";
 if (params.get("ui") === "0") document.body.classList.add("bare");
 
 function currentState(): LightingState {
@@ -118,6 +126,8 @@ function layout(): void {
   ))
     button.setAttribute("aria-pressed", String(button.dataset.view === view));
   timeLabel.textContent = `${String(Math.floor(Number(timeInput.value) / 60)).padStart(2, "0")}:${String(Number(timeInput.value) % 60).padStart(2, "0")}`;
+  fillLabel.textContent = `${fillInput.value}%`;
+  translucencyLabel.textContent = `${translucencyInput.value}%`;
   const custom = skySelect.value === "custom";
   dateInput.disabled = !custom;
   timeInput.disabled = !custom;
@@ -186,7 +196,10 @@ async function main(): Promise<void> {
       (["lit", "normals", "albedo"] as const).find(
         (m) => m === modeSelect.value,
       ) ?? "lit",
-    side: sideSelect.value === "viewer" ? "viewer" : "physical",
+    adjust: {
+      fill: Number(fillInput.value) / 100,
+      translucency: Number(translucencyInput.value) / 100,
+    },
   });
 
   let last = performance.now();
@@ -254,7 +267,8 @@ for (const input of [
   normalsSelect,
   inspectInput,
   modeSelect,
-  sideSelect,
+  fillInput,
+  translucencyInput,
 ])
   input.addEventListener("input", layout);
 playButton.addEventListener("click", () => {
@@ -297,9 +311,8 @@ window.addEventListener("keydown", (event) => {
       (normalsSelect.value =
         normalsSelect.value === "codex" ? "derived" : "codex"),
     i: () => (inspectInput.checked = !inspectInput.checked),
-    l: () =>
-      (sideSelect.value =
-        sideSelect.value === "viewer" ? "physical" : "viewer"),
+    "[": () => (fillInput.value = String(Number(fillInput.value) - 5)),
+    "]": () => (fillInput.value = String(Number(fillInput.value) + 5)),
     " ": () => {
       playButton.click();
     },
