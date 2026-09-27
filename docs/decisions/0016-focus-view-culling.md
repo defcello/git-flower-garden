@@ -15,8 +15,9 @@ commit, including its text, on each camera change. The canvas compositor also
 reallocated its backing store and re-parsed every stem path on every frame.
 
 The maintainer asked for a reasonable improvement with real numbers rather
-than a hard target on this hardware: the reference machine is an old Surface
-Pro (2 cores).
+than a hard target on this hardware. The reference machine is a Surface Pro
+(2017, Intel Core m3-7Y30, 2 cores / 4 threads), about nine years old, and it
+usually has other work running at the same time.
 
 ## Decision
 

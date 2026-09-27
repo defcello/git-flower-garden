@@ -148,6 +148,7 @@ Conclusions:
 3. **Native 4K and real night art:** the lighting studies (CSS color grades of
    one daytime backdrop, upscaled for 4K) are accepted for P2-A. Native 4K and
    real night artwork move to the setting and sky work (P2-C, P2-D).
-4. **Interaction at 2,000 commits:** the reference laptop is a first-generation
-   Surface Pro class machine, so some slack is expected there. A reasonable
+4. **Interaction at 2,000 commits:** the reference machine is a Surface Pro
+   (2017, Core m3), about nine years old and usually doing other work
+   concurrently, so some slack is expected there. A reasonable
    improvement with measured numbers is enough for now (see ADR 0016).
