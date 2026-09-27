@@ -33,6 +33,13 @@ export function BotanicalGraph(
     setFailed(true);
   }, []);
   const scene = useMemo(() => botanicalScene(props.graph), [props.graph]);
+  // Parsed once per scene, not on every pan/zoom frame.
+  const paths = useMemo(
+    () => scene.stems.map((stem) => new Path2D(stem.path)),
+    [scene],
+  );
+  const top = props.rows?.top ?? -Infinity;
+  const bottom = props.rows?.bottom ?? Infinity;
   const width = props.width ?? graphWidth(props.graph);
   const height = props.height ?? props.graph.size.height;
   const transform = props.transform;
@@ -52,8 +59,15 @@ export function BotanicalGraph(
         8192 / Math.max(width, height),
         Math.sqrt(4_000_000 / (width * height)),
       );
-      element.width = Math.max(1, Math.round(width * ratio));
-      element.height = Math.max(1, Math.round(height * ratio));
+      const pixelWidth = Math.max(1, Math.round(width * ratio));
+      const pixelHeight = Math.max(1, Math.round(height * ratio));
+      // Resizing reallocates the backing store; only do it when it changes.
+      if (element.width !== pixelWidth || element.height !== pixelHeight) {
+        element.width = pixelWidth;
+        element.height = pixelHeight;
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, pixelWidth, pixelHeight);
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
       // FocusGraph supplies a controlled translate/scale string, never repository text.
       const values = transform
@@ -64,9 +78,11 @@ export function BotanicalGraph(
         ctx.scale(values[2] ?? 1, values[2] ?? 1);
       }
       ctx.lineCap = "round";
-      for (const stem of scene.stems) {
+      for (const [index, stem] of scene.stems.entries()) {
+        if (stem.bottom < top || stem.top > bottom) continue;
+        const path = paths[index];
+        if (!path) continue;
         ctx.setLineDash(stem.dashed ? [3, 5] : []);
-        const path = new Path2D(stem.path);
         // Pale under-stroke separates crossings without introducing a junction.
         ctx.strokeStyle = "#e0e9cf";
         ctx.lineWidth = stem.width + 2;
@@ -76,6 +92,8 @@ export function BotanicalGraph(
         ctx.stroke(path);
       }
       for (const sprite of scene.sprites) {
+        if (sprite.y + sprite.size < top || sprite.y - sprite.size > bottom)
+          continue;
         ctx.drawImage(
           atlas,
           (sprite.kind % 2) * CELL_SIZE,
@@ -114,7 +132,7 @@ export function BotanicalGraph(
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };
-  }, [scene, width, height, transform, props.compositor]);
+  }, [scene, paths, top, bottom, width, height, transform, props.compositor]);
 
   if (failed) return <GraphSvg {...props} />;
   return (
@@ -133,7 +151,12 @@ export function BotanicalGraph(
           aria-hidden="true"
         >
           <g transform={transform}>
-            <BotanicalMarks scene={scene} onError={artFailed} />
+            <BotanicalMarks
+              scene={scene}
+              top={top}
+              bottom={bottom}
+              onError={artFailed}
+            />
           </g>
         </svg>
       )}
@@ -144,41 +167,51 @@ export function BotanicalGraph(
 
 const BotanicalMarks = memo(function BotanicalMarks({
   scene,
+  top,
+  bottom,
   onError,
 }: {
   scene: ReturnType<typeof botanicalScene>;
+  top: number;
+  bottom: number;
   onError: () => void;
 }) {
+  const near = (y: number, reach: number) =>
+    y + reach >= top && y - reach <= bottom;
   return (
     <>
-      {scene.stems.map((stem, index) => (
-        <g
-          key={index}
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={stem.dashed ? "3 5" : undefined}
-        >
-          <path d={stem.path} stroke="#e0e9cf" strokeWidth={stem.width + 2} />
-          <path d={stem.path} stroke={stem.color} strokeWidth={stem.width} />
-        </g>
-      ))}
-      {scene.sprites.map((sprite, index) => (
-        <svg
-          key={index}
-          x={sprite.x - sprite.size / 2}
-          y={sprite.y - sprite.size / 2}
-          width={sprite.size}
-          height={sprite.size}
-          viewBox={`${String((sprite.kind % 2) * CELL_SIZE)} ${String(Math.floor(sprite.kind / 2) * CELL_SIZE)} ${String(CELL_SIZE)} ${String(CELL_SIZE)}`}
-        >
-          <image
-            href={atlasUrl}
-            width={ATLAS_SIZE}
-            height={ATLAS_SIZE}
-            onError={onError}
-          />
-        </svg>
-      ))}
+      {scene.stems.map((stem, index) =>
+        stem.bottom < top || stem.top > bottom ? null : (
+          <g
+            key={index}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={stem.dashed ? "3 5" : undefined}
+          >
+            <path d={stem.path} stroke="#e0e9cf" strokeWidth={stem.width + 2} />
+            <path d={stem.path} stroke={stem.color} strokeWidth={stem.width} />
+          </g>
+        ),
+      )}
+      {scene.sprites.map((sprite, index) =>
+        !near(sprite.y, sprite.size) ? null : (
+          <svg
+            key={index}
+            x={sprite.x - sprite.size / 2}
+            y={sprite.y - sprite.size / 2}
+            width={sprite.size}
+            height={sprite.size}
+            viewBox={`${String((sprite.kind % 2) * CELL_SIZE)} ${String(Math.floor(sprite.kind / 2) * CELL_SIZE)} ${String(CELL_SIZE)} ${String(CELL_SIZE)}`}
+          >
+            <image
+              href={atlasUrl}
+              width={ATLAS_SIZE}
+              height={ATLAS_SIZE}
+              onError={onError}
+            />
+          </svg>
+        ),
+      )}
     </>
   );
 });

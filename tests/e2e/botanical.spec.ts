@@ -215,3 +215,171 @@ test("measure both compositors at the 2000 selected-node envelope", async ({
   });
   console.log("Compositor comparison:", JSON.stringify(measurements));
 });
+
+// A realistic 2,000-commit selection is tall (one row per commit), so most of
+// it is off screen in focus view. Evidence for ADR 0016, not a timing gate.
+test("measure the focus view on a tall 2000-commit history", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(180_000);
+  await page.route("**/api/repositories/tour/graph", async (route) => {
+    const response = await route.fetch();
+    const graph =
+      (await response.json()) as import("../../src/api/types.ts").GraphJson;
+    const copies = 200;
+    const nodes = [],
+      edges = [],
+      tails = [];
+    for (let index = 0; index < copies; index++) {
+      const prefix = `${String(index)}-`;
+      const dy = index * graph.size.height;
+      const point = (p: { x: number; y: number }) => ({ x: p.x, y: p.y + dy });
+      nodes.push(
+        ...graph.nodes.map((node) => ({
+          ...node,
+          ...point(node),
+          row: node.row + index * graph.nodes.length,
+          oid: prefix + node.oid,
+          parents: node.parents.map((oid) => prefix + oid),
+        })),
+      );
+      edges.push(
+        ...graph.edges.map((edge) => ({
+          ...edge,
+          child: prefix + edge.child,
+          parent: prefix + edge.parent,
+          from: point(edge.from),
+          to: point(edge.to),
+        })),
+      );
+      tails.push(
+        ...graph.tails.map((tail) => ({
+          ...tail,
+          child: prefix + tail.child,
+          from: point(tail.from),
+          to: point(tail.to),
+        })),
+      );
+    }
+    await route.fulfill({
+      json: {
+        ...graph,
+        nodes,
+        edges,
+        tails,
+        reachableCount: graph.reachableCount * copies,
+        size: { ...graph.size, height: graph.size.height * copies },
+      },
+    });
+  });
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/");
+  await expect(page.locator('[data-plot="tour"] g.commit')).toHaveCount(2000);
+  await page.locator('[data-plot="tour"]').focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".focus-graph")).toHaveAttribute(
+    "data-framed",
+    "true",
+  );
+  const zoomSamples = () =>
+    page.evaluate(async () => {
+      const buttons = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(".toolbar button"),
+      );
+      const elapsed = [];
+      for (let index = 0; index < 24; index++) {
+        const start = performance.now();
+        buttons[index % 2]?.click();
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              resolve();
+            });
+          }),
+        );
+        elapsed.push(performance.now() - start);
+      }
+      const s = elapsed.slice(4).sort((a, b) => a - b);
+      return { medianMs: s[10], p95Ms: s[18], maxMs: s[19] };
+    });
+  // Culling must never drop a commit whose row is on screen.
+  const missingOnScreen = () =>
+    page.evaluate(async () => {
+      const graph = (await (
+        await fetch("/api/repositories/tour/graph")
+      ).json()) as import("../../src/api/types.ts").GraphJson;
+      const view = document.querySelector<HTMLElement>(".focus-graph");
+      if (!view) return ["no focus graph"];
+      const scale = Number(view.dataset.scale);
+      const y = Number(view.dataset.y);
+      const drawn = new Set(
+        Array.from(view.querySelectorAll(".graph g.commit")).map((g) =>
+          g.getAttribute("data-oid"),
+        ),
+      );
+      return graph.nodes
+        .filter((n) => {
+          const sy = n.y * scale + y;
+          return sy > -20 && sy < view.clientHeight + 20;
+        })
+        .filter((n) => !drawn.has(n.oid))
+        .map((n) => n.oid);
+    });
+  const measurements: Record<string, unknown> = {};
+  for (const renderer of ["technical", "canvas", "svg"]) {
+    await page.getByLabel("Renderer", { exact: true }).selectOption(renderer);
+    if (renderer === "canvas")
+      await expect(page.locator('canvas[data-ready="true"]')).toHaveCount(1);
+    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    expect(await missingOnScreen(), renderer).toEqual([]);
+    // Drag through the history in steps; every step keeps visible rows drawn.
+    const box = await page.locator(".focus-graph").boundingBox();
+    if (!box) throw new Error("focus graph");
+    for (let step = 0; step < 6; step++) {
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height - 40);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 2, box.y + 60, { steps: 8 });
+      await page.mouse.up();
+      expect(
+        await missingOnScreen(),
+        `${renderer} pan ${String(step)}`,
+      ).toEqual([]);
+    }
+    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    const fitScale = await page
+      .locator(".focus-graph")
+      .getAttribute("data-scale");
+    const atFit = await zoomSamples();
+    const drawnAtFit = await page.locator(".focus-graph g.commit").count();
+    // Zoom to a readable scale (labels at full size) and measure there too.
+    while (
+      Number(await page.locator(".focus-graph").getAttribute("data-scale")) < 1
+    )
+      await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    expect(await missingOnScreen(), `${renderer} readable`).toEqual([]);
+    const atReadable = await zoomSamples();
+    const drawnAtReadable = await page.locator(".focus-graph g.commit").count();
+    measurements[renderer] = {
+      fitScale,
+      atFit,
+      drawnAtFit,
+      atReadable,
+      drawnAtReadable,
+    };
+  }
+  await testInfo.attach("tall-history-timings.json", {
+    body: JSON.stringify(
+      {
+        viewport: "1920x1080",
+        nodes: 2000,
+        metric: "zoom click to second animation frame, 4 warmups + 20 samples",
+        userAgent: await page.evaluate(() => navigator.userAgent),
+        measurements,
+      },
+      null,
+      2,
+    ),
+    contentType: "application/json",
+  });
+  console.log("Tall history:", JSON.stringify(measurements));
+});

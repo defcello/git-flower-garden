@@ -1,6 +1,6 @@
 # 0015: Botanical art direction and Canvas/SVG renderer proof (P2-A)
 
-- Status: Review candidate (awaiting maintainer visual and asset review)
+- Status: Accepted (maintainer sign-off 2026-09-27)
 - Date: 2026-09-26
 - Roadmap: sections 10 (P2-A), 7, 12
 
@@ -133,23 +133,21 @@ Conclusions:
   the bottleneck.
 - **No renderer meets the roadmap's interaction target** (input response ≤ 100
   ms, ≥ 30 fps pan/zoom) at 2,000 visible commits on this machine, including
-  the Phase 1 technical view. This was not measured in P1-E; ADR 0013 now
-  records it as an open gap.
+  the Phase 1 technical view. This was not measured in P1-E. Since resolved
+  for realistic (tall) histories by row culling ([ADR 0016](0016-focus-view-culling.md)).
 - **WebGL is not justified.** The measured cost is the SVG overlay's size, not
-  compositing. The next steps are to cull off-screen rows from the overlay and
-  draw labels in the Canvas layer, then re-measure on the roadmap's baseline
-  hardware (P2-B/P2-E).
+  compositing. Row culling (ADR 0016) addressed it; drawing labels in the
+  Canvas layer remains an option for very wide graphs.
 
-## Open for the maintainer
+## Maintainer decisions (2026-09-27)
 
-1. **Visual direction:** the P2-A exit gate. Look at the demo (`node dist/cli.js
-   demo`, then View → Garden preview) on the intended monitor.
-2. **Generated artwork and licensing.** Both images come from an image model.
-   The manifest labels them "MIT (project distribution license)" while
-   disclaiming copyright in generated output. Whether to ship generated images,
-   and how to state their terms, is a legal and policy decision I have not made
-   on your behalf. The roadmap requires "assets can legally ship" before P2-A
-   exits.
-3. **Native 4K and real night art.** The 4K study upscales a 1672×941
-   backdrop, and night is a darkened daytime image. The roadmap item asks for
-   day, dawn/dusk, and night examples at 1080p and 4K; that item stays open.
+1. **Visual direction:** approved. This closes the P2-A exit gate.
+2. **Generated artwork and licensing:** both images ship under the project's
+   MIT license as they are, with provenance kept in the manifest and
+   `docs/art/prompts.md`.
+3. **Native 4K and real night art:** the lighting studies (CSS color grades of
+   one daytime backdrop, upscaled for 4K) are accepted for P2-A. Native 4K and
+   real night artwork move to the setting and sky work (P2-C, P2-D).
+4. **Interaction at 2,000 commits:** the reference laptop is a first-generation
+   Surface Pro class machine, so some slack is expected there. A reasonable
+   improvement with measured numbers is enough for now (see ADR 0016).

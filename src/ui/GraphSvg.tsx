@@ -14,6 +14,13 @@ export interface GraphSvgProps {
   selectedOid: string | null;
   /** Pan/zoom transform for the drawing (focus view); identity when omitted. */
   transform?: string;
+  /**
+   * Vertical range of the drawing (graph coordinates) to render; marks
+   * entirely outside it are skipped. Everything is drawn when omitted.
+   */
+  rows?: { top: number; bottom: number };
+  /** Hide commit text (focus view zoomed out below readable size). */
+  far?: boolean;
   width?: number;
   height?: number;
   onHover: (node: GraphNodeJson | null, event?: React.PointerEvent) => void;
@@ -57,7 +64,7 @@ export function GraphSvg(props: GraphSvgProps) {
   const height = props.height ?? graph.size.height;
   return (
     <svg
-      className={`graph${props.botanical ? " botanical-overlay" : ""}`}
+      className={`graph${props.botanical ? " botanical-overlay" : ""}${props.far ? " far" : ""}`}
       width={width}
       height={height}
       viewBox={`0 0 ${String(width)} ${String(height)}`}
@@ -67,6 +74,8 @@ export function GraphSvg(props: GraphSvgProps) {
       <g transform={props.transform}>
         <GraphMarks
           graph={graph}
+          top={props.rows?.top ?? -Infinity}
+          bottom={props.rows?.bottom ?? Infinity}
           selectedOid={selectedOid}
           onHover={props.onHover}
           onSelect={props.onSelect}
@@ -77,21 +86,30 @@ export function GraphSvg(props: GraphSvgProps) {
 }
 
 // Camera updates change only the enclosing transform, not thousands of marks.
+// Off-screen rows are skipped: the browser repaints only what is near view.
 const GraphMarks = memo(function GraphMarks(
-  props: Pick<GraphSvgProps, "graph" | "selectedOid" | "onHover" | "onSelect">,
+  props: Pick<
+    GraphSvgProps,
+    "graph" | "selectedOid" | "onHover" | "onSelect"
+  > & { top: number; bottom: number },
 ) {
-  const { graph, selectedOid } = props;
+  const { graph, selectedOid, top, bottom } = props;
   const textX = graph.size.width + TEXT_GAP;
+  const spans = (a: number, b: number) =>
+    Math.max(a, b) >= top && Math.min(a, b) <= bottom;
+  const edges = graph.edges.filter((e) => spans(e.from.y, e.to.y));
+  const tails = graph.tails.filter((t) => spans(t.from.y, t.to.y));
+  const nodes = graph.nodes.filter((n) => spans(n.y - ROW_HIT, n.y + ROW_HIT));
   return (
     <>
-      {graph.edges.map((e) => (
+      {edges.map((e) => (
         <path
           key={`${e.child}-${e.parent}-${e.kind}`}
           className={`edge ${e.kind}`}
           d={edgePath(e)}
         />
       ))}
-      {graph.edges
+      {edges
         .filter((e) => e.kind === "collapsed")
         .map((e) => {
           const y = e.from.y + Math.min(18, (e.to.y - e.from.y) / 2);
@@ -122,7 +140,7 @@ const GraphMarks = memo(function GraphMarks(
             </g>
           );
         })}
-      {graph.tails.map((t) => (
+      {tails.map((t) => (
         <g
           key={`tail-${t.child}-${String(t.boundary)}`}
           className={`tail${t.boundary ? " boundary" : ""}`}
@@ -141,7 +159,7 @@ const GraphMarks = memo(function GraphMarks(
           )}
         </g>
       ))}
-      {graph.nodes.map((n) => (
+      {nodes.map((n) => (
         <g
           key={n.oid}
           className={`commit${n.oid === selectedOid ? " selected" : ""}`}

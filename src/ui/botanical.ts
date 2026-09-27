@@ -5,6 +5,9 @@ export type Renderer = "technical" | "canvas" | "svg";
 export type Lighting = "day" | "dawn" | "dusk" | "night";
 export interface Stem {
   path: string;
+  /** Vertical extent, for skipping off-screen stems. */
+  top: number;
+  bottom: number;
   width: number;
   color: string;
   dashed: boolean;
@@ -31,6 +34,8 @@ export function flowerVariant(identity: string): number {
 export function botanicalScene(graph: GraphJson) {
   const stems: Stem[] = graph.edges.map((edge) => ({
     path: edgePath(edge),
+    top: Math.min(edge.from.y, edge.to.y),
+    bottom: Math.max(edge.from.y, edge.to.y),
     width: Math.min(
       6,
       Math.max(2.5, 2.5 + (edge.to.y / graph.size.height) * 3),
@@ -41,6 +46,8 @@ export function botanicalScene(graph: GraphJson) {
   for (const tail of graph.tails) {
     stems.push({
       path: `M${String(tail.from.x)} ${String(tail.from.y)} L${String(tail.to.x)} ${String(tail.to.y)}`,
+      top: Math.min(tail.from.y, tail.to.y),
+      bottom: Math.max(tail.from.y, tail.to.y),
       width: 2.5,
       color: tail.boundary ? "#9a3b2a" : "#456b39",
       dashed: !tail.boundary,

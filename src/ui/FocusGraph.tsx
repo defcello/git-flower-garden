@@ -49,6 +49,28 @@ function framing(
 const clamp = (v: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, v));
 
+/** Below this zoom, 12 px commit text is under 6 px: not drawn (ADR 0016). */
+const FAR_SCALE = 0.5;
+
+/**
+ * The rows to render (graph coordinates): the visible range padded by a
+ * chunk each way, snapped to power-of-two chunks at least a viewport tall.
+ * Small pans and zooms keep the same window, so the memoized marks are
+ * reused and only the camera transform changes.
+ */
+function rowWindow(
+  cam: Camera,
+  viewportHeight: number,
+): { top: number; bottom: number } {
+  const viewTop = -cam.y / cam.scale;
+  const viewBottom = (viewportHeight - cam.y) / cam.scale;
+  const chunk = 2 ** Math.ceil(Math.log2(Math.max(64, viewBottom - viewTop)));
+  return {
+    top: (Math.floor(viewTop / chunk) - 1) * chunk,
+    bottom: (Math.floor(viewBottom / chunk) + 2) * chunk,
+  };
+}
+
 /**
  * Focused repository with bounded pan and zoom. The camera is kept across
  * live updates (no jumps); "Fit" re-frames on request, and commits that land
@@ -135,6 +157,7 @@ export function FocusGraph(props: FocusGraphProps) {
   }, [zoomAt]);
 
   const cam = camera ?? { scale: 1, x: 16, y: 64 };
+  const rows = rowWindow(cam, size.height);
   const above = graph.nodes.filter((n) => n.y * cam.scale + cam.y < 0).length;
   // The exit button sits in the same conceptual place as the garden's "+": centered above the tree.
   const exitLeft = clamp(
@@ -246,6 +269,8 @@ export function FocusGraph(props: FocusGraphProps) {
           width={size.width}
           height={size.height}
           transform={`translate(${String(cam.x)} ${String(cam.y)}) scale(${String(cam.scale)})`}
+          rows={rows}
+          far={cam.scale < FAR_SCALE}
           onHover={props.onHover}
           onSelect={props.onSelect}
         />

@@ -254,6 +254,10 @@ code,
 }
 
 /* Graph drawing */
+/* Focus view zoomed out past readable text size (ADR 0016). */
+.graph.far .commit text {
+  display: none;
+}
 .graph {
   display: block;
   font-size: 12px;

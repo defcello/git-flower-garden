@@ -50,7 +50,7 @@
       "scaleVariants": [
         "One source atlas; runtime resampling at bounded DPR up to 2"
       ],
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Maintainer asset review remains open. No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
     },
     {
       "id": "blue-ridge-day",
@@ -74,7 +74,7 @@
       "scaleVariants": [
         "One source; CSS cover at viewport size, including upscaled 4K review"
       ],
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Maintainer asset review remains open. No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
     }
   ],
   "location": "Source images are in src/ui/assets/ of the repository; the build fingerprints their file names under dist/ui/assets/."
