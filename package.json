@@ -20,6 +20,12 @@
     "monitor"
   ],
   "type": "module",
+  "imports": {
+    "#astronomy-engine": {
+      "types": "./vendor/astronomy-engine/source/js/astronomy.d.ts",
+      "default": "./vendor/astronomy-engine/source/js/esm/astronomy.js"
+    }
+  },
   "bin": {
     "git-flower-garden": "dist/cli.js"
   },

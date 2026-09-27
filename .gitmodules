@@ -1,0 +1,4 @@
+[submodule "vendor/astronomy-engine"]
+	path = vendor/astronomy-engine
+	url = https://github.com/cosinekitty/astronomy.git
+	shallow = true

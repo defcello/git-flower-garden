@@ -14,10 +14,16 @@ employer, animation studio, or Git hosting provider.
 3. Changes to a documented contract (Git semantics, configuration, data
    records) need a new record in [docs/decisions/](docs/decisions/). Update the
    roadmap, examples, and tests in the same change.
+4. Third-party code that ships to users is never installed from a package
+   registry. It is pinned in `vendor/` as a Git submodule at a reviewed commit,
+   with a security review record and checksum tests
+   ([ADR 0019](docs/decisions/0019-astronomy-engine-review.md)). Moving a pin
+   needs a new review.
 
 ## Making a change
 
 ```sh
+git submodule update --init   # vendor/astronomy-engine, pinned (ADR 0019)
 npm ci
 npm run check
 ```

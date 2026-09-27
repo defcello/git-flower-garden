@@ -8,5 +8,5 @@
     "sourceMap": true
   },
   "include": ["src"],
-  "exclude": ["src/ui"]
+  "exclude": ["src/ui", "src/environment"]
 }

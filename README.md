@@ -60,9 +60,15 @@ Requirements: [Node.js](https://nodejs.org/) 24 or newer (see `.nvmrc`) and
 [Git](https://git-scm.com/) 2.36 or newer.
 
 ```sh
+git clone --recurse-submodules https://github.com/defcello/git-flower-garden.git
 npm ci           # install exact dependency versions
 npm run check    # format check, lint, typecheck, build, and tests
 ```
+
+In an existing clone, `git submodule update --init` fetches the one
+submodule: astronomy-engine, pinned to a reviewed release in
+`vendor/astronomy-engine` ([ADR 0019](docs/decisions/0019-astronomy-engine-review.md)).
+After pulling a change that moves it, run the same command again.
 
 Individual commands:
 

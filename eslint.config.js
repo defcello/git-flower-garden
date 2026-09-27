@@ -12,6 +12,8 @@ export default tseslint.config(
       "tmp/",
       "playwright-report/",
       "test-results/",
+      // Reviewed third-party code, pinned as a submodule (ADR 0019).
+      "vendor/",
     ],
   },
   js.configs.recommended,
@@ -27,6 +29,25 @@ export default tseslint.config(
   {
     files: ["src/ui/**/*.{ts,tsx}"],
     extends: [reactHooks.configs.flat.recommended],
+  },
+  {
+    // Only the wrapper may import astronomy-engine: some of its functions
+    // never return on a non-finite number (ADR 0019).
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/environment/astronomy.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "#astronomy-engine",
+              message: "Use src/environment/astronomy.ts (ADR 0019).",
+            },
+          ],
+        },
+      ],
+    },
   },
   {
     // Plain JavaScript config files are outside the TypeScript project.

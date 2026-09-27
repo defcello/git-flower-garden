@@ -31,8 +31,8 @@ The maintainer's constraints (2026-09-27):
    tools and installation, but nothing new is shipped to users from npm,
    given the rate of supply-chain attacks. "Runtime" includes anything Vite
    bundles into `dist/ui`; React is the existing exception. Third-party code
-   may ship only as a reviewed, pinned, checksummed file committed to this
-   repository (see "Astronomy" below).
+   may ship only from a Git submodule pinned at a reviewed commit, with
+   checksum tests (see "Astronomy" below, and ADR 0019).
 3. **Lighting should follow the sun**: shading and shadows respond to the
    actual sun direction, not only a time-of-day tint.
 4. **A reduced software tier is acceptable**: without a GPU, fewer particles,
@@ -163,27 +163,31 @@ there:
 
 Sun and moon positions come from
 [astronomy-engine](https://github.com/cosinekitty/astronomy) (Don Cross),
-decided by the maintainer on 2026-09-27:
+decided by the maintainer on 2026-09-27, and accepted after a security review
+([ADR 0019](0019-astronomy-engine-review.md)):
 
 - **License**: MIT, the same as this project; the copyright and permission
   notice ship with it. No licensing concern found.
-- **Form**: the single TypeScript source file (`source/js/astronomy.ts`) from
-  release **v2.1.19**, committed under `vendor/astronomy-engine/` with its
-  `LICENSE`, the upstream URL, the release tag, and a SHA-256 of the file.
-  It is never installed from npm. Vite tree-shakes it, so only the
-  functions used are bundled.
+- **Form**: a Git submodule at `vendor/astronomy-engine`, pinned to the
+  v2.1.19 release commit (`61dc070`), cloned shallow. Code imports the
+  compiled ES module and its types through the package's own
+  `#astronomy-engine` import alias (`package.json` `imports`), never from
+  npm. Tests pin the reviewed files by SHA-256.
+- **Size**: tree-shaking keeps what the scene uses; the current wrapper
+  bundles to about 75 KB minified (25 KB gzipped), against 135 KB for the
+  whole library.
 - **Dependencies**: none. It computes offline from published models, with
   no network access, which matches P2-D's offline requirement.
 - **Maintenance**: the last release is from December 2023 (last repository
   activity January 2025). It is mature, computational code with no external
-  interfaces, so low churn is acceptable; our own reference-case tests
-  (Verification) guard against errors, and upgrading means replacing the
-  file, re-reviewing the diff, and updating the checksum.
+  interfaces, so low churn is acceptable. Reference-case tests guard against
+  errors; upgrading means moving the pin, re-reviewing the diff, and updating
+  the checksums (ADR 0019).
 - **Where it runs**: in the browser, beside `LightingState`, so the scene
   can animate time smoothly without polling the service. It covers P2-D's
   sun altitude and azimuth, rise and set times, moon altitude, illuminated
   fraction, and phase angle; limb orientation is derived from the sun and
-  moon positions it returns.
+  moon positions it returns. The wrapper is `src/environment/astronomy.ts`.
 
 ### Art pipeline
 
@@ -215,8 +219,8 @@ decision:
 
 1. **Lighting model**: `EnvironmentSnapshot` to `LightingState`, with the
    developer overrides P2-D asks for (sunrise, sunset, night, moon phases,
-   and so on). This is pure code and needs no art. It starts by vendoring
-   astronomy-engine.
+   and so on). This is pure code and needs no art. astronomy-engine is
+   vendored and wrapped already (ADR 0019).
 2. **Art spike** (gate): one ridge layer, the hill, and the four sprites,
    each as flat albedo plus normals, generated with Codex. Build a throwaway
    comparison page: Canvas 2D keyframed against WebGL2 relit, at dawn, noon,
@@ -234,7 +238,7 @@ decision:
 
 - Unit tests: astronomy results against published reference cases
   (sunrise and sunset tables, moon phase dates, a high-latitude polar day and
-  night), a check that the vendored file matches its recorded SHA-256, and
+  night), a check that the vendored files match their reviewed SHA-256, and
   `SceneDescription` stability (same inputs, same scene).
 - Browser tests force each tier with the View-menu override. In Chromium
   run with `--disable-gpu`, **Auto** must choose Canvas 2D. Both tiers must
@@ -257,8 +261,8 @@ decision:
   baking keep the difference to how pixels are shaded.
 - The art library roughly doubles in files (albedo and normals, layered
   backdrop). Generation stays reproducible through recorded prompts.
-- No npm runtime dependency is added. One vendored, pinned file
-  (astronomy-engine, MIT) is shipped, with its notice and checksum.
+- No npm runtime dependency is added. One reviewed, pinned submodule
+  (astronomy-engine, MIT) is bundled, with its notice and checksums.
 
 ## Maintainer answers (2026-09-27)
 

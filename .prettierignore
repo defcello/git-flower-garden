@@ -7,3 +7,4 @@ package-lock.json
 # Prose is hand-formatted; realigning whole tables on every edit creates churn.
 *.md
 release/
+vendor/
