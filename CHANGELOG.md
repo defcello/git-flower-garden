@@ -12,6 +12,12 @@ change configuration or behavior, and the notes say how.
   repositories grow from fixed positions; names, status, and focus icons
   appear on hover. The technical view remains the default.
   ([ADR 0015](docs/decisions/0015-botanical-renderer-proof.md))
+- Garden plants follow the graph: stems taper by branch flow (forks thinner,
+  merges wider, thicker lower down), crossings keep a clear depth order, and
+  new growth, moved branch heads, and removed history animate briefly
+  (never with reduced motion). ([ADR 0017](docs/decisions/0017-botanical-graph-rules.md))
+- Faster focus view for large histories: off-screen rows are skipped and
+  unreadable text is not drawn when zoomed far out. ([ADR 0016](docs/decisions/0016-focus-view-culling.md))
 - Fixed: focusing an empty repository offered no control to return to the
   garden (Escape still worked).
 

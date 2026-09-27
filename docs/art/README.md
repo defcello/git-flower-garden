@@ -33,7 +33,7 @@ The tool returned a 1254×1254 RGBA atlas and a 1672×941 RGB backdrop, despite 
 
 - Technical, Canvas, and botanical SVG share the same reduced DAG, coordinates, curve paths, labels, selection, focus camera, details, and keyboard commit list. The Canvas proof retains the SVG interaction overlay; replacing that layer is a later measured decision.
 - A ref's flower family is seeded from repository ID and ref label, not its current OID. Three flowers can represent a cluster; every ref remains available in labels and details. Tag fruit denotes tag presence; individual tag names remain inspectable.
-- No decorative stem joins disconnected components. All visible stem paths come from real graph edges or explicitly marked history tails. Width is decorative; full split/merge taper rules remain P2-B work.
+- No decorative stem joins disconnected components. All visible stem paths come from real graph edges or explicitly marked history tails. Width follows branch flow: forks thinner, merges wider, thicker lower down, clamped ([ADR 0017](../decisions/0017-botanical-graph-rules.md)).
 - Drawing is event-driven, with no continuous animation loop. Canvas skips drawing while the document is hidden and repaints on visibility/resize. The backing buffer caps DPR at 2 and maximum dimension at 8192 pixels and total area at four million pixels; very large overviews may soften, while the vector interaction layer remains exact.
 - Atlas failure falls back to the technical graph. Technical mode is always available from View.
 
@@ -41,7 +41,7 @@ The tool returned a 1254×1254 RGBA atlas and a 1672×941 RGB backdrop, despite 
 
 See [the exact prompts](prompts.md) and [asset manifest](../../src/ui/public/asset-manifest.json). Built-in image generation produced both images; no API key or external stock assets were used. Manifest fields record dimensions, anchors, scaling, source, generation/editing provenance, MIT distribution (approved by the maintainer), attribution, and redistribution status. No exclusive copyright claim is made for generated output.
 
-The maintainer reviewed the preview and accepted the direction on 2026-09-27, closing the P2-A gate. Native 4K and real night artwork are still to come with the setting and sky work (P2-C, P2-D). P2-B–E remain open: final botanical layout/motion, integrated plot composition, offline astronomy and optional weather, quality presets, and the 24-hour soak.
+The maintainer reviewed the preview and accepted the direction on 2026-09-27, closing the P2-A gate. Native 4K and real night artwork are still to come with the setting and sky work (P2-C, P2-D). P2-B (botanical layout and motion) is done; P2-C–E remain open: integrated plot composition, offline astronomy and optional weather, quality presets, and the 24-hour soak.
 
 ## Verification
 

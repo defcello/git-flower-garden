@@ -1,7 +1,15 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import atlasUrl from "./assets/botanical-atlas.png";
-import { ATLAS_SIZE, botanicalScene, CELL_SIZE } from "./botanical.ts";
+import {
+  ATLAS_SIZE,
+  botanicalScene,
+  CELL_SIZE,
+  HALO_COLOR,
+  KNOT_COLOR,
+  type Scene,
+} from "./botanical.ts";
 import { GraphSvg, graphWidth, type GraphSvgProps } from "./GraphSvg.tsx";
+import { blendScenes, TRANSITION_MS, type Frame } from "./transition.ts";
 
 /** One decoded atlas per page, shared by every plot and redraw. */
 let loadedAtlas: HTMLImageElement | null = null;
@@ -23,6 +31,52 @@ function loadAtlas(): Promise<HTMLImageElement> {
   return atlasLoading;
 }
 
+const GROUND_COLOR = "rgba(38, 52, 24, 0.22)";
+
+/** Whether motion is allowed: the OS preference and the app setting. */
+function motionAllowed(): boolean {
+  if (document.documentElement.classList.contains("reduce-motion"))
+    return false;
+  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * The artwork frame for a scene: when the same repository's scene changes,
+ * a brief transition from the previous one (unless motion is reduced).
+ */
+function useSceneFrame(scene: Scene, graphId: string): Frame {
+  const shown = useRef<{ scene: Scene; id: string } | null>(null);
+  const [animation, setAnimation] = useState<{
+    from: Scene;
+    to: Scene;
+    t: number;
+  } | null>(null);
+  useEffect(() => {
+    const previous = shown.current;
+    shown.current = { scene, id: graphId };
+    if (!previous || previous.id !== graphId || previous.scene === scene)
+      return;
+    // Reduced motion: the new scene shows at once (a stale animation is
+    // ignored because it no longer targets the current scene).
+    if (!motionAllowed()) return;
+    const start = performance.now();
+    let handle = 0;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / TRANSITION_MS);
+      setAnimation(t >= 1 ? null : { from: previous.scene, to: scene, t });
+      if (t < 1) handle = requestAnimationFrame(step);
+    };
+    handle = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(handle);
+    };
+  }, [scene, graphId]);
+  const settled = useMemo(() => blendScenes(null, scene, 1), [scene]);
+  return animation && animation.to === scene
+    ? blendScenes(animation.from, animation.to, animation.t)
+    : settled;
+}
+
 /** Canvas artwork plus the same SVG hit/label layer used by the truth renderer. */
 export function BotanicalGraph(
   props: GraphSvgProps & { compositor: "canvas" | "svg" },
@@ -33,16 +87,14 @@ export function BotanicalGraph(
     setFailed(true);
   }, []);
   const scene = useMemo(() => botanicalScene(props.graph), [props.graph]);
-  // Parsed once per scene, not on every pan/zoom frame.
-  const paths = useMemo(
-    () => scene.stems.map((stem) => new Path2D(stem.path)),
-    [scene],
-  );
-  const top = props.rows?.top ?? -Infinity;
-  const bottom = props.rows?.bottom ?? Infinity;
+  const frame = useSceneFrame(scene, props.graph.id);
+  // Parsed once per path string, not on every pan/zoom/animation frame.
+  const paths = useRef(new Map<string, Path2D>());
   const width = props.width ?? graphWidth(props.graph);
   const height = props.height ?? props.graph.size.height;
   const transform = props.transform;
+  const top = props.rows?.top ?? -Infinity;
+  const bottom = props.rows?.bottom ?? Infinity;
   useEffect(() => {
     if (props.compositor !== "canvas") return;
     const element = canvas.current;
@@ -50,6 +102,14 @@ export function BotanicalGraph(
     if (!element || !ctx) return;
     let disposed = false;
     let atlas: HTMLImageElement | null = loadedAtlas;
+    const path = (d: string) => {
+      let p = paths.current.get(d);
+      if (!p) {
+        p = new Path2D(d);
+        paths.current.set(d, p);
+      }
+      return p;
+    };
     const draw = () => {
       if (disposed || document.hidden || !atlas) return;
       // Bound backing memory even for tall histories; interaction is vector based.
@@ -77,39 +137,71 @@ export function BotanicalGraph(
         ctx.translate(values[0] ?? 0, values[1] ?? 0);
         ctx.scale(values[2] ?? 1, values[2] ?? 1);
       }
-      ctx.lineCap = "round";
-      for (const [index, stem] of scene.stems.entries()) {
-        if (stem.bottom < top || stem.top > bottom) continue;
-        const path = paths[index];
-        if (!path) continue;
-        ctx.setLineDash(stem.dashed ? [3, 5] : []);
-        // Pale under-stroke separates crossings without introducing a junction.
-        ctx.strokeStyle = "#e0e9cf";
-        ctx.lineWidth = stem.width + 2;
-        ctx.stroke(path);
-        ctx.strokeStyle = stem.color;
-        ctx.lineWidth = stem.width;
-        ctx.stroke(path);
+      const near = (y: number, reach: number) =>
+        y + reach >= top && y - reach <= bottom;
+      ctx.fillStyle = GROUND_COLOR;
+      for (const ground of frame.grounds) {
+        if (!near(ground.y, 10)) continue;
+        ctx.beginPath();
+        ctx.ellipse(ground.x, ground.y, ground.width / 2, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
-      for (const sprite of scene.sprites) {
-        if (sprite.y + sprite.size < top || sprite.y - sprite.size > bottom)
-          continue;
+      ctx.lineCap = "round";
+      for (const stem of frame.stems) {
+        if (stem.bottom < top || stem.top > bottom) continue;
+        ctx.globalAlpha = stem.alpha;
+        if (stem.dashed) {
+          // Pale under-stroke separates crossings without introducing a junction.
+          ctx.setLineDash([]);
+          ctx.strokeStyle = HALO_COLOR;
+          ctx.lineWidth = stem.width + 2.5;
+          ctx.stroke(path(stem.halo));
+          ctx.setLineDash([3, 5]);
+          ctx.strokeStyle = stem.color;
+          ctx.lineWidth = stem.width;
+          ctx.stroke(path(stem.path));
+        } else {
+          ctx.fillStyle = HALO_COLOR;
+          ctx.fill(path(stem.halo));
+          ctx.fillStyle = stem.color;
+          ctx.fill(path(stem.path));
+        }
+      }
+      ctx.setLineDash([]);
+      ctx.fillStyle = KNOT_COLOR;
+      for (const knot of frame.knots) {
+        if (!near(knot.y, knot.r)) continue;
+        ctx.globalAlpha = knot.alpha;
+        ctx.beginPath();
+        ctx.arc(knot.x, knot.y, knot.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      for (const sprite of frame.sprites) {
+        if (!near(sprite.y, sprite.size)) continue;
+        const size = sprite.size * sprite.scale;
+        ctx.globalAlpha = sprite.alpha;
+        ctx.save();
+        ctx.translate(sprite.x, sprite.y);
+        ctx.rotate(sprite.rotate);
+        if (sprite.flip) ctx.scale(-1, 1);
         ctx.drawImage(
           atlas,
           (sprite.kind % 2) * CELL_SIZE,
           Math.floor(sprite.kind / 2) * CELL_SIZE,
           CELL_SIZE,
           CELL_SIZE,
-          sprite.x - sprite.size / 2,
-          sprite.y - sprite.size / 2,
-          sprite.size,
-          sprite.size,
+          -size / 2,
+          -size / 2,
+          size,
+          size,
         );
+        ctx.restore();
       }
+      ctx.globalAlpha = 1;
       element.dataset.ready = "true";
     };
     if (atlas) {
-      // Pan and zoom re-run this effect every frame: draw synchronously.
+      // Pan, zoom, and animation re-run this effect every frame: draw synchronously.
       draw();
     } else {
       loadAtlas().then(
@@ -132,7 +224,7 @@ export function BotanicalGraph(
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };
-  }, [scene, paths, top, bottom, width, height, transform, props.compositor]);
+  }, [frame, top, bottom, width, height, transform, props.compositor]);
 
   if (failed) return <GraphSvg {...props} />;
   return (
@@ -152,7 +244,7 @@ export function BotanicalGraph(
         >
           <g transform={transform}>
             <BotanicalMarks
-              scene={scene}
+              frame={frame}
               top={top}
               bottom={bottom}
               onError={artFailed}
@@ -166,12 +258,12 @@ export function BotanicalGraph(
 }
 
 const BotanicalMarks = memo(function BotanicalMarks({
-  scene,
+  frame,
   top,
   bottom,
   onError,
 }: {
-  scene: ReturnType<typeof botanicalScene>;
+  frame: Frame;
   top: number;
   bottom: number;
   onError: () => void;
@@ -180,38 +272,84 @@ const BotanicalMarks = memo(function BotanicalMarks({
     y + reach >= top && y - reach <= bottom;
   return (
     <>
-      {scene.stems.map((stem, index) =>
-        stem.bottom < top || stem.top > bottom ? null : (
+      {frame.grounds.map((ground) =>
+        near(ground.y, 10) ? (
+          <ellipse
+            key={`ground-${ground.key}`}
+            cx={ground.x}
+            cy={ground.y}
+            rx={ground.width / 2}
+            ry={5}
+            fill={GROUND_COLOR}
+          />
+        ) : null,
+      )}
+      {frame.stems.map((stem) =>
+        stem.bottom < top || stem.top > bottom ? null : stem.dashed ? (
           <g
-            key={index}
+            key={stem.key}
             fill="none"
             strokeLinecap="round"
-            strokeDasharray={stem.dashed ? "3 5" : undefined}
+            opacity={stem.alpha}
           >
-            <path d={stem.path} stroke="#e0e9cf" strokeWidth={stem.width + 2} />
-            <path d={stem.path} stroke={stem.color} strokeWidth={stem.width} />
+            <path
+              d={stem.halo}
+              stroke={HALO_COLOR}
+              strokeWidth={stem.width + 2.5}
+            />
+            <path
+              d={stem.path}
+              stroke={stem.color}
+              strokeWidth={stem.width}
+              strokeDasharray="3 5"
+            />
+          </g>
+        ) : (
+          <g key={stem.key} opacity={stem.alpha}>
+            <path d={stem.halo} fill={HALO_COLOR} />
+            <path d={stem.path} fill={stem.color} />
           </g>
         ),
       )}
-      {scene.sprites.map((sprite, index) =>
-        !near(sprite.y, sprite.size) ? null : (
-          <svg
-            key={index}
-            x={sprite.x - sprite.size / 2}
-            y={sprite.y - sprite.size / 2}
-            width={sprite.size}
-            height={sprite.size}
-            viewBox={`${String((sprite.kind % 2) * CELL_SIZE)} ${String(Math.floor(sprite.kind / 2) * CELL_SIZE)} ${String(CELL_SIZE)} ${String(CELL_SIZE)}`}
-          >
-            <image
-              href={atlasUrl}
-              width={ATLAS_SIZE}
-              height={ATLAS_SIZE}
-              onError={onError}
-            />
-          </svg>
-        ),
+      {frame.knots.map((knot) =>
+        near(knot.y, knot.r) ? (
+          <circle
+            key={`knot-${knot.key}`}
+            cx={knot.x}
+            cy={knot.y}
+            r={knot.r}
+            fill={KNOT_COLOR}
+            opacity={knot.alpha}
+          />
+        ) : null,
       )}
+      {frame.sprites.map((sprite) => {
+        if (!near(sprite.y, sprite.size)) return null;
+        const size = sprite.size * sprite.scale;
+        const degrees = (sprite.rotate * 180) / Math.PI;
+        return (
+          <g
+            key={sprite.key}
+            opacity={sprite.alpha}
+            transform={`translate(${String(sprite.x)} ${String(sprite.y)}) rotate(${String(degrees)})${sprite.flip ? " scale(-1 1)" : ""}`}
+          >
+            <svg
+              x={-size / 2}
+              y={-size / 2}
+              width={size}
+              height={size}
+              viewBox={`${String((sprite.kind % 2) * CELL_SIZE)} ${String(Math.floor(sprite.kind / 2) * CELL_SIZE)} ${String(CELL_SIZE)} ${String(CELL_SIZE)}`}
+            >
+              <image
+                href={atlasUrl}
+                width={ATLAS_SIZE}
+                height={ATLAS_SIZE}
+                onError={onError}
+              />
+            </svg>
+          </g>
+        );
+      })}
     </>
   );
 });

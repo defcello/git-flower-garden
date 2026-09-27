@@ -21,7 +21,12 @@ const port = Number(process.argv[2] ?? 4790);
 // Browser tests pass a directory so they can change repositories while the UI watches.
 const given = process.env.GARDEN_E2E_ROOT;
 const root = given ?? (await mkdtemp(join(tmpdir(), "git-garden-e2e-")));
-if (given) await mkdir(given, { recursive: true });
+if (given) {
+  // The directory is named after the test runner's process id, which the OS
+  // can reuse: start from an empty one, not a stale run's leftovers.
+  await rm(given, { recursive: true, force: true, maxRetries: 5 });
+  await mkdir(given, { recursive: true });
+}
 const repo = (name: string) => join(root, name);
 
 await buildFixture(artProof, repo("garden tour"));
