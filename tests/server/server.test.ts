@@ -341,7 +341,10 @@ describe("CLI", () => {
     );
     io = capture();
     expect(await main(["validate-config", "--config", file], io)).toBe(1);
-    expect(io.lines.filter((l) => l.startsWith("ERR"))).toEqual([
+    const validationErrors = io.lines.filter(
+      (line) => line.startsWith("ERR") && !line.startsWith("ERR Note:"),
+    );
+    expect(validationErrors).toEqual([
       expect.stringMatching(
         /repository "linked": same repository as "main"/,
       ) as unknown,

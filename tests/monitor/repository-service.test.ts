@@ -108,4 +108,37 @@ describe("RepositoryService", () => {
     t.failNext(false);
     expect((await t.service.refresh("tour")).status.state).toBe("ready");
   });
+
+  it("replaces webhook routing when a repository GitHub mapping changes", async () => {
+    const dir = await tempDir();
+    const fixture = await buildFixture(gardenTour, join(dir, "repo"));
+    const config = (github: string) => {
+      const result = parseConfig(
+        JSON.stringify({
+          version: 1,
+          history: { timeZone: "America/New_York" },
+          repositories: [
+            {
+              id: "tour",
+              path: fixture.dir,
+              remotes: ["origin"],
+              github,
+            },
+          ],
+        }),
+        dir,
+      );
+      if (!result.ok) throw new Error("bad config");
+      return result.config;
+    };
+
+    const service = new RepositoryService(config("old/garden"));
+    await service.refresh("tour");
+    expect(service.view("tour")?.revision).toBe(1);
+    await service.applyConfig(config("new/garden"));
+    expect(service.view("tour")?.revision).toBe(2);
+    expect(service.notifyGithub("old/garden")).toEqual([]);
+    expect(service.notifyGithub("new/garden")).toEqual(["tour"]);
+    service.stop();
+  });
 });

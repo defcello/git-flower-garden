@@ -13,7 +13,7 @@ import { buildFixture, fixtureGit } from "./builder.ts";
 import {
   crissCross,
   forkMerge,
-  gardenTour,
+  artProof,
   oldBranchHead,
   threeHeads,
 } from "./fixtures.ts";
@@ -33,7 +33,7 @@ export async function startDemo(
   const directory = await mkdtemp(join(tmpdir(), "git-garden-demo-"));
   try {
     const repos = [
-      { id: "garden-tour", label: "Garden tour", spec: gardenTour },
+      { id: "garden-tour", label: "Garden tour", spec: artProof },
       { id: "fork-merge", label: "Fork and merge", spec: forkMerge },
       { id: "criss-cross", label: "Criss-cross merge", spec: crissCross },
       { id: "three-heads", label: "Three heads", spec: threeHeads },

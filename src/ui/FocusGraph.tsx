@@ -6,6 +6,8 @@ import {
   useState,
 } from "react";
 import type { GraphJson, GraphNodeJson } from "../api/types.ts";
+import { BotanicalGraph } from "./BotanicalGraph.tsx";
+import type { Renderer } from "./botanical.ts";
 import { GraphSvg, graphWidth } from "./GraphSvg.tsx";
 
 const MIN_SCALE = 0.3;
@@ -21,6 +23,7 @@ interface Camera {
 }
 
 interface FocusGraphProps {
+  renderer: Renderer;
   graph: GraphJson;
   label: string;
   selectedOid: string | null;
@@ -53,6 +56,7 @@ const clamp = (v: number, lo: number, hi: number) =>
  */
 export function FocusGraph(props: FocusGraphProps) {
   const { graph } = props;
+  const Drawing = props.renderer === "technical" ? GraphSvg : BotanicalGraph;
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
   // Null until the container is first measured; the tree is then framed once
@@ -234,7 +238,8 @@ export function FocusGraph(props: FocusGraphProps) {
             {above} commit{above === 1 ? "" : "s"} above · Fit
           </button>
         )}
-        <GraphSvg
+        <Drawing
+          compositor={props.renderer === "svg" ? "svg" : "canvas"}
           graph={graph}
           label={props.label}
           selectedOid={props.selectedOid}

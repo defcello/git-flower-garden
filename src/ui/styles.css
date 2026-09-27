@@ -644,3 +644,337 @@ code,
 .focus-graph.unframed .graph {
   visibility: hidden;
 }
+
+/* P2-A: static art studies. These are explicit previews, not live weather. */
+.preview-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.preview-control select {
+  max-width: 190px;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: var(--card);
+  color: var(--ink);
+}
+.botanical {
+  --bg: #f5f4eb;
+  --card: #fffef8;
+  --ink: #243326;
+  --muted: #4c604e;
+  --line: #bac8b2;
+  --accent: #305e3c;
+  --boundary: #9a3b2a;
+  --worktree: #c28a2c;
+  min-height: 100vh;
+  position: relative;
+  isolation: isolate;
+  color: var(--ink);
+  color-scheme: light;
+}
+.landscape,
+.landscape > div {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+.landscape {
+  z-index: -3;
+  overflow: hidden;
+  background: #9fccef;
+}
+.landscape-background,
+.landscape-hill {
+  background-image: url("./assets/blue-ridge-day.png");
+  background-position: center bottom;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+.landscape-background {
+  clip-path: polygon(0 0, 100% 0, 100% 76%, 0 79%);
+  filter: saturate(0.88) contrast(0.97);
+}
+.landscape-hill {
+  z-index: 1;
+  clip-path: polygon(
+    0 72%,
+    18% 68%,
+    48% 70%,
+    72% 69%,
+    100% 75%,
+    100% 100%,
+    0 100%
+  );
+  filter: saturate(1.08) contrast(1.04);
+}
+.landscape-vignette {
+  z-index: 2;
+  background:
+    radial-gradient(ellipse at 50% 43%, transparent 45%, #18371324 100%),
+    linear-gradient(to bottom, transparent 76%, #18371322);
+}
+.lighting-dawn .landscape {
+  filter: sepia(0.25) saturate(0.75) brightness(0.9);
+}
+.lighting-dusk .landscape {
+  filter: sepia(0.3) saturate(0.7) brightness(0.65);
+}
+.lighting-night .landscape {
+  filter: saturate(0.4) brightness(0.28);
+}
+.lighting-dawn .landscape-vignette {
+  background: linear-gradient(110deg, #f8c7a970, #988dcc20 65%, transparent);
+}
+.lighting-dusk .landscape-vignette {
+  background: linear-gradient(250deg, #ed9b6b75, #716b9830 65%, transparent);
+}
+.lighting-night .landscape-vignette {
+  background: linear-gradient(#142d5a70, #1e315a20);
+}
+.botanical .topbar,
+.botanical .art-notice {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out;
+}
+.botanical:hover .topbar,
+.botanical:focus-within .topbar,
+.botanical:hover .art-notice,
+.botanical:focus-within .art-notice {
+  opacity: 1;
+  transform: none;
+}
+.botanical .topbar {
+  background: #fffef8dc;
+  border-color: #ffffff80;
+  backdrop-filter: blur(12px);
+}
+.botanical .art-notice {
+  position: fixed;
+  z-index: 12;
+  left: 20px;
+  bottom: 18px;
+  width: min(720px, calc(100vw - 40px));
+  margin: 0;
+  background: #fffef8dc;
+  backdrop-filter: blur(12px);
+}
+.botanical .garden-scene {
+  position: relative;
+  display: block;
+  height: calc(100vh - 1px);
+  min-height: 680px;
+  padding: 0;
+  overflow: hidden;
+  perspective: 1100px;
+}
+.botanical .garden-scene .plot {
+  position: absolute;
+  z-index: var(--plant-z);
+  left: var(--plant-x);
+  top: var(--plant-y);
+  width: 150px;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: translate(-25%, -100%) scale(var(--plant-scale));
+  transform-origin: center bottom;
+  filter: drop-shadow(8px 11px 7px #152d1738);
+  transition:
+    filter 180ms ease-out,
+    transform 220ms ease-out;
+}
+.botanical .garden-scene .plot:hover,
+.botanical .garden-scene .plot:focus-within {
+  z-index: 1000;
+  filter: drop-shadow(10px 15px 10px #152d174d);
+  transform: translate(-25%, -100%) scale(calc(var(--plant-scale) * 1.06));
+}
+.botanical .garden-scene .plot h2,
+.botanical .garden-scene .plot .status {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+}
+.botanical .garden-scene .plot h2 {
+  z-index: 7;
+  top: 2px;
+  right: 8px;
+  padding: 8px 12px;
+  border-radius: 10px 10px 0 0;
+  background: #fffef8e8;
+  backdrop-filter: blur(9px);
+}
+.botanical .garden-scene .plot .status {
+  position: absolute;
+  z-index: 7;
+  top: 39px;
+  right: 8px;
+  max-width: 330px;
+  padding: 7px 12px;
+  border-radius: 10px 0 10px 10px;
+  background: #fffef8e8;
+  box-shadow: 0 8px 22px #213f2524;
+  backdrop-filter: blur(9px);
+}
+.botanical .garden-scene .plot:hover h2,
+.botanical .garden-scene .plot:focus-within h2,
+.botanical .garden-scene .plot:hover .status,
+.botanical .garden-scene .plot:focus-within .status {
+  opacity: 1;
+  pointer-events: auto;
+}
+.botanical .garden-scene .plot-graph {
+  max-height: none;
+  overflow: visible;
+  pointer-events: none;
+}
+.botanical .garden-scene .botanical-graph,
+.botanical .garden-scene .botanical-overlay {
+  pointer-events: none;
+}
+.botanical .garden-scene .commit .hit {
+  pointer-events: all;
+}
+.botanical .garden-scene .botanical-overlay .commit text {
+  display: none;
+}
+.botanical .garden-scene .botanical-overlay .commit .hit {
+  /* The normal row spans the label column. In the landscape that invisible
+     rectangle must not cover a neighboring plant. */
+  width: 150px;
+}
+.botanical .garden-scene .focus-button {
+  background: #fffef8e8;
+  backdrop-filter: blur(9px);
+}
+.botanical .garden-scene .placeholder {
+  min-width: 260px;
+  padding: 24px;
+  border-radius: 14px;
+  background: #fffef8d9;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+.botanical .garden-scene .plot:focus-within .placeholder {
+  opacity: 1;
+}
+.botanical .drawer,
+.botanical .focus-side,
+.botanical .focus-head,
+.botanical .toolbar button {
+  background: #fffef8e8;
+  backdrop-filter: blur(12px);
+}
+.botanical .focus-main {
+  padding-top: 6px;
+}
+.botanical .focus-graph {
+  background: transparent;
+  border-color: transparent;
+}
+.botanical .toolbar {
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+.botanical .focus-graph-wrap:hover .toolbar,
+.botanical .focus-graph-wrap:focus-within .toolbar {
+  opacity: 1;
+}
+@media (hover: none) {
+  .botanical .topbar,
+  .botanical .art-notice,
+  .botanical .toolbar {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .botanical .garden-scene .plot,
+  .botanical .topbar,
+  .botanical .art-notice {
+    transition: none;
+  }
+}
+@media (max-width: 700px) {
+  .botanical .garden-scene {
+    min-height: 760px;
+    overflow-x: hidden;
+  }
+  .botanical .garden-scene .plot {
+    --plant-scale: 0.52 !important;
+  }
+}
+.botanical::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.art-notice {
+  margin: 16px 20px 0;
+  padding: 10px 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 12px;
+}
+.botanical .plot {
+  background: #fffef8ed;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px #213f2526;
+}
+.botanical .focus-head {
+  padding: 12px;
+  background: var(--card);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+.botanical .focus-graph {
+  background: #fffef8ed;
+}
+.botanical-graph {
+  position: relative;
+  flex: none;
+}
+.botanical-graph > canvas,
+.botanical-graph > svg {
+  position: absolute;
+  inset: 0;
+}
+.botanical-art,
+.botanical-graph > canvas {
+  pointer-events: none;
+}
+.botanical-overlay .node,
+.botanical-overlay .ring,
+.botanical-overlay .edge,
+.botanical-overlay .tail line {
+  visibility: hidden;
+}
+.botanical-overlay .commit text {
+  paint-order: stroke;
+  stroke: #fffef8;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+@media (max-width: 1100px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+  .topbar .summary {
+    flex: 1;
+    min-width: 220px;
+  }
+}

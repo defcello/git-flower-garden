@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { CSSProperties } from "react";
 import type {
   GraphJson,
   GraphNodeJson,
@@ -13,6 +14,8 @@ import type {
 } from "../api/types.ts";
 import { useGardenData } from "./api.ts";
 import { Details } from "./Details.tsx";
+import { BotanicalGraph } from "./BotanicalGraph.tsx";
+import type { Renderer, Lighting } from "./botanical.ts";
 import { FocusGraph } from "./FocusGraph.tsx";
 import {
   describeNode,
@@ -41,6 +44,8 @@ export const FOCUS_BUTTON = 44;
 
 export function App() {
   const { repositories, graphs, connectionError, fetchedAt } = useGardenData();
+  const [renderer, setRenderer] = useState<Renderer>("canvas");
+  const [lighting, setLighting] = useState<Lighting>("day");
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
@@ -111,7 +116,16 @@ export function App() {
     : undefined;
 
   return (
-    <div className="app">
+    <div
+      className={`app${renderer !== "technical" ? ` botanical lighting-${lighting}` : ""}`}
+    >
+      {renderer !== "technical" && (
+        <div className="landscape" aria-hidden="true">
+          <div className="landscape-background" />
+          <div className="landscape-hill" />
+          <div className="landscape-vignette" />
+        </div>
+      )}
       <header className="topbar">
         <h1>git-garden</h1>
         {repositories && (
@@ -121,8 +135,47 @@ export function App() {
             {timeZone}
           </span>
         )}
+        <label className="preview-control">
+          View
+          <select
+            aria-label="Renderer"
+            value={renderer}
+            onChange={(event) => {
+              setRenderer(event.target.value as Renderer);
+            }}
+          >
+            <option value="technical">Technical</option>
+            <option value="canvas">Garden preview · Canvas</option>
+            <option value="svg">Garden preview · SVG</option>
+          </select>
+        </label>
+        {renderer !== "technical" && (
+          <label className="preview-control">
+            Lighting study
+            <select
+              aria-label="Lighting study"
+              value={lighting}
+              onChange={(event) => {
+                setLighting(event.target.value as Lighting);
+              }}
+            >
+              <option value="day">Day</option>
+              <option value="dawn">Dawn</option>
+              <option value="dusk">Dusk</option>
+              <option value="night">Night</option>
+            </select>
+          </label>
+        )}
         <Legend />
       </header>
+      {renderer !== "technical" && (
+        <div className="art-notice" role="note">
+          Art preview · {lighting} lighting study, not live conditions. Flowers
+          = branch heads · leaves = commits · fruit = tags · gold markers =
+          worktrees. Dashed stems hide history; red boundaries mean missing
+          history.
+        </div>
+      )}
       {repositories?.display.notice && (
         <div className="banner notice" role="note">
           {repositories.display.notice}
@@ -175,6 +228,7 @@ export function App() {
         </div>
       ) : focused ? (
         <FocusView
+          renderer={renderer}
           repo={focused}
           graph={graphs.get(focused.id)}
           timeZone={timeZone}
@@ -190,9 +244,13 @@ export function App() {
           onExit={exitFocus}
         />
       ) : (
-        <main className="garden" aria-label="All repositories">
-          {repos.map((repo) => (
+        <main
+          className={`garden${renderer === "technical" ? "" : " garden-scene"}`}
+          aria-label="All repositories"
+        >
+          {repos.map((repo, index) => (
             <Plot
+              renderer={renderer}
               key={repo.id}
               repo={repo}
               graph={graphs.get(repo.id)}
@@ -205,6 +263,8 @@ export function App() {
                 setSelection({ repoId: repo.id, oid });
               }}
               onHover={onHover}
+              sceneIndex={index}
+              sceneCount={repos.length}
             />
           ))}
         </main>
@@ -352,6 +412,7 @@ function PlotBody({
 }
 
 interface PlotProps {
+  renderer: Renderer;
   repo: RepositoryStatusJson;
   graph: GraphJson | undefined;
   now: number;
@@ -359,9 +420,23 @@ interface PlotProps {
   onFocus: () => void;
   onSelect: (oid: string) => void;
   onHover: (node: GraphNodeJson | null, event?: React.PointerEvent) => void;
+  sceneIndex: number;
+  sceneCount: number;
 }
 
+const SCENE_POSITIONS = [
+  { x: 13, y: 78, scale: 0.84 },
+  { x: 27, y: 75, scale: 0.76 },
+  { x: 45, y: 74, scale: 0.94 },
+  { x: 65, y: 64, scale: 0.74 },
+  { x: 84, y: 71, scale: 0.86 },
+  { x: 19, y: 92, scale: 1.32 },
+  { x: 49, y: 89, scale: 1.22 },
+  { x: 77, y: 93, scale: 1.38 },
+] as const;
+
 function Plot({
+  renderer,
   repo,
   graph,
   now,
@@ -369,18 +444,31 @@ function Plot({
   onFocus,
   onSelect,
   onHover,
+  sceneIndex,
+  sceneCount,
 }: PlotProps) {
+  const Drawing = renderer === "technical" ? GraphSvg : BotanicalGraph;
   const titleId = `plot-title-${repo.id}`;
   // Center the circular button over the tree's lanes, not over the text column.
   const buttonLeft = graph
     ? Math.max(4, PLOT_PADDING + graph.size.width / 2 - FOCUS_BUTTON / 2)
     : PLOT_PADDING;
+  const position = SCENE_POSITIONS[sceneIndex % SCENE_POSITIONS.length]!;
+  const cycle = Math.floor(sceneIndex / SCENE_POSITIONS.length);
+  const sceneStyle = {
+    "--plant-x": `${String(position.x + cycle * 3)}%`,
+    "--plant-y": `${String(position.y)}%`,
+    "--plant-scale": String(position.scale * Math.max(0.72, 1 - cycle * 0.12)),
+    "--plant-z": String(Math.round(position.y * 10)),
+    "--plant-count": String(sceneCount),
+  } as CSSProperties;
   return (
     <section
       className="plot"
       data-plot={repo.id}
       tabIndex={0}
       aria-labelledby={titleId}
+      style={renderer === "technical" ? undefined : sceneStyle}
       onKeyDown={(event) => {
         if (event.key === "Enter" && event.target === event.currentTarget) {
           // Stop this keystroke here: focus moves to the "−" button, which
@@ -404,7 +492,8 @@ function Plot({
       <PlotBody repo={repo} graph={graph}>
         {graph && (
           <div className="plot-graph">
-            <GraphSvg
+            <Drawing
+              compositor={renderer === "svg" ? "svg" : "canvas"}
               graph={graph}
               label={repo.label}
               selectedOid={selectedOid}
@@ -419,6 +508,7 @@ function Plot({
 }
 
 interface FocusViewProps {
+  renderer: Renderer;
   repo: RepositoryStatusJson;
   graph: GraphJson | undefined;
   timeZone: string;
@@ -447,6 +537,7 @@ function FocusView(props: FocusViewProps) {
         <PlotBody repo={repo} graph={graph}>
           {graph && (
             <FocusGraph
+              renderer={props.renderer}
               graph={graph}
               label={repo.label}
               selectedOid={selectedOid}

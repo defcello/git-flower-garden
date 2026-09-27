@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "scope": "P2-A art direction proof; not a full production asset library",
+  "assets": [
+    {
+      "id": "botanical-atlas",
+      "file": "botanical-atlas.png",
+      "author": "Generated for git-garden with OpenAI image generation, directed by Codex",
+      "source": "Original text-to-image generation; no reference images supplied",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-09-26",
+        "tool": "built-in image_gen",
+        "prompt": "docs/art/prompts.md#botanical-atlas",
+        "edits": "None; original RGBA output copied unchanged"
+      },
+      "dimensions": { "width": 1254, "height": 1254 },
+      "alpha": true,
+      "anchorConvention": "Normalized cell coordinates; rendering uses each cell center",
+      "cells": [
+        {
+          "name": "coral-flower",
+          "rect": [0, 0, 627, 627],
+          "anchor": [0.5, 0.5],
+          "displayPixels": 32
+        },
+        {
+          "name": "lavender-flower",
+          "rect": [627, 0, 627, 627],
+          "anchor": [0.5, 0.5],
+          "displayPixels": 32
+        },
+        {
+          "name": "leaf-pair",
+          "rect": [0, 627, 627, 627],
+          "anchor": [0.5, 0.5],
+          "displayPixels": 30
+        },
+        {
+          "name": "golden-fruit",
+          "rect": [627, 627, 627, 627],
+          "anchor": [0.5, 0.5],
+          "displayPixels": 25
+        }
+      ],
+      "scaleVariants": [
+        "One source atlas; runtime resampling at bounded DPR up to 2"
+      ],
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Maintainer asset review remains open. No claim of exclusive copyright in generated output."
+    },
+    {
+      "id": "blue-ridge-day",
+      "file": "blue-ridge-day.png",
+      "author": "Generated for git-garden with OpenAI image generation, directed by Codex",
+      "source": "Original text-to-image generation; illustrative Blue Ridge setting, not a geolocated photograph",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-09-26",
+        "tool": "built-in image_gen",
+        "prompt": "docs/art/prompts.md#blue-ridge-backdrop",
+        "edits": "None; CSS color grading used only for labeled lighting studies"
+      },
+      "dimensions": { "width": 1672, "height": 941 },
+      "alpha": false,
+      "anchor": [0.5, 1],
+      "scaleVariants": [
+        "One source; CSS cover at viewport size, including upscaled 4K review"
+      ],
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Maintainer asset review remains open. No claim of exclusive copyright in generated output."
+    }
+  ]
+}

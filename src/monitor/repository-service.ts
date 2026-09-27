@@ -468,14 +468,17 @@ export class RepositoryService {
     this.fetches.setLimit(next.monitor.maxConcurrentFetches);
     const nextById = new Map(next.repositories.map((r) => [r.id, r]));
     const started: string[] = [];
+    const replacedRevisions = new Map<string, number>();
     for (const [id, entry] of this.entries) {
       const repo = nextById.get(id);
       const sameSource =
         repo !== undefined &&
         repo.path === entry.config.path &&
         repo.url === entry.config.url &&
-        repo.remotes.join("\n") === entry.config.remotes.join("\n");
+        repo.remotes.join("\n") === entry.config.remotes.join("\n") &&
+        repo.github === entry.config.github;
       if (!sameSource) {
+        if (repo !== undefined) replacedRevisions.set(id, entry.view.revision);
         this.stopEntry(entry);
         this.entries.delete(id);
       } else {
@@ -490,6 +493,10 @@ export class RepositoryService {
       let entry = this.entries.get(repo.id);
       if (!entry) {
         entry = this.add(repo);
+        entry.view = {
+          ...entry.view,
+          revision: replacedRevisions.get(repo.id) ?? entry.view.revision,
+        };
         started.push(repo.id);
       }
       ordered.set(repo.id, entry);

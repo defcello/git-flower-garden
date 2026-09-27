@@ -84,6 +84,9 @@ export function useGardenData(): GardenData {
       setFetchedAt(Date.now());
       setConnectionError(null);
       const ids = new Set(repos.repositories.map((r) => r.id));
+      const graphIds = new Set(
+        repos.repositories.filter(needsGraph).map((repo) => repo.id),
+      );
       for (const id of [...requested.current.keys()]) {
         if (!ids.has(id)) {
           requested.current.delete(id);
@@ -91,9 +94,9 @@ export function useGardenData(): GardenData {
         }
       }
       setGraphs((previous) =>
-        [...previous.keys()].every((id) => ids.has(id))
+        [...previous.keys()].every((id) => graphIds.has(id))
           ? previous
-          : new Map([...previous].filter(([id]) => ids.has(id))),
+          : new Map([...previous].filter(([id]) => graphIds.has(id))),
       );
       for (const repo of repos.repositories.filter(needsGraph)) {
         const key = `${String(repo.revision)}|${String(repos.display.windowStartMs)}`;

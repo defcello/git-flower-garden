@@ -336,3 +336,11 @@ export const demoFixtures = {
   gardenTour,
 } as const;
 export type DemoFixtureName = keyof typeof demoFixtures;
+
+/** P2-A review scene: the tour plus coincident heads, without extra commits. */
+export const artProof: FixtureSpec = {
+  ...gardenTour,
+  description:
+    "Art proof: fork, merge, release fruit, coincident heads, and worktree marker.",
+  branches: { ...gardenTour.branches, release: "m3", stable: "m3" },
+};

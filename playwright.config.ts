@@ -4,7 +4,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 // Use a browser that is already installed: Edge ships with Windows; GitHub's
 // macOS and Ubuntu runners include Chrome. No browser download is needed.
-const channel = process.platform === "win32" ? "msedge" : "chrome";
+const channel =
+  process.env.GARDEN_E2E_CHANNEL ??
+  (process.platform === "win32" ? "msedge" : "chrome");
 const port = 4791;
 
 // Shared with the fixture server so tests can change repositories live.

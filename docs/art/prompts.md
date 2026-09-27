@@ -1,0 +1,11 @@
+# Original art prompts
+
+Generated with the built-in image generation tool on 2026-09-26. No reference images or third-party artwork were supplied. The returned dimensions differ from the requested dimensions; the manifest records actual pixels. Files are copied unchanged, including atlas alpha.
+
+## Botanical atlas
+
+Use case: stylized-concept. Asset type: original botanical sprite atlas for git-garden, a calm Git visualization. Create a square 1024x1024 transparent PNG with exactly four isolated objects in a precise 2x2 grid of equal 512x512 cells, each object centered in its cell with 80px empty padding. Top left: coral pink five-petal wildflower seen face-on, golden pollen center, no stem. Top right: lavender blue five-petal wildflower face-on, golden pollen center, no stem. Bottom left: one paired set of lush green leaves meeting at center, extending left and right, no long stem. Bottom right: single warm golden orange berry with a tiny green calyx. Dimensional softly lit lightly stylized realism, high-quality original animated-film botanical materials, delicate veins, soft subsurface light from upper left, smooth clean silhouettes legible when tiny. No text, no borders, no grid lines, no background, no ground shadows, no additional objects. Actual transparent background. These are compositing sprites, not a scene.
+
+## Blue Ridge backdrop
+
+Use case: stylized-concept. Asset type: original landscape backdrop for git-garden botanical Git visualization. Wide 16:9 3840x2160 composition. A serene manicured grassy hill in the Blue Ridge Mountains in clear daylight, softly dimensional stylized realism with warm animated-film quality and original natural scenery. Open soft blue sky occupies top 55 percent, layered rounded Blue Ridge mountain silhouettes in hazy indigo and blue-green across middle distance, gently curved smooth moss-green lawn fills bottom 30 percent, delicate blades only along very bottom corners. Subtle warm sunlight from upper left, atmospheric perspective, refined soft natural materials. Keep center and foreground uncluttered for compositing small plants and graph controls. No trees, no flowers, no bushes, no buildings, no paths, no people, no text, no logo. Artwork serves as a quiet backdrop; no graph or interface drawn into it.

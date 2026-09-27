@@ -64,7 +64,7 @@ Individual commands:
 | Command | Purpose |
 | --- | --- |
 | `npm test` | Run unit and Git fixture tests once (`npm run test:watch` to watch) |
-| `npm run test:e2e` | Browser tests with Playwright, using installed Chrome or Edge (build first) |
+| `npm run test:e2e` | Browser tests with Playwright, using installed Chrome or Edge (build first); set `GARDEN_E2E_CHANNEL=chromium` after `npx playwright install chromium` when a system browser is unavailable |
 | `npm run dev:ui` | Vite dev server for the UI, proxying `/api` to a running service |
 | `npm run lint` | ESLint with type-aware rules |
 | `npm run typecheck` | TypeScript over sources and tests |
@@ -87,3 +87,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how changes are made, and
 ## License
 
 [MIT](LICENSE)
+
+### Garden art preview (P2-A)
+
+The View menu now offers **Garden preview · Canvas** and **Garden preview · SVG**, using original botanical artwork over the same Git graph. The Technical view remains the default. Try `node dist/cli.js demo` after building, then choose a garden preview and a day, dawn, dusk, or night lighting study. These are static art studies, not live weather. See the [style sheet, provenance, and review notes](docs/art/README.md). Phase 2 is in progress; astronomy, weather, motion, final scene composition, and release soak testing remain unfinished.
