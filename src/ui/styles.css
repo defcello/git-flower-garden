@@ -1047,7 +1047,7 @@ code,
   height: 0;
   pointer-events: none;
 }
-/* A soil bed: the plot exists, and nothing grows in it yet. */
+/* A soil bed, only for a repository with no commits yet. */
 .botanical .garden-scene .plant-bed {
   position: absolute;
   left: -34px;
@@ -1073,12 +1073,16 @@ code,
 }
 .botanical .garden-scene .plant-stake {
   position: absolute;
-  left: 20px;
+  left: -1.5px;
   bottom: -6px;
   width: 3px;
   height: 34px;
   border-radius: 2px;
   background: linear-gradient(90deg, #a07a52, #6f5236);
+}
+/* Beside the bed rather than in it. */
+.botanical .garden-scene .with-bed .plant-stake {
+  left: 20px;
 }
 .botanical .garden-scene .stake-tag {
   position: absolute;

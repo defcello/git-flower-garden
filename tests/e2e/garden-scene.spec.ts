@@ -127,7 +127,7 @@ async function exposedPoint(page: Page, id: string) {
     const plant = document.querySelector(`[data-plot="${plotId}"] .plant`);
     if (!plant) return null;
     const targets = plant.querySelectorAll(
-      ".commit .hit, .plant-bed, .plant-stake",
+      ".commit .hit, .plant-bed, .plant-stake, .stake-tag",
     );
     for (const target of targets) {
       const box = target.getBoundingClientRect();
@@ -276,11 +276,14 @@ test("empty and broken repositories stay visible without text, and are targets t
   await expect(empty.locator(".plant-bed")).toBeVisible();
   await expect(empty.locator(".stake-tag")).toHaveCount(0);
   const missing = page.locator('[data-plot="missing"]');
-  await expect(missing.locator(".plant-bed")).toBeVisible();
+  // Only a repository with no commits gets a soil bed (maintainer
+  // decision); an unreadable one is just its stake, never invisible.
+  await expect(missing.locator(".plant-bed")).toHaveCount(0);
+  await expect(missing.locator(".stake-tag")).toBeVisible();
   await expect(missing.locator(".stake-tag")).toHaveText("✕");
-  // Hovering the bed explains it; clicking it focuses.
+  // Hovering the stake explains it; hovering the bed too, and clicking focuses.
   const point = await exposedPoint(page, "missing");
-  if (!point) throw new Error("missing bed is not exposed");
+  if (!point) throw new Error("missing stake is not exposed");
   await page.mouse.move(point.x, point.y);
   await expect.poll(() => lit(page)).toEqual(["missing"]);
   await expect(missing.locator(".status")).toContainText("Path not found");

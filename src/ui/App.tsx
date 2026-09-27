@@ -512,9 +512,7 @@ function Plot({
         {slot && (
           <PlantMarker
             repo={repo}
-            drawable={
-              graph !== undefined && repo.counts?.reachableCommits !== 0
-            }
+            empty={repo.counts?.reachableCommits === 0}
             center={lanes / 2}
           />
         )}
@@ -541,20 +539,22 @@ function Plot({
  * Garden-view health without text (roadmap section 7, "Overview in the garden
  * renderer"). Names and status stay hover/focus-only so the unattended scene
  * reads as a natural garden; problems are still visible at a glance:
- * - a soil bed where there is nothing to draw (empty, loading, unreadable),
- *   so a plot never disappears and an empty bed looks intentional;
+ * - a soil bed only for a repository with no commits at all, so an empty
+ *   plot looks intentional (maintainer decision: otherwise the plant's heads
+ *   and stems represent it, with no placeholder);
  * - a marker stake carrying the state's glyph (never color alone) for any
- *   state other than healthy, including an unreachable remote.
+ *   state other than healthy, including an unreachable remote, so an
+ *   unreadable repository with nothing to draw is still never invisible.
  * Stale and incomplete plants are also desaturated (see .plot.wilting).
  */
 function PlantMarker({
   repo,
-  drawable,
+  empty,
   center,
 }: {
   repo: RepositoryStatusJson;
-  /** Whether a plant is drawn for this repository. */
-  drawable: boolean;
+  /** The repository has no commits at all. */
+  empty: boolean;
   /** Horizontal center of the tree's lanes, in the plot's coordinates. */
   center: number;
 }) {
@@ -562,15 +562,15 @@ function PlantMarker({
   const remoteDown = repo.remote?.state === "error";
   const glyph =
     state !== "ready" ? STATE_TEXT[state].glyph : remoteDown ? "⊘" : null;
-  if (drawable && glyph === null) return null;
+  if (!empty && glyph === null) return null;
   return (
     <div
-      className={`plant-marker marker-${state}${remoteDown ? " marker-remote-down" : ""}`}
+      className={`plant-marker marker-${state}${remoteDown ? " marker-remote-down" : ""}${empty ? " with-bed" : ""}`}
       style={{ left: center }}
       data-state={state}
       aria-hidden="true"
     >
-      {!drawable && <span className="plant-bed" />}
+      {empty && <span className="plant-bed" />}
       {glyph !== null && (
         <span className="plant-stake">
           <span className="stake-tag">{glyph}</span>

@@ -31,7 +31,7 @@ Codex built this review candidate; I reviewed and corrected it (below).
 | Finding | Fix |
 | --- | --- |
 | The unreviewed garden preview had become the default view, while the README said Technical remains the default. Four Phase 1 browser tests failed, and the "graph truth" test compared Canvas against Canvas instead of against the technical view | Technical is the default again; a viewer's choice is remembered in that browser (`localStorage`, failure-safe) |
-| On the hillside, empty or unreadable repositories rendered as nothing at all, so a broken source was invisible (roadmap principle 4, clear freshness) | Health is shown without text: a repository with nothing to draw is a soil bed; an unhealthy source or unreachable remote has a marker stake with its state glyph; a last-known plant is desaturated. Names and status stay hover/focus/tap-only (see below) |
+| On the hillside, empty or unreadable repositories rendered as nothing at all, so a broken source was invisible (roadmap principle 4, clear freshness) | Health is shown without text: a repository with no commits is a soil bed (only then, per the maintainer: otherwise the plant itself is enough); an unhealthy source or unreachable remote has a marker stake with its state glyph; a last-known plant is desaturated. Names and status stay hover/focus/tap-only (see below) |
 | The hover reveal was hard to read: names were cut to one or two letters (the card layout's `max-width` inside a 150 px plant), the name card covered the circular `+`, and on empty or unreadable plots a second placeholder card overlapped the status card | Name and status cards sit beside the `+` at full width (mirrored for plants near the right edge); the status card is the single card and carries the explanation ("no commits yet", or the error); placeholder text stays for assistive technology |
 | The circular `+` shrank to 33–41 px with plant scaling (section 7 requires at least 44×44) | Counter-scaled to keep an effective 44 px target |
 | Nine or more repositories wrapped around eight fixed positions and overlapped | Superseded: the hillside now has 64 fixed positions, and dense overlap is intended (below) |
@@ -50,8 +50,8 @@ states that the technical renderer shows names and status always, and the
 garden renderer only on hover, focus, or tap, with non-text health cues.
 
 `tests/e2e/garden-scene.spec.ts` covers the technical default and remembered
-choice, a text-free unattended scene, soil beds and marker stakes for empty
-and missing repositories, and the 64-position hillside (below). Codex's
+choice, a text-free unattended scene, a soil bed for the empty repository
+and a marker stake alone for the missing one, and the 64-position hillside (below). Codex's
 `tests/e2e/botanical.spec.ts` checks graph truth across all three renderers
 (now against the technical view), selection and camera across switches,
 coincident refs and worktrees, atlas-failure fallback, and the lighting and
