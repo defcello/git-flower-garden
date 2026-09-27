@@ -15,7 +15,7 @@ import type {
 import { useGardenData } from "./api.ts";
 import { Details } from "./Details.tsx";
 import { BotanicalGraph } from "./BotanicalGraph.tsx";
-import type { Renderer, Lighting } from "./botanical.ts";
+import type { Renderer } from "./botanical.ts";
 import { FocusGraph } from "./FocusGraph.tsx";
 import {
   describeNode,
@@ -31,6 +31,15 @@ import {
   hillsideSlots,
   type HillsideSlot,
 } from "./hillside.ts";
+import {
+  SKY_CHOICES,
+  describeSky,
+  landscapeStyle,
+  parseSkyChoice,
+  useSky,
+  type SkyChoice,
+} from "./sky.ts";
+import { SkyLayer } from "./SkyLayer.tsx";
 
 interface Selection {
   repoId: string;
@@ -52,7 +61,7 @@ export function App() {
   // The technical view stays the default until the garden is accepted; a
   // viewer's own choice is remembered in this browser only.
   const [renderer, setRenderer] = useState<Renderer>(loadRenderer);
-  const [lighting, setLighting] = useState<Lighting>("day");
+  const [skyChoice, setSkyChoice] = useState<SkyChoice>("live");
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
@@ -61,6 +70,11 @@ export function App() {
   const repos = repositories?.repositories ?? [];
   const timeZone = repositories?.display.timeZone ?? "UTC";
   const focused = repos.find((r) => r.id === focusedId);
+  const environment = repositories?.display.environment ?? null;
+  const sky = useSky(
+    renderer !== "technical" ? environment : null,
+    renderer !== "technical" ? skyChoice : "live",
+  );
   // The hillside has 64 fixed plant slots; dense planting is intended (focus
   // view isolates one plant). Larger gardens use the card layout.
   const sceneMode =
@@ -128,12 +142,17 @@ export function App() {
     : undefined;
 
   return (
-    <div
-      className={`app${renderer !== "technical" ? ` botanical lighting-${lighting}` : ""}`}
-    >
+    <div className={`app${renderer !== "technical" ? " botanical" : ""}`}>
       {renderer !== "technical" && (
-        <div className="landscape" aria-hidden="true">
+        <div
+          className="landscape"
+          aria-hidden="true"
+          data-sky={sky ? (sky.snapshot.preview ?? "live") : "day"}
+          style={sky ? landscapeStyle(sky.state) : undefined}
+        >
           <div className="landscape-background" />
+          {sky && <div className="landscape-glow" />}
+          {sky && <SkyLayer state={sky.state} />}
           <div className="landscape-hill" />
           <div className="landscape-vignette" />
         </div>
@@ -165,18 +184,21 @@ export function App() {
         </label>
         {renderer !== "technical" && (
           <label className="preview-control">
-            Lighting study
+            Sky
             <select
-              aria-label="Lighting study"
-              value={lighting}
+              aria-label="Sky"
+              value={skyChoice}
               onChange={(event) => {
-                setLighting(event.target.value as Lighting);
+                setSkyChoice(parseSkyChoice(event.target.value));
               }}
             >
-              <option value="day">Day</option>
-              <option value="dawn">Dawn</option>
-              <option value="dusk">Dusk</option>
-              <option value="night">Night</option>
+              {SKY_CHOICES.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {value === "live" && !environment
+                    ? "Live · no location configured"
+                    : label}
+                </option>
+              ))}
             </select>
           </label>
         )}
@@ -184,10 +206,16 @@ export function App() {
       </header>
       {renderer !== "technical" && (
         <div className="art-notice" role="note">
-          Art preview · {lighting} lighting study, not live conditions. Flowers
-          = branch heads · leaves = commits · fruit = tags · gold markers =
-          worktrees. Dashed stems hide history; red boundaries mean missing
-          history.
+          {sky?.snapshot.source === "preview" ? (
+            <strong className="sky-preview-badge">Sky preview</strong>
+          ) : null}{" "}
+          Art preview ·{" "}
+          {sky
+            ? `${sky.snapshot.source === "preview" ? "not live conditions: " : "live sky, "}${describeSky(sky)}.`
+            : "daytime backdrop; set a location under environment to follow the real sky."}{" "}
+          Flowers = branch heads · leaves = commits · fruit = tags · gold
+          markers = worktrees. Dashed stems hide history; red boundaries mean
+          missing history.
         </div>
       )}
       {repositories?.display.notice && (

@@ -17,7 +17,7 @@ The direction is a small wildflower garden with soft dimensional materials, warm
 | Unknown history | Red broken boundary | Rust `#9a3b2a` | Missing ancestry, never a normal root |
 | Grass | Fine soft blades on a smooth rolling hill | Golden olive highlights / deep green shadows | Decorative setting only |
 | Ridges | Layered rounded silhouettes with atmospheric haze | Desaturated indigo to pale blue | Decorative setting only |
-| Sky | Broad blue-to-cream gradient, soft cloud volumes | Day blue / warm horizon | Static lighting study only |
+| Sky | Broad blue-to-cream gradient, soft cloud volumes | Day blue / warm horizon | Graded from the live lighting model (ADR 0018) |
 
 ![Original atlas](../../src/ui/assets/botanical-atlas.png)
 
@@ -45,6 +45,6 @@ The maintainer reviewed the preview and accepted the direction on 2026-09-27, cl
 
 ## Verification
 
-`tests/e2e/botanical.spec.ts` compares OIDs, labels, and edge paths across all three renderers; preserves selected details and zoom through switches; verifies coincident ref/worktree inspection and image-load fallback; captures all four lighting studies at 1080p and 4K; and checks a narrow viewport. It also records a 2,000-node Canvas/SVG comparison using identical geometry and the same atlas. Timing evidence and limitations are recorded in ADR 0015.
+`tests/e2e/botanical.spec.ts` compares OIDs, labels, and edge paths across all three renderers; preserves selected details and zoom through switches; verifies coincident ref/worktree inspection and image-load fallback; captures the Sky previews (sunrise, noon, dusk, full moon, moonless night, daytime moon, polar night) at 1080p and 4K; and checks a narrow viewport. It also records a 2,000-node Canvas/SVG comparison using identical geometry and the same atlas. Timing evidence and limitations are recorded in ADR 0015.
 
 Regenerate the review images with `GARDEN_E2E_CHANNEL=chromium npx playwright test tests/e2e/botanical.spec.ts` (use an installed browser channel for your machine). Images are in Playwright's `test-results` directory. The screenshot matrix is review evidence, not a pixel-golden test or proof of aesthetic acceptance.

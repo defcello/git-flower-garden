@@ -113,8 +113,9 @@ conditions below.
    header. Before the UI first bundles this library (ADR 0018 step 1), the
    MIT notice must reach users, by keeping legal comments in the build or
    shipping a third-party notices file in the package, with a check in
-   `scripts/stage-release.ts`. Today only tests import it, so nothing is
-   bundled yet.
+   `scripts/stage-release.ts`. *Met (2026-09-27):* the staged package
+   includes `THIRD-PARTY-NOTICES.md`, generated from the vendored `LICENSE`
+   (and React's), and staging fails if a notice is missing or not MIT.
 4. **Upgrades are reviews.** To move the pin: check out the new commit,
    repeat steps 1 to 8 on the diff from `61dc070` (the template diff and
    capability search are the quickest high-value checks), rerun the

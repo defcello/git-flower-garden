@@ -7,6 +7,15 @@ change configuration or behavior, and the notes say how.
 
 ## Unreleased
 
+- **Real-time sky** in the garden view: set `environment.enabled` with your
+  latitude and longitude, and the sky follows the sun and moon, computed
+  offline (no location lookup, nothing sent anywhere). The Sky menu replaces
+  the four lighting studies with Live and a set of labelled previews
+  (sunrise, full moon, polar night, and more). The package now includes
+  `THIRD-PARTY-NOTICES.md`.
+  ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md),
+  [ADR 0019](docs/decisions/0019-astronomy-engine-review.md))
+
 - **Renamed to git-flower-garden.** The command is now `git-flower-garden`;
   there is no `git-garden` alias, because an unrelated npm package uses that
   name. Installing over an earlier release replaces the old command. On

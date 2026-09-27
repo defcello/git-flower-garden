@@ -234,6 +234,22 @@ decision:
 5. **Weather** in both tiers, with presets and particle caps.
 6. **Presets, measurements, and the P2-E soak.**
 
+## Progress
+
+- **Step 1, lighting model: done** (2026-09-27). `src/environment/`:
+  `environment.ts` (snapshot with an injectable clock), `lighting.ts`
+  (`LightingState`: panoramic projection, twilight, sky keyframes, sun
+  color, shadows, stars, moonlight, and the Moon's limb angle), and
+  `overrides.ts` (twelve developer previews). The configuration gains
+  `environment.latitude`, `longitude`, `elevationMeters`, and `timeZone`.
+  Until layered art exists, the garden view grades the flat backdrop from
+  `LightingState` (interpolating the four P2-A studies) and draws the Sun,
+  Moon, and stars above the far ridgeline. The painted upper-left sunlight
+  in that backdrop does not follow the Sun, which is what step 2 addresses.
+  The UI now bundles astronomy-engine; its notice ships in
+  `THIRD-PARTY-NOTICES.md` (ADR 0019, condition 3).
+- **Next: step 2, the art spike**, which needs the maintainer.
+
 ## Verification
 
 - Unit tests: astronomy results against published reference cases

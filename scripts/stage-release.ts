@@ -104,6 +104,26 @@ for (const [from, to] of [
   await mkdir(join(stage, to, ".."), { recursive: true });
   await cp(join(repoRoot, from), join(stage, to));
 }
+// The UI bundle keeps no license comments, so the notices of the
+// third-party code it contains ship beside it (ADR 0019, condition 3).
+const THIRD_PARTY = [
+  ["astronomy-engine (vendored, ADR 0019)", "vendor/astronomy-engine/LICENSE"],
+  ["react", "node_modules/react/LICENSE"],
+  ["react-dom", "node_modules/react-dom/LICENSE"],
+  ["scheduler (used by react-dom)", "node_modules/scheduler/LICENSE"],
+] as const;
+const notices = [
+  "# Third-party notices\n",
+  "The browser interface in `dist/ui` includes the following software.\n",
+];
+for (const [name, file] of THIRD_PARTY) {
+  const text = (await readFile(join(repoRoot, file), "utf8")).trim();
+  if (!/^MIT License/.test(text) || !/Copyright/.test(text))
+    throw new Error(`${file}: not the expected MIT notice`);
+  notices.push(`## ${name}\n\n\`\`\`text\n${text}\n\`\`\`\n`);
+}
+await writeFile(join(stage, "THIRD-PARTY-NOTICES.md"), notices.join("\n"));
+
 const readme = join(stage, "README.md");
 await writeFile(
   readme,
@@ -136,6 +156,7 @@ const manifest = {
     "docs/",
     "README.md",
     "LICENSE",
+    "THIRD-PARTY-NOTICES.md",
     "CHANGELOG.md",
     "git-flower-garden.schema.json",
     "git-flower-garden.example.json",

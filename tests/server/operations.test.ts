@@ -42,10 +42,11 @@ describe("demo mode", () => {
     const demo = await startDemo({ port: 0, uiDir: null });
     try {
       const body = (await getJson(`${demo.app.url}api/repositories`)) as {
-        display: { notice: string | null };
+        display: { notice: string | null; environment: unknown };
         repositories: { id: string; status: { state: string } }[];
       };
       expect(body.display.notice).toMatch(/^Demo mode/);
+      expect(body.display.environment).toBeNull();
       expect(body.repositories.map((r) => r.id)).toEqual([
         "garden-tour",
         "fork-merge",
@@ -60,6 +61,43 @@ describe("demo mode", () => {
       expect(graph?.graph.nodes.size).toBe(10); // same view as the static probe
     } finally {
       await demo.close();
+    }
+  });
+});
+
+describe("environment", () => {
+  it("gives the browser the configured place and zone, and nothing else", async () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        version: 1,
+        repositories: [],
+        environment: {
+          enabled: true,
+          latitude: 35.5951,
+          longitude: -82.5515,
+          timeZone: "America/New_York",
+        },
+      }),
+      await tempDir(),
+    );
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
+    const app = await startApp(parsed.config, {
+      port: 0,
+      uiDir: null,
+      cacheRoot: await tempDir(),
+    });
+    try {
+      const body = (await getJson(`${app.url}api/repositories`)) as {
+        display: { environment: unknown };
+      };
+      expect(body.display.environment).toEqual({
+        latitude: 35.5951,
+        longitude: -82.5515,
+        elevationMeters: 0,
+        timeZone: "America/New_York",
+      });
+    } finally {
+      await app.close();
     }
   });
 });

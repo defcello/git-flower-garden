@@ -19,6 +19,7 @@ import {
 import type { AddressInfo } from "node:net";
 import { extname, join, relative } from "node:path";
 import type {
+  EnvironmentJson,
   GraphJson,
   GraphNodeJson,
   RepositoriesJson,
@@ -31,6 +32,7 @@ import type {
   RepositoryService,
   RepositoryView,
 } from "../monitor/repository-service.ts";
+import type { EnvironmentConfig } from "../config/config.ts";
 import { escapeXml, renderSvg } from "../render/svg.ts";
 import { directorySize } from "../monitor/cache.ts";
 import { EventHub } from "./events.ts";
@@ -124,6 +126,14 @@ export interface ConfigHealth {
   webhooks?: WebhooksJson;
 }
 
+function environmentJson(
+  environment: EnvironmentConfig,
+): EnvironmentJson | null {
+  return environment.enabled
+    ? { ...environment.place, timeZone: environment.timeZone }
+    : null;
+}
+
 export function repositoriesJson(
   service: RepositoryService,
   health: ConfigHealth = { configErrors: [], restartNeeded: [] },
@@ -136,6 +146,7 @@ export function repositoriesJson(
       reducedMotion: service.config.display.reducedMotion,
       windowStartMs: service.windowStartMs(),
       notice: health.notice ?? null,
+      environment: environmentJson(service.config.environment),
     },
     repositories: service
       .ids()

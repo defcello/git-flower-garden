@@ -60,28 +60,66 @@ test("garden compositors retain graph truth, selection, and focus camera", async
   }
 });
 
-test("lighting studies at 1080p and 4K remain explicit previews and load local art", async ({
+test("sky previews at 1080p and 4K are marked as previews and load local art", async ({
   page,
 }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   await page.goto("/");
   await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
   await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
   await expect(page.locator('canvas[data-ready="true"]')).toHaveCount(7);
+  const landscape = page.locator(".landscape");
+  const note = page.locator(".art-notice");
+  // The fixture configures no location: Live keeps the daytime backdrop.
+  await expect(landscape).toHaveAttribute("data-sky", "day");
+  await expect(note).toContainText("set a location");
+  await expect(page.locator(".sky-sun, .sky-moon, .sky-stars")).toHaveCount(0);
+  const sky = page.getByLabel("Sky", { exact: true });
+  await expect(sky.locator("option").first()).toHaveText(
+    "Live · no location configured",
+  );
+
+  const cases = [
+    { name: "noon", sun: true, moon: false, stars: false },
+    { name: "sunrise", sun: true, moon: false, stars: false },
+    { name: "civil-dusk", sun: false, moon: true, stars: false },
+    { name: "full-moon", sun: false, moon: true, stars: true },
+    { name: "night", sun: false, moon: false, stars: true },
+    { name: "daytime-moon", sun: true, moon: true, stars: false },
+    { name: "polar-night", sun: false, moon: true, stars: true },
+  ];
   for (const width of [1920, 3840]) {
     await page.setViewportSize({ width, height: (width * 9) / 16 });
-    for (const lighting of ["day", "dawn", "dusk", "night"]) {
-      await page
-        .getByLabel("Lighting study", { exact: true })
-        .selectOption(lighting);
-      await expect(page.getByRole("note")).toContainText(
-        `${lighting} lighting study, not live conditions`,
+    for (const preview of cases) {
+      await sky.selectOption(preview.name);
+      await expect(landscape).toHaveAttribute("data-sky", preview.name);
+      await expect(note).toContainText("Sky preview");
+      await expect(note).toContainText("not live conditions");
+      await expect(page.locator(".sky-sun")).toHaveCount(preview.sun ? 1 : 0);
+      await expect(page.locator(".sky-moon")).toHaveCount(preview.moon ? 1 : 0);
+      await expect(page.locator(".sky-stars")).toHaveCount(
+        preview.stars ? 1 : 0,
       );
       await page.screenshot({
-        path: testInfo.outputPath(`${lighting}-${String(width)}.png`),
+        path: testInfo.outputPath(`${preview.name}-${String(width)}.png`),
       });
     }
   }
+  // The sky is decoration: it never takes pointer input from the garden.
+  expect(
+    await page
+      .locator(".landscape-sky")
+      .evaluate((node) => getComputedStyle(node).pointerEvents),
+  ).toBe("none");
+  // Night is darker than noon, by the lighting model's grade.
+  await sky.selectOption("night");
+  const night = await landscape.evaluate((node) =>
+    getComputedStyle(node).getPropertyValue("--sky-grade"),
+  );
+  expect(night).toMatch(/brightness\(0\.2/);
+  await sky.selectOption("live");
+  await expect(landscape).toHaveAttribute("data-sky", "day");
+  await expect(note).not.toContainText("Sky preview");
   // Also exercise narrow screens and DPR-independent vector hit regions.
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByLabel("Renderer", { exact: true })).toBeInViewport();

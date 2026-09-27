@@ -148,6 +148,10 @@ checking. Unknown keys are errors.
 | `monitor.maxConcurrentFetches` | `2` | Fetches running at once across all repositories (1–16) |
 | `monitor.fetchTimeoutSeconds` | `120` | Per-fetch limit; raise it for a very large first fetch (10–3600) |
 | `display.reducedMotion` | `false` | Reduce motion further (the OS setting is always honored) |
+| `environment.enabled` | `false` | Follow the real sun, moon, and stars in the garden view |
+| `environment.latitude`, `environment.longitude` | (required when enabled) | Your location in degrees; north and east are positive |
+| `environment.elevationMeters` | `0` | Height above sea level |
+| `environment.timeZone` | `history.timeZone` | Zone for the local time shown with the sky |
 | `repositories` | (required) | List of sources, below. `[]` shows a welcome page. |
 
 Each repository needs a unique `id` (lowercase letters, digits, `.`, `_`, or
@@ -169,6 +173,24 @@ Each repository needs a unique `id` (lowercase letters, digits, `.`, `_`, or
 - **`url`**: a repository you have no clone of (`https`, `http`, `ssh`, `git`,
   `file`, or `user@host:path`). URLs with passwords in them are rejected; use a
   credential helper or SSH agent instead.
+
+### The sky
+
+With `environment.enabled` and your coordinates, the garden view's sky follows
+the real sun and moon: dawn, daylight, dusk, twilight, and night, the moon's
+phase (lit on the side facing the sun), and stars. Everything is computed on
+your computer; no location lookup happens and nothing is sent anywhere.
+Weather is not available yet.
+
+```json
+"environment": { "enabled": true, "latitude": 35.6, "longitude": -82.55 }
+```
+
+The sky is a panorama: east is always on the left and west on the right, with
+the noon sun in the middle, whichever way your monitor faces. Heights above
+the horizon are real. The **Sky** menu (garden view) also offers previews
+such as sunrise, full moon, or polar night; previews are labelled
+**Sky preview** and are never taken for live conditions.
 
 ## Authentication troubleshooting
 
@@ -269,8 +291,9 @@ text. See [SECURITY.md](../SECURITY.md) to report a problem.
 
 ## Known limitations (0.1)
 
-- The garden artwork, weather, and sky are not built yet; this is the
-  technical view.
+- The garden view is a preview. Its backdrop is one painted daytime image,
+  graded for the time of day; the painted sunlight comes from the upper left
+  whatever the sun's real position. Weather is not built yet.
 - There is no "retry now" button for a failing remote; it retries on its own
   with backoff (at most 15 minutes).
 - For a local repository with monitored `remotes`, remote *tags* come from the

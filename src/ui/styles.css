@@ -706,7 +706,6 @@ code,
 }
 .landscape-background {
   clip-path: polygon(0 0, 100% 0, 100% 76%, 0 79%);
-  filter: saturate(0.88) contrast(0.97);
 }
 .landscape-hill {
   z-index: 1;
@@ -719,31 +718,58 @@ code,
     100% 100%,
     0 100%
   );
-  filter: saturate(1.08) contrast(1.04);
 }
 .landscape-vignette {
-  z-index: 2;
+  z-index: 4;
   background:
     radial-gradient(ellipse at 50% 43%, transparent 45%, #18371324 100%),
     linear-gradient(to bottom, transparent 76%, #18371322);
 }
-.lighting-dawn .landscape {
-  filter: sepia(0.25) saturate(0.75) brightness(0.9);
+/* The sky grade comes from the lighting model (src/ui/sky.ts), applied to
+   the painted layers only so the Sun, Moon, and stars keep their own light. */
+.landscape-background {
+  filter: saturate(0.88) contrast(0.97) var(--sky-grade, brightness(1));
 }
-.lighting-dusk .landscape {
-  filter: sepia(0.3) saturate(0.7) brightness(0.65);
+.landscape-hill {
+  filter: saturate(1.08) contrast(1.04) var(--sky-grade, brightness(1));
 }
-.lighting-night .landscape {
-  filter: saturate(0.4) brightness(0.28);
+.landscape-sky {
+  z-index: 3;
 }
-.lighting-dawn .landscape-vignette {
-  background: linear-gradient(110deg, #f8c7a970, #988dcc20 65%, transparent);
+/* Warm light toward a low Sun, or a cool night wash, over the painted
+   layers but beneath the Sun, Moon, and stars, which always sit above the
+   far ridgeline (src/ui/sky.ts HORIZON). */
+.landscape-glow {
+  z-index: 2;
+  background: var(--sky-glow, none);
 }
-.lighting-dusk .landscape-vignette {
-  background: linear-gradient(250deg, #ed9b6b75, #716b9830 65%, transparent);
+.sky-stars {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
-.lighting-night .landscape-vignette {
-  background: linear-gradient(#142d5a70, #1e315a20);
+.sky-sun,
+.sky-moon {
+  position: absolute;
+  translate: -50% -50%;
+}
+.sky-sun {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+}
+.sky-moon {
+  width: 32px;
+  height: 32px;
+  overflow: visible;
+}
+.sky-preview-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #6b3fa0;
+  color: #fff;
 }
 .botanical .topbar,
 .botanical .art-notice {

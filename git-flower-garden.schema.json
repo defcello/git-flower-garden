@@ -102,14 +102,44 @@
       }
     },
     "environment": {
+      "description": "Real-time sky from the Sun and Moon, computed offline. Nothing is sent anywhere; there is no automatic location lookup.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "enabled": {
-          "const": false,
+          "type": "boolean",
           "default": false
+        },
+        "latitude": {
+          "description": "Degrees north (negative for south). Required when enabled.",
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "description": "Degrees east (negative for west). Required when enabled.",
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "elevationMeters": {
+          "description": "Meters above sea level.",
+          "type": "number",
+          "minimum": -500,
+          "maximum": 9000,
+          "default": 0
+        },
+        "timeZone": {
+          "description": "IANA time zone for the local time shown with the sky. Defaults to history.timeZone.",
+          "type": "string",
+          "minLength": 1
         }
-      }
+      },
+      "if": {
+        "properties": { "enabled": { "const": true } },
+        "required": ["enabled"]
+      },
+      "then": { "required": ["latitude", "longitude"] }
     },
     "repositories": {
       "type": "array",

@@ -63,7 +63,8 @@ export interface Config {
   };
   display: { renderer: "technical"; reducedMotion: boolean };
   repositories: RepositoryConfig[];
-  environment: { enabled: boolean };
+  /** Real-time sky (ADR 0018). Computed offline; nothing leaves the machine. */
+  environment: EnvironmentConfig;
   webhooks: {
     enabled: boolean;
     /** Loopback address for a user-managed tunnel or reverse proxy. */
@@ -75,6 +76,16 @@ export interface Config {
     safetyPollSeconds: number;
   };
 }
+
+export type EnvironmentConfig =
+  | { enabled: false }
+  | {
+      enabled: true;
+      /** Degrees north, -90..90; east, -180..180; meters above sea level. */
+      place: { latitude: number; longitude: number; elevationMeters: number };
+      /** Local time shown with the sky; defaults to history.timeZone. */
+      timeZone: string;
+    };
 
 export interface ConfigError {
   /** JSON Pointer to the offending value ("" for the whole document). */
@@ -412,17 +423,62 @@ export function validateConfig(
     86400,
     300,
   );
-  const environment = section(root, "environment", ["enabled"]);
+  const environment = section(root, "environment", [
+    "enabled",
+    "latitude",
+    "longitude",
+    "elevationMeters",
+    "timeZone",
+  ]);
   const environmentEnabled = boolean(
     "/environment/enabled",
     environment.enabled,
     false,
   );
-  if (environmentEnabled)
-    err(
-      "/environment/enabled",
-      "the weather and sky environment is not available yet",
-    );
+  const coordinate = (
+    key: string,
+    min: number,
+    max: number,
+    required: boolean,
+  ): number => {
+    const v = environment[key];
+    const pointer = at("/environment", key);
+    if (v === undefined) {
+      if (required)
+        err(
+          pointer,
+          "is required when the environment is enabled (no automatic location lookup)",
+        );
+      return 0;
+    }
+    if (typeof v !== "number" || !Number.isFinite(v) || v < min || v > max) {
+      err(pointer, `must be a number from ${String(min)} to ${String(max)}`);
+      return 0;
+    }
+    return v;
+  };
+  const latitude = coordinate("latitude", -90, 90, environmentEnabled);
+  const longitude = coordinate("longitude", -180, 180, environmentEnabled);
+  const elevationMeters = coordinate("elevationMeters", -500, 9000, false);
+  let environmentTimeZone = timeZone;
+  if (environment.timeZone !== undefined) {
+    if (
+      typeof environment.timeZone !== "string" ||
+      !isValidTimeZone(environment.timeZone)
+    )
+      err(
+        "/environment/timeZone",
+        "must be an IANA time zone such as America/New_York",
+      );
+    else environmentTimeZone = environment.timeZone;
+  }
+  const environmentConfig: EnvironmentConfig = environmentEnabled
+    ? {
+        enabled: true,
+        place: { latitude, longitude, elevationMeters },
+        timeZone: environmentTimeZone,
+      }
+    : { enabled: false };
 
   const repositories: RepositoryConfig[] = [];
   if (root.repositories === undefined) {
@@ -560,7 +616,7 @@ export function validateConfig(
       monitor: monitorValues,
       display: { renderer: "technical", reducedMotion },
       repositories,
-      environment: { enabled: environmentEnabled },
+      environment: environmentConfig,
       webhooks: {
         enabled: webhooksEnabled,
         host: webhookHost,

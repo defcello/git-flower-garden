@@ -2,7 +2,6 @@ import type { GraphJson } from "../api/types.ts";
 import { edgeCurve, edgePath } from "./edge-path.ts";
 
 export type Renderer = "technical" | "canvas" | "svg";
-export type Lighting = "day" | "dawn" | "dusk" | "night";
 
 type Point = { x: number; y: number };
 

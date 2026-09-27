@@ -34,6 +34,7 @@ const payload = (): RepositoriesJson => ({
     reducedMotion: false,
     windowStartMs: 0,
     notice: null,
+    environment: null,
   },
   repositories: [
     {

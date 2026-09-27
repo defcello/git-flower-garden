@@ -41,6 +41,15 @@ export interface DisplayJson {
   windowStartMs: number;
   /** A notice to show on every page, e.g. demo mode. */
   notice: string | null;
+  /** Where the real-time sky is computed (in the browser); null when off. */
+  environment: EnvironmentJson | null;
+}
+
+export interface EnvironmentJson {
+  latitude: number;
+  longitude: number;
+  elevationMeters: number;
+  timeZone: string;
 }
 
 export interface RepositoriesJson {

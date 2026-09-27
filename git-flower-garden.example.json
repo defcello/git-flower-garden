@@ -27,5 +27,10 @@
       "url": "https://github.com/OWNER/REPOSITORY.git"
     }
   ],
-  "environment": { "enabled": false }
+  "environment": {
+    "enabled": false,
+    "latitude": 35.5951,
+    "longitude": -82.5515,
+    "elevationMeters": 650
+  }
 }

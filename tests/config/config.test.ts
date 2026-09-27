@@ -321,6 +321,13 @@ describe("validator agrees with the JSON Schema (Ajv) on structural rules", () =
       "Label",
       "https://example.invalid/r.git",
       "git@example.invalid:o/r.git",
+      -90,
+      90.5,
+      -180,
+      181,
+      35.6,
+      -82.55,
+      9001,
     ];
     const paths: (string | number)[][] = [
       ["version"],
@@ -335,6 +342,11 @@ describe("validator agrees with the JSON Schema (Ajv) on structural rules", () =
       ["display", "renderer"],
       ["display", "reducedMotion"],
       ["environment", "enabled"],
+      ["environment", "latitude"],
+      ["environment", "longitude"],
+      ["environment", "elevationMeters"],
+      ["environment", "timeZone"],
+      ["environment", "surprise"],
       ["repositories"],
       ["repositories", 0, "id"],
       ["repositories", 0, "label"],
@@ -399,6 +411,78 @@ describe("validator agrees with the JSON Schema (Ajv) on structural rules", () =
     }
     expect(agreedValid).toBeGreaterThan(100);
     expect(agreedInvalid).toBeGreaterThan(100);
+  });
+});
+
+describe("environment (real-time sky, ADR 0018)", () => {
+  const base = { version: 1, repositories: [] };
+  const parse = (environment: unknown) =>
+    parseConfig(JSON.stringify({ ...base, environment }), dir);
+
+  it("is off by default", () => {
+    const result = parseConfig(JSON.stringify(base), dir);
+    expect(result.ok && result.config.environment).toEqual({ enabled: false });
+  });
+
+  it("needs an explicit place when enabled; there is no location lookup", () => {
+    const result = parse({ enabled: true });
+    expect(result.ok ? [] : result.errors.map((e) => e.pointer)).toEqual([
+      "/environment/latitude",
+      "/environment/longitude",
+    ]);
+    expect(schemaValid({ ...base, environment: { enabled: true } })).toBe(
+      false,
+    );
+  });
+
+  it("uses the history time zone unless it names its own", () => {
+    const inherits = parseConfig(
+      JSON.stringify({
+        ...base,
+        history: { timeZone: "America/New_York" },
+        environment: { enabled: true, latitude: 35.6, longitude: -82.55 },
+      }),
+      dir,
+    );
+    expect(inherits.ok && inherits.config.environment).toEqual({
+      enabled: true,
+      place: { latitude: 35.6, longitude: -82.55, elevationMeters: 0 },
+      timeZone: "America/New_York",
+    });
+    const own = parse({
+      enabled: true,
+      latitude: -33.87,
+      longitude: 151.21,
+      elevationMeters: 58,
+      timeZone: "Australia/Sydney",
+    });
+    expect(own.ok && own.config.environment).toMatchObject({
+      place: { elevationMeters: 58 },
+      timeZone: "Australia/Sydney",
+    });
+  });
+
+  it("rejects out-of-range coordinates, bad zones, and unknown keys", () => {
+    const result = parse({
+      enabled: true,
+      latitude: 91,
+      longitude: "west",
+      elevationMeters: 1e6,
+      timeZone: "Mars/Olympus",
+      weather: "open-meteo",
+    });
+    expect(result.ok ? [] : result.errors.map((e) => e.pointer)).toEqual([
+      "/environment/weather",
+      "/environment/latitude",
+      "/environment/longitude",
+      "/environment/elevationMeters",
+      "/environment/timeZone",
+    ]);
+  });
+
+  it("keeps a place while disabled, without using it", () => {
+    const result = parse({ enabled: false, latitude: 10, longitude: 20 });
+    expect(result.ok && result.config.environment).toEqual({ enabled: false });
   });
 });
 
