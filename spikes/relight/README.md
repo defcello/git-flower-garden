@@ -48,7 +48,16 @@ ray tracing would give:
   and Moon mirrored to the viewer's side at that fraction of their power. It reaches the hill and
   the plants only; a fill near the viewer would not visibly brighten the mountains.
 
-Open: the maintainer picks the fill power (and confirms translucency) to carry into the GPU tier.
+The maintainer chose **15% front fill and 50% translucency** (now the defaults).
+
+**Translucency maps (third round).** The constant per layer treated a whole petal, its stamens, and
+the berry alike. Codex generated grayscale translucency maps for the sprites and the hill (white:
+thin and translucent; black: opaque), aligned with the albedo (silhouette overlap within 1–2 px).
+Petals glow brightest at their thin edges with darker veins, stamens and the berry stay opaque,
+sepals and leaves are translucent with dark midribs, and grass blade tips glow along the crest. The
+map replaces the layer's constant and the slider still scales it. Toggle with the checkbox or `T`
+(`tmap=1`); "Relit shows: Translucency" displays the effective map. The ridge has none: backlit
+distant forest does not glow. Open: map or constant.
 
 ## What was judged in the first round
 
@@ -79,6 +88,8 @@ unchanged; corrections are applied at load time in `art.ts` and listed below.
 | `ridge-normal-codex.png` | 1672×941 RGB | `6e760eeead7cc0f702d9e9a0847be6d1b53e0cd02157f36c9deaf08420645659` |
 | `hill-albedo.png` | 1672×941 RGBA | `3b93325f296b26b5e392cd9dcb03e63e6a38f5035d56033ccce7036adf3afcf3` |
 | `hill-normal-codex.png` | 1672×941 RGB | `3eae52c37bedb6346cc168943d065cb0b7567b200fa92d3490c081ba8fea43c5` |
+| `sprites-translucency-codex.png` | 1254×1254 RGB | `dd9cc5612fa91663588bef3700874d38eb4b23be6951fd0ffa9f9ba55ccdd053` |
+| `hill-translucency-codex.png` | 1672×941 RGB | `1fb71820b9ebab2a3a530bbed12ed8e8fa87f398f91e65107ee53e8c7ab3eeed` |
 
 These are spike assets, not yet in the asset manifest; they would be added there (MIT, as in
 ADR 0015) only if kept.

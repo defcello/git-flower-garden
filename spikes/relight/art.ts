@@ -13,6 +13,8 @@ export interface Pixels {
 export interface LayerArt {
   albedo: Pixels;
   normals: { derived: Pixels; codex: Pixels | null };
+  /** Codex translucency map: red = how much light passes through, 0..1. */
+  translucency: Pixels | null;
 }
 
 export type NormalSource = "derived" | "codex";
@@ -253,8 +255,27 @@ export async function loadLayer(
   albedoUrl: string,
   codexNormals: CodexNormals | null,
   derive: DeriveOptions,
+  translucencyUrl: string | null = null,
 ): Promise<LayerArt> {
   const albedo = cleanAlpha(await load(albedoUrl));
+  let translucency: Pixels | null = null;
+  if (translucencyUrl !== null) {
+    translucency = await load(translucencyUrl, albedo.width, albedo.height);
+    // Gray: take the luminance, and nothing outside the albedo's silhouette.
+    const d = translucency.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const inside = (albedo.data[i + 3] ?? 0) > 0;
+      const v = inside
+        ? 0.299 * (d[i] ?? 0) +
+          0.587 * (d[i + 1] ?? 0) +
+          0.114 * (d[i + 2] ?? 0)
+        : 0;
+      d[i] = v;
+      d[i + 1] = v;
+      d[i + 2] = v;
+      d[i + 3] = 255;
+    }
+  }
   let codex: Pixels | null = null;
   if (codexNormals !== null) {
     const map = await load(codexNormals.url, albedo.width, albedo.height);
@@ -263,7 +284,11 @@ export async function loadLayer(
       albedo,
     );
   }
-  return { albedo, normals: { derived: deriveNormals(albedo, derive), codex } };
+  return {
+    albedo,
+    normals: { derived: deriveNormals(albedo, derive), codex },
+    translucency,
+  };
 }
 
 export function decodeNormal(

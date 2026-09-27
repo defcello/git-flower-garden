@@ -46,6 +46,7 @@ const fillInput = $("#fill", HTMLInputElement);
 const fillLabel = $("#fill-label", HTMLElement);
 const translucencyInput = $("#translucency", HTMLInputElement);
 const translucencyLabel = $("#translucency-label", HTMLElement);
+const translucencyMapInput = $("#translucency-map", HTMLInputElement);
 
 const BLUE_RIDGE = {
   latitude: 35.5951,
@@ -80,8 +81,10 @@ timeInput.value = params.get("minutes") ?? String(8 * 60);
 normalsSelect.value = params.get("normals") === "derived" ? "derived" : "codex";
 inspectInput.checked = params.get("inspect") === "1";
 modeSelect.value = params.get("mode") ?? "lit";
-fillInput.value = params.get("fill") ?? "40";
-translucencyInput.value = params.get("translucency") ?? "100";
+// Chosen by the maintainer (2026-09-27): 15% fill, 50% translucency.
+fillInput.value = params.get("fill") ?? "15";
+translucencyInput.value = params.get("translucency") ?? "50";
+translucencyMapInput.checked = params.get("tmap") === "1";
 if (params.get("ui") === "0") document.body.classList.add("bare");
 
 function currentState(): LightingState {
@@ -165,11 +168,13 @@ async function main(): Promise<void> {
       art("hill-albedo.png"),
       { url: art("hill-normal-codex.png"), flipX: true },
       { radius: 260, detail: 4 },
+      art("hill-translucency-codex.png"),
     ),
     loadLayer(
       art("sprites-albedo.png"),
       { url: art("sprites-normal-codex.png") },
       { radius: 70, detail: 14 },
+      art("sprites-translucency-codex.png"),
     ),
   ]);
   const scene: Art = { ridge, hill, sprites };
@@ -192,8 +197,9 @@ async function main(): Promise<void> {
   const options = (): Options => ({
     normals: normalsSelect.value as NormalSource,
     inspect: inspectInput.checked,
+    translucencyMap: translucencyMapInput.checked,
     mode:
-      (["lit", "normals", "albedo"] as const).find(
+      (["lit", "normals", "albedo", "translucency"] as const).find(
         (m) => m === modeSelect.value,
       ) ?? "lit",
     adjust: {
@@ -269,6 +275,7 @@ for (const input of [
   modeSelect,
   fillInput,
   translucencyInput,
+  translucencyMapInput,
 ])
   input.addEventListener("input", layout);
 playButton.addEventListener("click", () => {
@@ -311,6 +318,7 @@ window.addEventListener("keydown", (event) => {
       (normalsSelect.value =
         normalsSelect.value === "codex" ? "derived" : "codex"),
     i: () => (inspectInput.checked = !inspectInput.checked),
+    t: () => (translucencyMapInput.checked = !translucencyMapInput.checked),
     "[": () => (fillInput.value = String(Number(fillInput.value) - 5)),
     "]": () => (fillInput.value = String(Number(fillInput.value) + 5)),
     " ": () => {

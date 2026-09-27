@@ -75,10 +75,11 @@ void main() {
 
 const LIT_FS = `#version 300 es
 precision highp float;
-uniform sampler2D uAlbedo, uNormal;
+uniform sampler2D uAlbedo, uNormal, uTranslucency;
+uniform int uTranslucencyMap; // 1: per-texel map; 0: the layer's constant
 uniform vec3 uSunDir, uSun, uMoonDir, uMoon, uSunFill, uMoonFill, uAmbient, uHorizon;
 uniform float uHaze, uLayerHaze, uLayerTranslucency, uLayerFill;
-uniform int uMode; // 0 lit, 1 normals, 2 albedo
+uniform int uMode; // 0 lit, 1 normals, 2 albedo, 3 translucency
 in vec2 vUv;
 out vec4 color;
 const float WRAP = ${WRAP.toFixed(4)};
@@ -92,7 +93,9 @@ void main() {
   vec3 n = normalize(texture(uNormal, vUv).rgb * 2.0 - 1.0);
   if (uMode == 1) { color = vec4((n * 0.5 + 0.5) * a.a, a.a); return; }
   if (uMode == 2) { color = vec4(a.rgb, a.a); return; }
-  float t = uLayerTranslucency;
+  float map = uTranslucencyMap == 1 ? texture(uTranslucency, vUv).r : 1.0;
+  if (uMode == 3) { color = vec4(vec3(map * uLayerTranslucency) * a.a, a.a); return; }
+  float t = uLayerTranslucency * map;
   float f = uLayerFill;
   float sun = diffuse(n, uSunDir) + t * through(n, uSunDir) + f * diffuse(n, uSunFill);
   float moon = diffuse(n, uMoonDir) + t * through(n, uMoonDir) + f * diffuse(n, uMoonFill);
@@ -194,6 +197,7 @@ function texture(
 interface LayerTextures {
   size: Pixels;
   albedo: WebGLTexture;
+  translucency: WebGLTexture | null;
   normals: Record<NormalSource, WebGLTexture | null>;
 }
 
@@ -206,7 +210,9 @@ export interface Art {
 export interface Options {
   normals: NormalSource;
   /** Debugging: show the normal map or the flat albedo instead of lighting. */
-  mode: "lit" | "normals" | "albedo";
+  mode: "lit" | "normals" | "albedo" | "translucency";
+  /** Use Codex translucency maps where a layer has one. */
+  translucencyMap: boolean;
   adjust: Adjustments;
   inspect: boolean;
 }
@@ -248,6 +254,10 @@ export class GpuTier {
     const upload = (layer: LayerArt): LayerTextures => ({
       size: layer.albedo,
       albedo: texture(gl, layer.albedo, true),
+      translucency:
+        layer.translucency === null
+          ? null
+          : texture(gl, layer.translucency, false),
       normals: {
         derived: texture(gl, layer.normals.derived, false),
         codex:
@@ -392,9 +402,10 @@ export class GpuTier {
     gl.uniform1f(lu("uHaze"), p.haze);
     gl.uniform1i(lu("uAlbedo"), 0);
     gl.uniform1i(lu("uNormal"), 1);
+    gl.uniform1i(lu("uTranslucency"), 2);
     gl.uniform1i(
       lu("uMode"),
-      ["lit", "normals", "albedo"].indexOf(options.mode),
+      ["lit", "normals", "albedo", "translucency"].indexOf(options.mode),
     );
     const drawLit = (
       layer: LayerTextures,
@@ -403,10 +414,16 @@ export class GpuTier {
     ) => {
       gl.useProgram(this.#lit);
       gl.uniform1f(lu("uLayerHaze"), light.haze);
+      // A map holds absolute translucency, replacing the layer's constant;
+      // the slider scales either.
+      const map = options.translucencyMap ? layer.translucency : null;
+      gl.uniform1i(lu("uTranslucencyMap"), map === null ? 0 : 1);
       gl.uniform1f(
         lu("uLayerTranslucency"),
-        light.translucency * p.translucency,
+        (map === null ? light.translucency : 1) * p.translucency,
       );
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, map ?? layer.albedo);
       gl.uniform1f(lu("uLayerFill"), light.fill ? p.fill : 0);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, layer.albedo);
