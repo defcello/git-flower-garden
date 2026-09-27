@@ -3,6 +3,26 @@ import atlasUrl from "./assets/botanical-atlas.png";
 import { ATLAS_SIZE, botanicalScene, CELL_SIZE } from "./botanical.ts";
 import { GraphSvg, graphWidth, type GraphSvgProps } from "./GraphSvg.tsx";
 
+/** One decoded atlas per page, shared by every plot and redraw. */
+let loadedAtlas: HTMLImageElement | null = null;
+let atlasLoading: Promise<HTMLImageElement> | null = null;
+function loadAtlas(): Promise<HTMLImageElement> {
+  atlasLoading ??= new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      loadedAtlas = image;
+      resolve(image);
+    };
+    image.onerror = () => {
+      // Allow a later attempt (e.g. after the service restarts).
+      atlasLoading = null;
+      reject(new Error("atlas failed to load"));
+    };
+    image.src = atlasUrl;
+  });
+  return atlasLoading;
+}
+
 /** Canvas artwork plus the same SVG hit/label layer used by the truth renderer. */
 export function BotanicalGraph(
   props: GraphSvgProps & { compositor: "canvas" | "svg" },
@@ -22,9 +42,9 @@ export function BotanicalGraph(
     const ctx = element?.getContext("2d");
     if (!element || !ctx) return;
     let disposed = false;
-    const atlas = new Image();
+    let atlas: HTMLImageElement | null = loadedAtlas;
     const draw = () => {
-      if (disposed || document.hidden) return;
+      if (disposed || document.hidden || !atlas) return;
       // Bound backing memory even for tall histories; interaction is vector based.
       const ratio = Math.min(
         window.devicePixelRatio || 1,
@@ -70,13 +90,22 @@ export function BotanicalGraph(
       }
       element.dataset.ready = "true";
     };
-    atlas.onload = draw;
-    atlas.onerror = () => {
-      if (!disposed) setFailed(true);
-    };
-    atlas.src = atlasUrl;
+    if (atlas) {
+      // Pan and zoom re-run this effect every frame: draw synchronously.
+      draw();
+    } else {
+      loadAtlas().then(
+        (image) => {
+          atlas = image;
+          draw();
+        },
+        () => {
+          if (!disposed) setFailed(true);
+        },
+      );
+    }
     const redraw = () => {
-      if (atlas.complete && atlas.naturalWidth > 0) draw();
+      draw();
     };
     document.addEventListener("visibilitychange", redraw);
     window.addEventListener("resize", redraw);

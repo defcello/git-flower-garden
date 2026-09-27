@@ -27,8 +27,7 @@
     "README.md",
     "LICENSE",
     "docs/user-guide.md",
-    "docs/art/",
-    "src/ui/assets/manifest.json",
+    "docs/art/*.md",
     "CHANGELOG.md"
   ],
   "engines": {

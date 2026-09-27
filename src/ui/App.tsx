@@ -44,7 +44,9 @@ export const FOCUS_BUTTON = 44;
 
 export function App() {
   const { repositories, graphs, connectionError, fetchedAt } = useGardenData();
-  const [renderer, setRenderer] = useState<Renderer>("canvas");
+  // The technical view stays the default until the garden is accepted; a
+  // viewer's own choice is remembered in this browser only.
+  const [renderer, setRenderer] = useState<Renderer>(loadRenderer);
   const [lighting, setLighting] = useState<Lighting>("day");
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -54,6 +56,10 @@ export function App() {
   const repos = repositories?.repositories ?? [];
   const timeZone = repositories?.display.timeZone ?? "UTC";
   const focused = repos.find((r) => r.id === focusedId);
+  // The hillside composition has room for a fixed number of plants; larger
+  // gardens use the card layout (with the same artwork) so nothing overlaps.
+  const sceneMode =
+    renderer !== "technical" && repos.length <= SCENE_POSITIONS.length;
   // A focused repository that disappears from the configuration shows the garden.
   const activeFocusId = focused ? focusedId : null;
 
@@ -141,7 +147,9 @@ export function App() {
             aria-label="Renderer"
             value={renderer}
             onChange={(event) => {
-              setRenderer(event.target.value as Renderer);
+              const next = event.target.value as Renderer;
+              setRenderer(next);
+              saveRenderer(next);
             }}
           >
             <option value="technical">Technical</option>
@@ -245,7 +253,7 @@ export function App() {
         />
       ) : (
         <main
-          className={`garden${renderer === "technical" ? "" : " garden-scene"}`}
+          className={`garden${sceneMode ? " garden-scene" : ""}`}
           aria-label="All repositories"
         >
           {repos.map((repo, index) => (
@@ -263,8 +271,7 @@ export function App() {
                 setSelection({ repoId: repo.id, oid });
               }}
               onHover={onHover}
-              sceneIndex={index}
-              sceneCount={repos.length}
+              sceneIndex={sceneMode ? index : null}
             />
           ))}
         </main>
@@ -420,8 +427,8 @@ interface PlotProps {
   onFocus: () => void;
   onSelect: (oid: string) => void;
   onHover: (node: GraphNodeJson | null, event?: React.PointerEvent) => void;
-  sceneIndex: number;
-  sceneCount: number;
+  /** Position on the hillside, or null when plots are laid out as cards. */
+  sceneIndex: number | null;
 }
 
 const SCENE_POSITIONS = [
@@ -445,7 +452,6 @@ function Plot({
   onSelect,
   onHover,
   sceneIndex,
-  sceneCount,
 }: PlotProps) {
   const Drawing = renderer === "technical" ? GraphSvg : BotanicalGraph;
   const titleId = `plot-title-${repo.id}`;
@@ -453,22 +459,23 @@ function Plot({
   const buttonLeft = graph
     ? Math.max(4, PLOT_PADDING + graph.size.width / 2 - FOCUS_BUTTON / 2)
     : PLOT_PADDING;
-  const position = SCENE_POSITIONS[sceneIndex % SCENE_POSITIONS.length]!;
-  const cycle = Math.floor(sceneIndex / SCENE_POSITIONS.length);
-  const sceneStyle = {
-    "--plant-x": `${String(position.x + cycle * 3)}%`,
-    "--plant-y": `${String(position.y)}%`,
-    "--plant-scale": String(position.scale * Math.max(0.72, 1 - cycle * 0.12)),
-    "--plant-z": String(Math.round(position.y * 10)),
-    "--plant-count": String(sceneCount),
-  } as CSSProperties;
+  const position =
+    sceneIndex === null ? undefined : SCENE_POSITIONS[sceneIndex];
+  const sceneStyle = position
+    ? ({
+        "--plant-x": `${String(position.x)}%`,
+        "--plant-y": `${String(position.y)}%`,
+        "--plant-scale": String(position.scale),
+        "--plant-z": String(Math.round(position.y * 10)),
+      } as CSSProperties)
+    : undefined;
   return (
     <section
       className="plot"
       data-plot={repo.id}
       tabIndex={0}
       aria-labelledby={titleId}
-      style={renderer === "technical" ? undefined : sceneStyle}
+      style={sceneStyle}
       onKeyDown={(event) => {
         if (event.key === "Enter" && event.target === event.currentTarget) {
           // Stop this keystroke here: focus moves to the "−" button, which
@@ -489,6 +496,9 @@ function Plot({
       </button>
       <h2 id={titleId}>{repo.label}</h2>
       <StatusLine repo={repo} graph={graph} now={now} />
+      {position && (
+        <PlantLabel repo={repo} center={buttonLeft + FOCUS_BUTTON / 2} />
+      )}
       <PlotBody repo={repo} graph={graph}>
         {graph && (
           <div className="plot-graph">
@@ -505,6 +515,52 @@ function Plot({
       </PlotBody>
     </section>
   );
+}
+
+/**
+ * On the hillside every plant keeps its name and state in view (roadmap
+ * section 7); the full status panel still appears on hover or focus.
+ */
+function PlantLabel({
+  repo,
+  center,
+}: {
+  repo: RepositoryStatusJson;
+  /** Horizontal center of the tree's lanes, in the plot's coordinates. */
+  center: number;
+}) {
+  const { glyph, word } = STATE_TEXT[repo.status.state];
+  return (
+    <div
+      className={`plant-label state-${repo.status.state}`}
+      style={{ left: center }}
+      aria-hidden="true"
+    >
+      <span className="plant-name">{repo.label}</span>
+      <span className="plant-state">
+        <span className="glyph">{glyph}</span> {word}
+      </span>
+    </div>
+  );
+}
+
+const RENDERER_KEY = "git-garden.renderer";
+
+function loadRenderer(): Renderer {
+  try {
+    const saved = window.localStorage.getItem(RENDERER_KEY);
+    return saved === "canvas" || saved === "svg" ? saved : "technical";
+  } catch {
+    return "technical";
+  }
+}
+
+function saveRenderer(renderer: Renderer): void {
+  try {
+    window.localStorage.setItem(RENDERER_KEY, renderer);
+  } catch {
+    // Storage may be unavailable (private windows); the choice lasts this visit.
+  }
 }
 
 interface FocusViewProps {

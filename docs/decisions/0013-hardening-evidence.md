@@ -124,6 +124,16 @@ minutes, and memory, handles, reads, and errors are sampled every minute.
 
 Result: *in progress at the time of writing; recorded when complete.*
 
+## Gap found later: interaction at the 2,000-node envelope
+
+The roadmap's interaction target (input response ≤ 100 ms, ≥ 30 fps pan/zoom)
+was not measured in P1-E. Measured during the P2-A review, a focused graph of
+2,000 visible commits takes about 0.2–0.4 s per zoom step in the technical
+view on the Core m3 laptop ([ADR 0015](0015-botanical-renderer-proof.md)). The
+target is not met at that size. Typical repositories (tens to hundreds of
+visible commits) are unaffected. The planned fix is to cull off-screen rows
+from the SVG overlay.
+
 ## Not verified by me
 
 - **Sleep/resume on real hardware.** The logic (window recompute on every

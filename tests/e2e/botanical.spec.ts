@@ -167,7 +167,8 @@ test("measure both compositors at the 2000 selected-node envelope", async ({
   await page.locator('[data-plot="tour"]').focus();
   await page.keyboard.press("Enter");
   const measurements: Record<string, unknown> = {};
-  for (const renderer of ["canvas", "svg"]) {
+  // The technical view is the baseline both compositors are judged against.
+  for (const renderer of ["technical", "canvas", "svg"]) {
     await page.getByLabel("Renderer", { exact: true }).selectOption(renderer);
     if (renderer === "canvas")
       await expect(page.locator('canvas[data-ready="true"]')).toHaveCount(1);

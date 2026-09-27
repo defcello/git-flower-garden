@@ -978,3 +978,52 @@ code,
     min-width: 220px;
   }
 }
+
+/* Review fixes (roadmap section 7) for the hillside layout. */
+.botanical .garden-scene .plant-label {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  margin-top: 4px;
+  padding: 3px 9px;
+  border-radius: 9px;
+  background: #fffef8e0;
+  box-shadow: 0 3px 10px #213f2520;
+  white-space: nowrap;
+  /* Counter the plant's scale so the text stays at a readable size. */
+  font-size: calc(12px / var(--plant-scale));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.botanical .garden-scene .plant-name {
+  font-weight: 600;
+}
+.botanical .garden-scene .plant-state {
+  color: var(--muted);
+  font-size: 0.9em;
+}
+.botanical .garden-scene .plant-label.state-error .glyph,
+.botanical .garden-scene .plant-label.state-stale .glyph,
+.botanical .garden-scene .plant-label.state-incomplete .glyph {
+  color: var(--boundary);
+}
+.botanical .garden-scene .plot:hover .plant-label,
+.botanical .garden-scene .plot:focus-within .plant-label {
+  visibility: hidden;
+}
+/* An empty or unreadable repository must never be an invisible plot. */
+.botanical .garden-scene .placeholder {
+  opacity: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  font-size: calc(13px / var(--plant-scale));
+}
+/* The focus control keeps a 44 x 44 CSS px target after plant scaling. */
+.botanical .garden-scene .focus-button {
+  width: calc(44px / min(1, var(--plant-scale)));
+  height: calc(44px / min(1, var(--plant-scale)));
+}

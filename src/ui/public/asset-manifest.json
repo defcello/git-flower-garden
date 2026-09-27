@@ -15,7 +15,10 @@
         "prompt": "docs/art/prompts.md#botanical-atlas",
         "edits": "None; original RGBA output copied unchanged"
       },
-      "dimensions": { "width": 1254, "height": 1254 },
+      "dimensions": {
+        "width": 1254,
+        "height": 1254
+      },
       "alpha": true,
       "anchorConvention": "Normalized cell coordinates; rendering uses each cell center",
       "cells": [
@@ -62,7 +65,10 @@
         "prompt": "docs/art/prompts.md#blue-ridge-backdrop",
         "edits": "None; CSS color grading used only for labeled lighting studies"
       },
-      "dimensions": { "width": 1672, "height": 941 },
+      "dimensions": {
+        "width": 1672,
+        "height": 941
+      },
       "alpha": false,
       "anchor": [0.5, 1],
       "scaleVariants": [
@@ -70,5 +76,6 @@
       ],
       "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Maintainer asset review remains open. No claim of exclusive copyright in generated output."
     }
-  ]
+  ],
+  "location": "Source images are in src/ui/assets/ of the repository; the build fingerprints their file names under dist/ui/assets/."
 }

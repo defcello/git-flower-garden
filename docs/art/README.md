@@ -1,6 +1,6 @@
 # Living garden: first art direction
 
-P2-A review candidate, 2026-09-26. This is a working renderer proof, not the finished Phase 2 garden. Run `npm run build`, then `node dist/cli.js demo`. Choose **Garden preview · Canvas** in the View menu; **Garden preview · SVG** draws the same geometry and atlas for comparison. Technical remains the default. The Garden tour contains a fork, merge, tag, three coincident heads, and a worktree marker, all backed by a real fictional Git repository.
+P2-A review candidate, 2026-09-26. This is a working renderer proof, not the finished Phase 2 garden. Run `npm run build`, then `node dist/cli.js demo`. Choose **Garden preview · Canvas** in the View menu; **Garden preview · SVG** draws the same geometry and atlas for comparison. Technical remains the default, and the chosen view is remembered in that browser. On the hillside (up to eight repositories; larger gardens use cards) each plant keeps its name and state visible, and the full status appears on hover or focus. The Garden tour contains a fork, merge, tag, three coincident heads, and a worktree marker, all backed by a real fictional Git repository.
 
 ## Style sheet
 
@@ -39,7 +39,7 @@ The tool returned a 1254×1254 RGBA atlas and a 1672×941 RGB backdrop, despite 
 
 ## Provenance and review
 
-See [the exact prompts](prompts.md) and [asset manifest](../../src/ui/assets/manifest.json). Built-in image generation produced both images; no API key or external stock assets were used. Manifest fields record dimensions, anchors, scaling, source, generation/editing provenance, intended MIT distribution, attribution, and redistribution review status. No exclusive copyright claim is made for generated output.
+See [the exact prompts](prompts.md) and [asset manifest](../../src/ui/public/asset-manifest.json). Built-in image generation produced both images; no API key or external stock assets were used. Manifest fields record dimensions, anchors, scaling, source, generation/editing provenance, intended MIT distribution, attribution, and redistribution review status. No exclusive copyright claim is made for generated output.
 
 Before expanding the library, the maintainer should review the flower materials and size, hill/ridge composition, and day/night readability on the intended monitor. This is the P2-A roadmap exit gate: “maintainer visual review accepts the direction.” The runnable preview makes that decision reviewable. P2-B–E remain open: final botanical layout/motion, integrated plot composition, offline astronomy and optional weather, quality presets, and the 24-hour soak.
 
