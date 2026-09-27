@@ -38,7 +38,7 @@ if (
 }
 
 const spec = demoFixtures[name as DemoFixtureName];
-const dir = await mkdtemp(join(tmpdir(), "git-garden-render-"));
+const dir = await mkdtemp(join(tmpdir(), "git-flower-garden-render-"));
 try {
   const fixture = await buildFixture(spec, join(dir, "repo"));
   const snapshot = await readSnapshot(fixture.dir);

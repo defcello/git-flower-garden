@@ -21,7 +21,9 @@ import {
 /** Tuesday 2026-09-22 15:00 in New York: the demo histories' "now". */
 export const DEMO_NOW = Date.parse("2026-09-22T15:00:00-04:00");
 
-const DEMO_PREFIX = "git-garden-demo-";
+const DEMO_PREFIX = "git-flower-garden-demo-";
+/** Demos started under the project's former name are swept too. */
+const LEGACY_DEMO_PREFIX = "git-garden-demo-";
 const OWNER_FILE = ".owner-pid";
 
 function alive(pid: number): boolean {
@@ -48,7 +50,8 @@ export async function sweepStaleDemos(root = tmpdir()): Promise<number> {
     return 0;
   }
   for (const name of names) {
-    if (!name.startsWith(DEMO_PREFIX)) continue;
+    if (!name.startsWith(DEMO_PREFIX) && !name.startsWith(LEGACY_DEMO_PREFIX))
+      continue;
     const dir = join(root, name);
     try {
       const pid = Number(await readFile(join(dir, OWNER_FILE), "utf8"));

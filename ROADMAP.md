@@ -1,4 +1,4 @@
-# git-garden roadmap
+# git-flower-garden roadmap
 
 Status: Phase 1 complete in code, including optional GitHub push notifications (P1-F). The 8-hour soak passed (ADR 0013); v0.1.0 is tagged. Open: maintainer rehearsals (private GitHub, real webhook, physical sleep/resume). The 2,000-node interaction target is now met for realistic histories (ADR 0016). Phase 2: P2-A accepted by the maintainer (2026-09-27); P2-B done (ADR 0017); next P2-C. Updated: 2026-09-27.
 
@@ -8,14 +8,14 @@ Navigation: [Git/time semantics](#4-exact-git-and-time-semantics) · [Architectu
 
 ## 1. Product vision and boundaries
 
-Run git-garden on a dedicated monitor and see the life of one or many repositories. Each repository occupies one plot. Commits grow upward, branches diverge, merges reconnect, tags mark releases, and worktree indicators show local checkouts. Hovering or selecting reveals the real Git information underneath the picture. A circular `+` above a hovered tree focuses that repository; a circular `-` returns to the whole garden.
+Run git-flower-garden on a dedicated monitor and see the life of one or many repositories. Each repository occupies one plot. Commits grow upward, branches diverge, merges reconnect, tags mark releases, and worktree indicators show local checkouts. Hovering or selecting reveals the real Git information underneath the picture. A circular `+` above a hovered tree focuses that repository; a circular `-` returns to the whole garden.
 
 Deliver the functional graph first. Then give that same graph the appearance of flowering bushes on a manicured hill, backed by the Blue Ridge Mountains and a living sky. Aim for the warmth, dimensional lighting, and playful realism of a high-quality animated film, using original art and mostly pre-rendered components rather than a full 3D world.
 
 Product principles:
 
 1. **Git truth comes first.** A beautiful image must not invent a branch, merge, commit, or current remote state.
-2. **Local ownership.** No git-garden account, hosted service, telemetry, or paid service is required for the core product. Users supply their own repository access through Git and, optionally, GitHub CLI.
+2. **Local ownership.** No git-flower-garden account, hosted service, telemetry, or paid service is required for the core product. Users supply their own repository access through Git and, optionally, GitHub CLI.
 3. **Observe safely.** Do not checkout, pull, push, commit, reset, modify files, install hooks, or prune worktrees in monitored repositories. Network fetches write only to app-owned caches.
 4. **A calm, legible monitor.** Stable placement, restrained motion, clear freshness, and useful inspection matter more than constant animation.
 5. **One graph, multiple renderers.** The technical view remains available after the garden ships, and provides a diagnostic comparison.
@@ -250,7 +250,7 @@ Receiver contract:
 
 ## 6. Configuration contract
 
-Use a versioned JSON file for the initial implementation: portable, strict, schema-validatable, and free of YAML type surprises. Supply `git-garden.example.json` and a JSON Schema in P1-A. The following is a design example, not a currently runnable configuration:
+Use a versioned JSON file for the initial implementation: portable, strict, schema-validatable, and free of YAML type surprises. Supply `git-flower-garden.example.json` and a JSON Schema in P1-A. The following is a design example, not a currently runnable configuration:
 
 ```json
 {
@@ -269,9 +269,9 @@ Use a versioned JSON file for the initial implementation: portable, strict, sche
   "display": { "renderer": "technical", "reducedMotion": false },
   "repositories": [
     {
-      "id": "git-garden-local",
-      "label": "git-garden",
-      "path": "C:/Users/me/projects/git-garden",
+      "id": "git-flower-garden-local",
+      "label": "git-flower-garden",
+      "path": "C:/Users/me/projects/git-flower-garden",
       "remotes": ["origin"]
     },
     {

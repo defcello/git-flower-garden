@@ -186,7 +186,11 @@ describe("webhook receiver", () => {
 });
 
 describe("push notifications end to end", () => {
-  async function setup(options: { secret?: string; safetyPollMs: number }) {
+  async function setup(options: {
+    secret?: string;
+    secretVar?: string;
+    safetyPollMs: number;
+  }) {
     const root = await tempDir();
     const seed = await buildFixture(forkMerge, join(root, "seed"));
     const server = join(root, "server.git");
@@ -217,7 +221,10 @@ describe("push notifications end to end", () => {
       env:
         options.secret === undefined
           ? {}
-          : { GIT_GARDEN_WEBHOOK_SECRET: options.secret },
+          : {
+              [options.secretVar ?? "GIT_FLOWER_GARDEN_WEBHOOK_SECRET"]:
+                options.secret,
+            },
       // Ordinary polling effectively off: an hour.
       intervals: {
         remotePollMs: 3_600_000,
@@ -301,12 +308,21 @@ describe("push notifications end to end", () => {
     ).toBe(true);
   });
 
+  it("reads the former secret variable when the new one is unset", async () => {
+    const { app } = await setup({
+      secret: SECRET,
+      secretVar: "GIT_GARDEN_WEBHOOK_SECRET",
+      safetyPollMs: 3_600_000,
+    });
+    expect(app.health().webhooks?.state).toBe("listening");
+  });
+
   it("without a secret, reports why and keeps ordinary polling", async () => {
     const { app } = await setup({ safetyPollMs: 500 });
     expect(app.health().webhooks).toMatchObject({
       state: "error",
       diagnostic: expect.stringMatching(
-        /GIT_GARDEN_WEBHOOK_SECRET is not set; remotes are polled instead/,
+        /GIT_FLOWER_GARDEN_WEBHOOK_SECRET is not set; remotes are polled instead/,
       ) as unknown,
     });
   });

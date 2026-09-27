@@ -48,7 +48,7 @@ async function machineBusy(durationMs: number): Promise<number> {
   return (1 - (b.idle - a.idle) / (b.total - a.total)) * 100;
 }
 
-const root = await mkdtemp(join(tmpdir(), "git-garden-bench-live-"));
+const root = await mkdtemp(join(tmpdir(), "git-flower-garden-bench-live-"));
 try {
   const dirs: string[] = [];
   for (let i = 0; i < REPOS; i++)

@@ -7,8 +7,8 @@
 ## Decision
 
 - **Topology:** a per-repository GitHub webhook delivered to a small receiver
-  that git-garden runs on loopback, exposed by a tunnel or reverse proxy the
-  user operates. No hosted relay, and no infrastructure git-garden sets up.
+  that git-flower-garden runs on loopback, exposed by a tunnel or reverse proxy the
+  user operates. No hosted relay, and no infrastructure git-flower-garden sets up.
   Costs are the user's tunnel (free tiers exist) and nothing else.
 - **Per-repository webhook, not a GitHub App.** A webhook needs only repository
   admin rights and a shared secret, and each user sets it up for themselves. A
@@ -38,7 +38,7 @@
   its last successful fetch, so a notification alone never claims the graph is
   current.
 - **Secrets:** read from an environment variable named in the configuration
-  (default `GIT_GARDEN_WEBHOOK_SECRET`), at least 16 characters, never stored in
+  (default `GIT_FLOWER_GARDEN_WEBHOOK_SECRET`), at least 16 characters, never stored in
   the file. Rotation: set the new value, restart, and update GitHub. The safety
   poll covers the gap.
 

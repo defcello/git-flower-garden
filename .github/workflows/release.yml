@@ -68,12 +68,12 @@ jobs:
 
               npm install --global ${url}
 
-          The command is git-garden. To uninstall:
+          The command is git-flower-garden. To uninstall:
           npm uninstall --global @defcello/git-flower-garden
 
           See the README and CHANGELOG in the package. SHA-256: SHA256SUMS.txt.
           NOTES
           gh release create "${GITHUB_REF_NAME}" "$file" SHA256SUMS.txt \
             --draft --prerelease --verify-tag \
-            --title "git-garden ${GITHUB_REF_NAME#v}" \
+            --title "git-flower-garden ${GITHUB_REF_NAME#v}" \
             --notes-file notes.md

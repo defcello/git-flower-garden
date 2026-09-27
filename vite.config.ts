@@ -1,7 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// The UI is served by the git-garden service from dist/ui. During UI
+// The UI is served by the git-flower-garden service from dist/ui. During UI
 // development, `npm run dev:ui` proxies API calls to a running service.
 export default defineConfig({
   root: "src/ui",

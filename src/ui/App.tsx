@@ -139,7 +139,7 @@ export function App() {
         </div>
       )}
       <header className="topbar">
-        <h1>git-garden</h1>
+        <h1>git-flower-garden</h1>
         {repositories && (
           <span className="summary">
             {repos.length} {repos.length === 1 ? "repository" : "repositories"}{" "}
@@ -217,7 +217,7 @@ export function App() {
       )}
       {repositories && repositories.restartNeeded.length > 0 && (
         <div className="banner" role="status">
-          Restart git-garden to apply changes to{" "}
+          Restart git-flower-garden to apply changes to{" "}
           {repositories.restartNeeded.join(", ")}.
         </div>
       )}
@@ -236,8 +236,8 @@ export function App() {
           <h2>No repositories are configured yet</h2>
           <p>
             Add entries to <code>repositories</code> in your configuration file,
-            check it with <code>git-garden validate-config</code>, then restart
-            the service.
+            check it with <code>git-flower-garden validate-config</code>, then
+            restart the service.
           </p>
         </div>
       ) : focused ? (
@@ -580,11 +580,15 @@ function PlantMarker({
   );
 }
 
-const RENDERER_KEY = "git-garden.renderer";
+const RENDERER_KEY = "git-flower-garden.renderer";
+/** The key under the project's former name, read when the new one is unset. */
+const LEGACY_RENDERER_KEY = "git-garden.renderer";
 
 function loadRenderer(): Renderer {
   try {
-    const saved = window.localStorage.getItem(RENDERER_KEY);
+    const saved =
+      window.localStorage.getItem(RENDERER_KEY) ??
+      window.localStorage.getItem(LEGACY_RENDERER_KEY);
     return saved === "canvas" || saved === "svg" ? saved : "technical";
   } catch {
     return "technical";

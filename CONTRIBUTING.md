@@ -1,6 +1,6 @@
-# Contributing to git-garden
+# Contributing to git-flower-garden
 
-Thank you for your interest. git-garden is an independent, MIT-licensed personal
+Thank you for your interest. git-flower-garden is an independent, MIT-licensed personal
 open-source project. It is not affiliated with, sponsored by, or endorsed by any
 employer, animation studio, or Git hosting provider.
 

@@ -1,8 +1,23 @@
 # Changelog
 
-All notable changes to git-garden. The project follows
+All notable changes to git-flower-garden (formerly git-garden). The project
+follows
 [semantic versioning](https://semver.org/); before 1.0, minor versions may
 change configuration or behavior, and the notes say how.
+
+## Unreleased
+
+- **Renamed to git-flower-garden.** The command is now `git-flower-garden`;
+  there is no `git-garden` alias, because an unrelated npm package uses that
+  name. Installing over an earlier release replaces the old command. On
+  first run, the per-user configuration and cache
+  folders named `git-garden` are moved to `git-flower-garden` (only when the
+  new folder does not exist yet, and only for defaults, not `--config` or
+  `--cache-dir`). The default webhook secret variable is now
+  `GIT_FLOWER_GARDEN_WEBHOOK_SECRET`; `GIT_GARDEN_WEBHOOK_SECRET` is still read
+  when it is unset. The schema and example files are now
+  `git-flower-garden.schema.json` and `git-flower-garden.example.json`; a
+  configuration's `$schema` pointing at the old file name still loads.
 
 ## 0.2.0-beta.1: garden beta (2026-09-27)
 

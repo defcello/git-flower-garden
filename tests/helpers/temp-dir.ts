@@ -15,7 +15,7 @@ export function useTempDirs(): () => Promise<string> {
     );
   });
   return async () => {
-    const dir = await mkdtemp(join(tmpdir(), "git-garden-test-"));
+    const dir = await mkdtemp(join(tmpdir(), "git-flower-garden-test-"));
     created.push(dir);
     return dir;
   };

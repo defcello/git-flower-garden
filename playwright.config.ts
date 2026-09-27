@@ -12,7 +12,7 @@ const port = 4791;
 // Shared with the fixture server so tests can change repositories live.
 process.env.GARDEN_E2E_ROOT ??= join(
   tmpdir(),
-  `git-garden-e2e-${String(process.pid)}`,
+  `git-flower-garden-e2e-${String(process.pid)}`,
 );
 
 export default defineConfig({

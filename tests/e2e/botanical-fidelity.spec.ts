@@ -28,7 +28,7 @@ let root: string;
 
 test.beforeAll(async () => {
   test.setTimeout(180_000);
-  root = await mkdtemp(join(tmpdir(), "git-garden-fidelity-"));
+  root = await mkdtemp(join(tmpdir(), "git-flower-garden-fidelity-"));
   for (const [id, spec] of Object.entries(FIXTURES))
     await buildFixture(spec, join(root, id));
   const parsed = parseConfig(

@@ -17,6 +17,11 @@ import {
   type Position,
 } from "./json-positions.ts";
 
+/** Default `webhooks.secretEnv`. */
+export const DEFAULT_SECRET_ENV = "GIT_FLOWER_GARDEN_WEBHOOK_SECRET";
+/** The default under the project's former name, still read as a fallback. */
+export const LEGACY_SECRET_ENV = "GIT_GARDEN_WEBHOOK_SECRET";
+
 export const CONFIG_VERSION = 1;
 export const MAX_CONFIG_BYTES = 1024 * 1024;
 export const LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "::1"] as const;
@@ -227,7 +232,7 @@ export function validateConfig(
       "/version",
       root.version === undefined
         ? `is required and must be ${String(CONFIG_VERSION)}`
-        : `unsupported version ${JSON.stringify(root.version)}; this git-garden reads version ${String(CONFIG_VERSION)}`,
+        : `unsupported version ${JSON.stringify(root.version)}; this git-flower-garden reads version ${String(CONFIG_VERSION)}`,
     );
   }
   if (root.$schema !== undefined && typeof root.$schema !== "string")
@@ -386,7 +391,7 @@ export function validateConfig(
     65535,
     4785,
   );
-  let secretEnv = "GIT_GARDEN_WEBHOOK_SECRET";
+  let secretEnv = DEFAULT_SECRET_ENV;
   if (webhookSection.secretEnv !== undefined) {
     if (
       typeof webhookSection.secretEnv !== "string" ||

@@ -1,10 +1,15 @@
 import { request } from "node:http";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { main, type Io } from "../../src/cli.ts";
 import { parseConfig, type Config } from "../../src/config/config.ts";
-import { defaultCacheDir, defaultConfigPath } from "../../src/config/paths.ts";
+import {
+  defaultCacheDir,
+  defaultConfigPath,
+  migrateLegacyFolders,
+} from "../../src/config/paths.ts";
 import { RepositoryService } from "../../src/monitor/repository-service.ts";
 import { startServer, type StartedServer } from "../../src/server/server.ts";
 import { buildFixture, fixtureGit } from "../../src/demo/builder.ts";
@@ -383,29 +388,76 @@ describe("per-user paths", () => {
     [
       "win32",
       { APPDATA: "A", LOCALAPPDATA: "L", USERPROFILE: "U" },
-      join("A", "git-garden", "config.json"),
-      join("L", "git-garden", "Cache"),
+      join("A", "git-flower-garden", "config.json"),
+      join("L", "git-flower-garden", "Cache"),
     ],
     [
       "darwin",
       { HOME: "H" },
-      join("H", "Library", "Application Support", "git-garden", "config.json"),
-      join("H", "Library", "Caches", "git-garden"),
+      join(
+        "H",
+        "Library",
+        "Application Support",
+        "git-flower-garden",
+        "config.json",
+      ),
+      join("H", "Library", "Caches", "git-flower-garden"),
     ],
     [
       "linux",
       { HOME: "H" },
-      join("H", ".config", "git-garden", "config.json"),
-      join("H", ".cache", "git-garden"),
+      join("H", ".config", "git-flower-garden", "config.json"),
+      join("H", ".cache", "git-flower-garden"),
     ],
     [
       "linux",
       { HOME: "H", XDG_CONFIG_HOME: "X", XDG_CACHE_HOME: "C" },
-      join("X", "git-garden", "config.json"),
-      join("C", "git-garden"),
+      join("X", "git-flower-garden", "config.json"),
+      join("C", "git-flower-garden"),
     ],
   ] as const)("%s %j", (platform, env, config, cache) => {
     expect(defaultConfigPath(env, platform)).toBe(config);
     expect(defaultCacheDir(env, platform)).toBe(cache);
+  });
+});
+
+describe("folders under the former name", () => {
+  it("move to the new name once, only for defaults in use", async () => {
+    const home = await tempDir();
+    const env = { HOME: home };
+    const oldConfig = join(home, ".config", "git-garden");
+    const oldCache = join(home, ".cache", "git-garden");
+    await mkdir(oldConfig, { recursive: true });
+    await mkdir(oldCache, { recursive: true });
+    await writeFile(join(oldConfig, "config.json"), "{}");
+
+    // An explicit --cache-dir leaves the old cache alone.
+    const notes = await migrateLegacyFolders(
+      { config: true, cache: false },
+      env,
+      "linux",
+    );
+    expect(notes).toHaveLength(1);
+    expect(await readFile(defaultConfigPath(env, "linux"), "utf8")).toBe("{}");
+    expect(existsSync(oldConfig)).toBe(false);
+    expect(existsSync(oldCache)).toBe(true);
+
+    // A folder under the new name is never merged into or overwritten.
+    await mkdir(defaultCacheDir(env, "linux"), { recursive: true });
+    expect(
+      await migrateLegacyFolders({ config: true, cache: true }, env, "linux"),
+    ).toEqual([]);
+    expect(existsSync(oldCache)).toBe(true);
+  });
+
+  it("move the whole app folder on Windows, cache included", async () => {
+    const root = await tempDir();
+    const env = { APPDATA: join(root, "A"), LOCALAPPDATA: join(root, "L") };
+    await mkdir(join(root, "L", "git-garden", "Cache"), { recursive: true });
+    expect(
+      await migrateLegacyFolders({ config: true, cache: true }, env, "win32"),
+    ).toHaveLength(1);
+    expect(existsSync(defaultCacheDir(env, "win32"))).toBe(true);
+    expect(existsSync(join(root, "L", "git-garden"))).toBe(false);
   });
 });

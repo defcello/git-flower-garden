@@ -109,7 +109,7 @@ beforeAll(async () => {
   await fixtureGit(root, ["clone", "--quiet", server, clone]);
   await fixtureGit(root, ["clone", "--quiet", server, teammate]);
   solo = (await buildFixture(gardenTour, join(root, "solo"))).dir;
-  configPath = join(root, "git-garden.json");
+  configPath = join(root, "git-flower-garden.json");
   await writeFile(configPath, config(baseRepos()));
   const parsed = parseConfig(config(baseRepos()), root);
   if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
@@ -355,7 +355,7 @@ describe("live monitoring", () => {
       app.health().configErrors.length > 0 ? true : undefined,
     );
     expect(app.health().configErrors[0]).toMatch(
-      /^git-garden\.json:1:\d+: invalid JSON/,
+      /^git-flower-garden\.json:1:\d+: invalid JSON/,
     );
     expect(app.service.ids()).toEqual(["clone", "remote", "solo"]);
 

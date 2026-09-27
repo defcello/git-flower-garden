@@ -45,7 +45,7 @@ watchers off. `tests/server/events.test.ts` covers full resync on connect,
 burst coalescing, and dropping non-reading clients.
 
 Manual rehearsal (2026-09-26) against public GitHub over HTTPS: a remote-only
-source for `defcello/git-garden` fetched and rendered in 1.6 s, and this
+source for `defcello/git-flower-garden` fetched and rendered in 1.6 s, and this
 repository's own clone monitoring `origin` in 2.4 s, both ready.
 
 ## Bugs found by these tests
@@ -65,7 +65,7 @@ repository's own clone monitoring `origin` in 2.4 s, both ready.
 - **Private GitHub rehearsal** needs a private repository and the maintainer's
   own credentials. It is left to the maintainer. Steps: add
   `{ "id": "private", "url": "https://github.com/<owner>/<private-repo>.git" }`,
-  run `git-garden serve`, and check that the plot becomes ready. If it shows
+  run `git-flower-garden serve`, and check that the plot becomes ready. If it shows
   "authentication needed", `git ls-remote <url>` in a terminal should fail the
   same way.
 - **Manual "retry now"** needs a mutating endpoint with a per-run capability

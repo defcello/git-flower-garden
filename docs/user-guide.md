@@ -1,6 +1,6 @@
-# git-garden user guide
+# git-flower-garden user guide
 
-git-garden shows the live commit graphs of your Git repositories in a browser,
+git-flower-garden shows the live commit graphs of your Git repositories in a browser,
 for a dedicated monitor or a spare window. It reads your repositories; it
 never changes them. This guide covers version 0.2 (beta): the technical view
 and the garden view.
@@ -15,27 +15,29 @@ Windows, macOS, and Linux are supported.
 
 ## Install
 
-git-garden is distributed as a file on its [releases page](https://github.com/defcello/git-flower-garden/releases). Install
+git-flower-garden is distributed as a file on its [releases page](https://github.com/defcello/git-flower-garden/releases). Install
 it with npm, using the file's link or a downloaded copy:
 
 ```sh
 npm install --global https://github.com/defcello/git-flower-garden/releases/download/v<version>/defcello-git-flower-garden-<version>.tgz
 # or, after downloading it:
 npm install --global ./defcello-git-flower-garden-<version>.tgz
-git-garden --version
+git-flower-garden --version
 ```
 
 The package is `@defcello/git-flower-garden`; the command it installs is
-`git-garden`. Installing runs no install scripts and adds no other packages.
+`git-flower-garden`. Installing runs no install scripts and adds no other packages.
 On Windows, a global install goes to your user profile and needs no
 administrator rights.
 
 On Windows, if PowerShell says running scripts is disabled, your system's
-policy blocks npm's PowerShell launcher: run `git-garden.cmd` instead (or use
+policy blocks npm's PowerShell launcher: run `git-flower-garden.cmd` instead (or use
 Command Prompt). There is no need to change the policy.
 
 **Update:** install a newer release the same way (stop a running
-`git-garden` first). Your configuration and cache are kept.
+`git-flower-garden` first). Your configuration and cache are kept. Updating
+from a release named `git-garden` moves its configuration and cache folders
+to the new name on first run.
 
 **Uninstall:** see [Diagnostics and data](#diagnostics-and-data).
 
@@ -45,7 +47,7 @@ program files are not meant to be changed; an update replaces them.
 ## Try the demo
 
 ```sh
-git-garden demo
+git-flower-garden demo
 ```
 
 This opens fictional repositories at <http://127.0.0.1:4784/>. They need no
@@ -56,23 +58,23 @@ visible. Press Ctrl+C to stop; the demo repositories are then deleted.
 ## Set up your garden
 
 ```sh
-git-garden init-config                 # writes the per-user configuration file
+git-flower-garden init-config                 # writes the per-user configuration file
 # edit the file: add repositories (see below)
-git-garden validate-config             # checks the file and every repository
-git-garden serve                       # http://127.0.0.1:4783/
+git-flower-garden validate-config             # checks the file and every repository
+git-flower-garden serve                       # http://127.0.0.1:4783/
 ```
 
 Press Ctrl+C to stop the service. To start it at login, add
-`git-garden serve` to your operating system's startup items. For a dedicated
+`git-flower-garden serve` to your operating system's startup items. For a dedicated
 monitor, open the page in a browser's fullscreen or kiosk mode.
 
 The configuration file is:
 
 | System | Location |
 | --- | --- |
-| Windows | `%APPDATA%\git-garden\config.json` |
-| macOS | `~/Library/Application Support/git-garden/config.json` |
-| Linux | `$XDG_CONFIG_HOME/git-garden/config.json` (usually `~/.config/…`) |
+| Windows | `%APPDATA%\git-flower-garden\config.json` |
+| macOS | `~/Library/Application Support/git-flower-garden/config.json` |
+| Linux | `$XDG_CONFIG_HOME/git-flower-garden/config.json` (usually `~/.config/…`) |
 
 Use `--config <file>` with any command to pick another file. Changes to the
 file apply while the service runs. If an edit is invalid, the previous valid
@@ -129,8 +131,8 @@ says so.
 ## Configuration reference
 
 A complete example is in
-[git-garden.example.json](../git-garden.example.json). The JSON Schema
-[git-garden.schema.json](../git-garden.schema.json) gives editors completion and
+[git-flower-garden.example.json](../git-flower-garden.example.json). The JSON Schema
+[git-flower-garden.schema.json](../git-flower-garden.schema.json) gives editors completion and
 checking. Unknown keys are errors.
 
 | Key | Default | Meaning |
@@ -161,7 +163,7 @@ Each repository needs a unique `id` (lowercase letters, digits, `.`, `_`, or
   relative to the configuration file. Listing two worktrees of the same
   repository is rejected (they share one graph).
 - **`remotes`** (with `path`): these remotes are also fetched, into
-  git-garden's own cache, and their *current* branches replace the clone's
+  git-flower-garden's own cache, and their *current* branches replace the clone's
   last-fetched tracking branches in the graph. Your clone is not fetched into
   or changed.
 - **`url`**: a repository you have no clone of (`https`, `http`, `ssh`, `git`,
@@ -170,12 +172,12 @@ Each repository needs a unique `id` (lowercase letters, digits, `.`, `_`, or
 
 ## Authentication troubleshooting
 
-git-garden uses your existing Git setup (credential helpers, SSH agent, and
+git-flower-garden uses your existing Git setup (credential helpers, SSH agent, and
 `insteadOf` rules), and it never prompts. If a remote shows "authentication
 needed":
 
 1. In a terminal, run `git ls-remote <url>` (or `git ls-remote origin` inside the
-   clone). git-garden can fetch once this works without prompting.
+   clone). git-flower-garden can fetch once this works without prompting.
 2. GitHub over HTTPS: `gh auth setup-git` configures Git to use the GitHub
    CLI's login. Being logged in to `gh` alone is not enough.
 3. SSH: make sure your key is loaded (`ssh-add -l`) and the host is in
@@ -185,14 +187,14 @@ needed":
 
 ## Faster remote updates with GitHub push notifications (optional)
 
-By default git-garden checks remotes every `monitor.remotePollSeconds`. For
-GitHub repositories you administer, GitHub can notify git-garden right after
-a push. git-garden then fetches at once, and keeps a slow safety poll
+By default git-flower-garden checks remotes every `monitor.remotePollSeconds`. For
+GitHub repositories you administer, GitHub can notify git-flower-garden right after
+a push. git-flower-garden then fetches at once, and keeps a slow safety poll
 (`webhooks.safetyPollSeconds`, default 5 minutes) in case a notification is
 lost.
 
 1. **Choose a secret** (at least 16 characters) and put it in an environment
-   variable for git-garden: `GIT_GARDEN_WEBHOOK_SECRET`, or another name set
+   variable for git-flower-garden: `GIT_FLOWER_GARDEN_WEBHOOK_SECRET`, or another name set
    in `webhooks.secretEnv`. The secret never goes in the configuration file.
 2. **Enable the receiver:** `"webhooks": { "enabled": true }`. It listens on
    `http://127.0.0.1:4785/github/webhook` (`webhooks.port`) and nowhere else. It
@@ -214,37 +216,37 @@ secret is missing or the receiver cannot start, the page says so and ordinary
 polling continues.
 
 **Rotating the secret:** set the new value in the environment variable,
-restart git-garden, then update the secret in GitHub's webhook settings.
+restart git-flower-garden, then update the secret in GitHub's webhook settings.
 Notifications that arrive in between are rejected; the safety poll covers the
 gap.
 
 ## Diagnostics and data
 
 ```sh
-git-garden status        # the running service: per-repository state, timings, cache sizes
-git-garden cache         # cache sizes; --clean <id> or --clean-all removes caches
+git-flower-garden status        # the running service: per-repository state, timings, cache sizes
+git-flower-garden cache         # cache sizes; --clean <id> or --clean-all removes caches
 ```
 
 `http://127.0.0.1:4783/api/diagnostics` returns the same information as JSON.
 
-git-garden keeps fetched remote objects in a per-user cache:
-`%LOCALAPPDATA%\git-garden\Cache` (Windows), `~/Library/Caches/git-garden`
-(macOS), or `$XDG_CACHE_HOME/git-garden` (Linux). This is private repository
+git-flower-garden keeps fetched remote objects in a per-user cache:
+`%LOCALAPPDATA%\git-flower-garden\Cache` (Windows), `~/Library/Caches/git-flower-garden`
+(macOS), or `$XDG_CACHE_HOME/git-flower-garden` (Linux). This is private repository
 data. Removing a repository from the configuration stops monitoring it but
-keeps its cache; `git-garden cache --clean <id>` deletes it. Nothing else is
+keeps its cache; `git-flower-garden cache --clean <id>` deletes it. Nothing else is
 stored, and nothing is sent anywhere except fetches to your own remotes.
 
 **Uninstall:**
 
 ```sh
-git-garden cache --clean-all        # optional: remove cached remote data
+git-flower-garden cache --clean-all        # optional: remove cached remote data
 npm uninstall --global @defcello/git-flower-garden
 ```
 
-This removes the program and the `git-garden` command. Your configuration
-file stays for a later install; to remove it, delete its `git-garden` folder
-(`%APPDATA%git-garden` on Windows, `~/Library/Application Support/git-garden`
-on macOS, `~/.config/git-garden` on Linux). If you used `git-garden demo` and
+This removes the program and the `git-flower-garden` command. Your configuration
+file stays for a later install; to remove it, delete its `git-flower-garden` folder
+(`%APPDATA%git-flower-garden` on Windows, `~/Library/Application Support/git-flower-garden`
+on macOS, `~/.config/git-flower-garden` on Linux). If you used `git-flower-garden demo` and
 closed its window instead of pressing Ctrl+C, the next demo removes the
 leftover temporary folder.
 

@@ -15,17 +15,20 @@ it("removes demo directories whose process is gone, and nothing else", async () 
   const deadPid = finished.pid;
   expect(deadPid).toBeGreaterThan(0);
 
-  const stale = join(root, "git-garden-demo-stale");
-  const live = join(root, "git-garden-demo-live");
-  const foreign = join(root, "git-garden-demo-no-owner");
+  const stale = join(root, "git-flower-garden-demo-stale");
+  const legacy = join(root, "git-garden-demo-stale");
+  const live = join(root, "git-flower-garden-demo-live");
+  const foreign = join(root, "git-flower-garden-demo-no-owner");
   const other = join(root, "something-else");
-  for (const dir of [stale, live, foreign, other]) await mkdir(dir);
+  for (const dir of [stale, legacy, live, foreign, other]) await mkdir(dir);
   await writeFile(join(stale, ".owner-pid"), String(deadPid));
+  await writeFile(join(legacy, ".owner-pid"), String(deadPid));
   await writeFile(join(live, ".owner-pid"), String(process.pid));
   await writeFile(join(other, ".owner-pid"), String(deadPid));
 
-  expect(await sweepStaleDemos(root)).toBe(1);
+  expect(await sweepStaleDemos(root)).toBe(2);
   expect(existsSync(stale)).toBe(false);
+  expect(existsSync(legacy)).toBe(false);
   expect(existsSync(live)).toBe(true);
   expect(existsSync(foreign)).toBe(true);
   expect(existsSync(other)).toBe(true);

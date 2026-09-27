@@ -39,7 +39,7 @@ const source = JSON.parse(
   bugs: { url: string };
   repository: { type: string; url: string };
 };
-// The package name comes from package.json; the command is always git-garden.
+// The package name comes from package.json; the command is always git-flower-garden.
 const PACKAGE_NAME = source.name;
 /** npm's tarball name for a (possibly scoped) package. */
 const TARBALL = `${PACKAGE_NAME.replace(/^@/, "").replace("/", "-")}-${source.version}.tgz`;
@@ -98,8 +98,8 @@ for (const [from, to] of [
   ["docs/user-guide.md", "docs/user-guide.md"],
   ["LICENSE", "LICENSE"],
   ["CHANGELOG.md", "CHANGELOG.md"],
-  ["git-garden.schema.json", "git-garden.schema.json"],
-  ["git-garden.example.json", "git-garden.example.json"],
+  ["git-flower-garden.schema.json", "git-flower-garden.schema.json"],
+  ["git-flower-garden.example.json", "git-flower-garden.example.json"],
 ] as const) {
   await mkdir(join(stage, to, ".."), { recursive: true });
   await cp(join(repoRoot, from), join(stage, to));
@@ -137,8 +137,8 @@ const manifest = {
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
-    "git-garden.schema.json",
-    "git-garden.example.json",
+    "git-flower-garden.schema.json",
+    "git-flower-garden.example.json",
   ],
 };
 await writeFile(
@@ -183,8 +183,9 @@ for (const doc of ["README.md", "docs/user-guide.md"]) {
     problems.push(`${doc}: does not show the uninstall command`);
   if (/{{[A-Z]+}}/.test(text))
     problems.push(`${doc}: has an unfilled placeholder`);
-  if (/npm (un)?install --global git-garden(?!-)/.test(text))
-    problems.push(`${doc}: names the unrelated npm package "git-garden"`);
+  // Unscoped names: `git-garden` (the former name) is an unrelated package.
+  if (/npm (un)?install --global git-(flower-)?garden(?!-)/.test(text))
+    problems.push(`${doc}: names an unscoped npm package, not ${PACKAGE_NAME}`);
 }
 if (problems.length > 0) {
   console.error(problems.join("\n"));

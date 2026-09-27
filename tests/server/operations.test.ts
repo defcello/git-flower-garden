@@ -116,7 +116,7 @@ describe("diagnostics, status, and cache", () => {
       const io = capture();
       expect(await main(["status", "--config", configFile], io)).toBe(0);
       expect(io.lines[0]).toMatch(
-        /^git-garden at http:\/\/127\.0\.0\.1:\d+\/ · up \d+ s/,
+        /^git-flower-garden at http:\/\/127\.0\.0\.1:\d+\/ · up \d+ s/,
       );
       expect(io.lines[1]).toMatch(
         /^ {2}tour: ready · \d+\/16 commits · read \d+ ms, graph \d+ ms$/,
@@ -169,6 +169,6 @@ describe("diagnostics, status, and cache", () => {
   it("prints its version", async () => {
     const io = capture();
     expect(await main(["--version"], io)).toBe(0);
-    expect(io.lines[0]).toMatch(/^git-garden \d+\.\d+\.\d+/);
+    expect(io.lines[0]).toMatch(/^git-flower-garden \d+\.\d+\.\d+/);
   });
 });

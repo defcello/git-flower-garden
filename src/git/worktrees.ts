@@ -11,7 +11,7 @@ export interface GitWorktree {
   bare: boolean;
   /** Lock reason ("" when locked without a reason), or null when unlocked. */
   locked: string | null;
-  /** Why Git considers the worktree prunable, or null. Never pruned by git-garden. */
+  /** Why Git considers the worktree prunable, or null. Never pruned by git-flower-garden. */
   prunable: string | null;
   /** True for the main worktree (listed first by Git). */
   main: boolean;

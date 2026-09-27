@@ -6,14 +6,14 @@
 
 ## Context
 
-Users will point git-garden at working clones that hold uncommitted work. A
+Users will point git-flower-garden at working clones that hold uncommitted work. A
 monitor that fetched, pruned, or repaired those clones could move their
 remote-tracking refs, delete branches they rely on, or race with their own Git
 commands. Hooks and repository-provided configuration could execute code.
 
 ## Decision
 
-git-garden never mutates a monitored repository or the user's Git setup:
+git-flower-garden never mutates a monitored repository or the user's Git setup:
 
 - No checkout, pull, push, commit, reset, fetch, prune, gc, or deepening in a user
   clone. No changes to files, the index, refs, hooks, worktrees, or config.

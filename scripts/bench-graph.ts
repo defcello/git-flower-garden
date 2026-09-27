@@ -101,7 +101,7 @@ console.log("| --- | ---: | --- | ---: |");
 // 1. Real Git: build a repository, then read it the way the service does.
 {
   const old = quick ? 10_000 : 100_000;
-  const dir = await mkdtemp(join(tmpdir(), "git-garden-bench-"));
+  const dir = await mkdtemp(join(tmpdir(), "git-flower-garden-bench-"));
   try {
     const spec = quietSpec(old);
     const total = spec.commits.length;

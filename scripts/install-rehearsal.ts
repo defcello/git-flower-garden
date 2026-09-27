@@ -47,7 +47,7 @@ const tarball = join(
 if (!existsSync(tarball))
   throw new Error(`No staged package at ${tarball}; run npm run release:stage`);
 
-const work = await mkdtemp(join(tmpdir(), "git-garden-release-"));
+const work = await mkdtemp(join(tmpdir(), "git-flower-garden-release-"));
 const prefix = join(work, "prefix");
 const npmCache = join(work, "npm-cache");
 const home = join(work, "home");
@@ -87,11 +87,11 @@ const npm = (args: string[]) =>
     "--no-audit",
     "--no-fund",
   ]);
-/** The installed `git-garden` command, as a shell would run it. */
+/** The installed `git-flower-garden` command, as a shell would run it. */
 const shim = windows
-  ? join(prefix, "git-garden.cmd")
-  : join(prefix, "bin", "git-garden");
-const gitGarden = (args: string[]) =>
+  ? join(prefix, "git-flower-garden.cmd")
+  : join(prefix, "bin", "git-flower-garden");
+const gitFlowerGarden = (args: string[]) =>
   windows
     ? run(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", shim, ...args])
     : run(shim, args);
@@ -207,14 +207,14 @@ try {
   if (installedFiles.some((f) => /\.(map|ts)$/.test(f) && !f.endsWith(".d.ts")))
     throw new Error("installed sources or source maps");
 
-  step("git-garden --version");
-  const version = gitGarden(["--version"]).trim();
+  step("git-flower-garden --version");
+  const version = gitFlowerGarden(["--version"]).trim();
   console.log(version);
-  if (version !== `git-garden ${staged.version}`)
+  if (version !== `git-flower-garden ${staged.version}`)
     throw new Error(`unexpected version: ${version}`);
 
   step("init-config and validate-config at the default location");
-  console.log(gitGarden(["init-config"]).trim());
+  console.log(gitFlowerGarden(["init-config"]).trim());
   const configs = (await files(home)).filter((f) => f.endsWith("config.json"));
   const config = configs[0];
   if (configs.length !== 1 || !config)
@@ -224,7 +224,7 @@ try {
   };
   starter.repositories = [{ id: "self", path: repoRoot }];
   await writeFile(config, JSON.stringify(starter, null, 2));
-  console.log(gitGarden(["validate-config"]).trim());
+  console.log(gitFlowerGarden(["validate-config"]).trim());
 
   step("serve with the default cache");
   await withServer(["serve", "--port", "0"], async (url) => {
@@ -258,7 +258,7 @@ try {
     });
   }
   const demoLeft = (await readdir(join(home, "tmp"))).filter((n) =>
-    n.startsWith("git-garden-demo-"),
+    n.startsWith("git-flower-garden-demo-"),
   );
   // Ctrl+C removes it; a killed demo (Windows here) leaves one, never more.
   if (demoLeft.length > (windows ? 1 : 0))
@@ -283,16 +283,16 @@ try {
     ),
   ) as { filename: string }[];
   npm(["install", "--global", join(work, packed[0]?.filename ?? "")]);
-  const updated = gitGarden(["--version"]).trim();
+  const updated = gitFlowerGarden(["--version"]).trim();
   console.log(updated);
-  if (updated !== `git-garden ${nextVersion}`)
+  if (updated !== `git-flower-garden ${nextVersion}`)
     throw new Error(`update did not take: ${updated}`);
   if ((await sha(config)) !== configBefore)
     throw new Error("the update changed the configuration file");
   console.log("configuration kept");
 
   step("remove cached data, then uninstall");
-  console.log(gitGarden(["cache", "--clean-all"]).trim());
+  console.log(gitFlowerGarden(["cache", "--clean-all"]).trim());
   npm(["uninstall", "--global", staged.name]);
   const leftInPrefix = await listed(prefix);
   if (leftInPrefix.length > 0)
@@ -302,17 +302,17 @@ try {
   step("what remains in the home folder");
   const leftInHome = (await listed(home)).filter(
     (f) =>
-      !f.startsWith("tmp/git-garden-demo-") &&
+      !f.startsWith("tmp/git-flower-garden-demo-") &&
       // npm itself enables Node's compile cache in temp for its own runs.
       !f.startsWith("tmp/node-compile-cache/"),
   );
   console.log(leftInHome.join("\n") || "(nothing)");
   const allowed = [
-    /^AppData\/Roaming\/git-garden\/config\.json$/,
-    /^\.config\/git-garden\/config\.json$/,
-    /^Library\/Application Support\/git-garden\/config\.json$/,
+    /^AppData\/Roaming\/git-flower-garden\/config\.json$/,
+    /^\.config\/git-flower-garden\/config\.json$/,
+    /^Library\/Application Support\/git-flower-garden\/config\.json$/,
     // Cache index files kept after --clean-all (no repository data).
-    /^(AppData\/Local\/git-garden\/Cache|\.cache\/git-garden|Library\/Caches\/git-garden)\/[^/]+\.json$/,
+    /^(AppData\/Local\/git-flower-garden\/Cache|\.cache\/git-flower-garden|Library\/Caches\/git-flower-garden)\/[^/]+\.json$/,
   ];
   const unexpected = leftInHome.filter((f) => !allowed.some((a) => a.test(f)));
   if (unexpected.length > 0)

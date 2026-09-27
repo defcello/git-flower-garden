@@ -25,7 +25,7 @@ const log = process.argv[3] ?? "soak.jsonl";
 const endAt = Date.now() + hours * 3_600_000;
 const random = (n: number) => Math.floor(Math.random() * n);
 
-const root = await mkdtemp(join(tmpdir(), "git-garden-soak-"));
+const root = await mkdtemp(join(tmpdir(), "git-flower-garden-soak-"));
 const locals: string[] = [];
 for (let i = 0; i < 10; i++)
   locals.push(

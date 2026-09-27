@@ -6,7 +6,7 @@
 
 ## Context
 
-git-garden must read local Git repositories and filesystem metadata, fetch remotes
+git-flower-garden must read local Git repositories and filesystem metadata, fetch remotes
 with the user's existing credentials, and display continuously on a dedicated
 monitor. Browsers cannot run Git or watch the filesystem. A desktop shell
 (Electron, Tauri) would add packaging, signing, and update work before the first
@@ -14,10 +14,10 @@ graph exists.
 
 ## Decision
 
-Run git-garden as a local background process that owns all Git and filesystem
+Run git-flower-garden as a local background process that owns all Git and filesystem
 access, and serve the UI to an ordinary browser over loopback HTTP. The service
 pushes updates with server-sent events and answers ordinary HTTP reads. There is
-no git-garden account, hosted service, database, or telemetry.
+no git-flower-garden account, hosted service, database, or telemetry.
 
 The service binds to `127.0.0.1` by default and rejects non-loopback hosts until
 authenticated hosting is designed separately. It validates `Host`/`Origin`, avoids

@@ -100,10 +100,10 @@ verifying by re-reading.
 
 ## Operations
 
-- `git-garden demo`: fictional repositories, no credentials or network.
-- `git-garden status` and `GET /api/diagnostics`: freshness, fetch failures,
+- `git-flower-garden demo`: fictional repositories, no credentials or network.
+- `git-flower-garden status` and `GET /api/diagnostics`: freshness, fetch failures,
   counts, read, graph, and fetch timings, and cache sizes.
-- `git-garden cache [--clean <id> | --clean-all]`: cache sizes, flags caches
+- `git-flower-garden cache [--clean <id> | --clean-all]`: cache sizes, flags caches
   of repositories no longer configured, and explicit cleanup limited to
   app-owned directories.
 - Progressive startup: the page is served at once, and repositories fill in.

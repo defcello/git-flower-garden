@@ -20,7 +20,7 @@ export const FIXTURE_NOW = Date.parse("2026-09-22T15:00:00-04:00");
 const port = Number(process.argv[2] ?? 4790);
 // Browser tests pass a directory so they can change repositories while the UI watches.
 const given = process.env.GARDEN_E2E_ROOT;
-const root = given ?? (await mkdtemp(join(tmpdir(), "git-garden-e2e-")));
+const root = given ?? (await mkdtemp(join(tmpdir(), "git-flower-garden-e2e-")));
 if (given) {
   // The directory is named after the test runner's process id, which the OS
   // can reuse: start from an empty one, not a stale run's leftovers.
@@ -73,7 +73,7 @@ if (!result.ok) throw new Error(JSON.stringify(result.errors));
 const app = await startApp(result.config, {
   now: () => FIXTURE_NOW,
   // Never touch the real per-user cache from tests.
-  cacheRoot: join(root, ".git-garden-cache"),
+  cacheRoot: join(root, ".git-flower-garden-cache"),
   port,
   uiDir: resolve(import.meta.dirname, "../../dist/ui"),
 });

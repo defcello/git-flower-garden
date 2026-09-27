@@ -21,14 +21,14 @@
   ],
   "type": "module",
   "bin": {
-    "git-garden": "dist/cli.js"
+    "git-flower-garden": "dist/cli.js"
   },
   "files": [
     "dist/",
     "!dist/**/*.map",
     "!dist/**/*.d.ts",
-    "git-garden.schema.json",
-    "git-garden.example.json",
+    "git-flower-garden.schema.json",
+    "git-flower-garden.example.json",
     "README.md",
     "LICENSE",
     "docs/user-guide.md",

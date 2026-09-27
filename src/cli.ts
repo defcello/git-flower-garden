@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * git-garden command line.
+ * git-flower-garden command line.
  *
- *   git-garden init-config [--config <file>]
- *   git-garden validate-config [--config <file>]
- *   git-garden serve [--config <file>] [--port <n>]
- *   git-garden demo [--port <n>]
- *   git-garden status [--config <file>]
- *   git-garden cache [--config <file>] [--clean <id> | --clean-all]
+ *   git-flower-garden init-config [--config <file>]
+ *   git-flower-garden validate-config [--config <file>]
+ *   git-flower-garden serve [--config <file>] [--port <n>]
+ *   git-flower-garden demo [--port <n>]
+ *   git-flower-garden status [--config <file>]
+ *   git-flower-garden cache [--config <file>] [--clean <id> | --clean-all]
  *
  * Without --config, the per-user configuration file is used.
  */
@@ -22,7 +22,11 @@ import {
   systemTimeZone,
   type Config,
 } from "./config/config.ts";
-import { defaultCacheDir, defaultConfigPath } from "./config/paths.ts";
+import {
+  defaultCacheDir,
+  defaultConfigPath,
+  migrateLegacyFolders,
+} from "./config/paths.ts";
 import { startDemo } from "./demo/run-demo.ts";
 import {
   detectGitVersion,
@@ -57,7 +61,16 @@ export function version(): string {
   }
 }
 
-const USAGE = `Usage: git-garden <command> [options]
+const COMMANDS = [
+  "init-config",
+  "validate-config",
+  "serve",
+  "demo",
+  "status",
+  "cache",
+];
+
+const USAGE = `Usage: git-flower-garden <command> [options]
 
 Commands:
   init-config       Write a starter configuration file
@@ -97,7 +110,7 @@ async function loadConfig(file: string, io: Io): Promise<Config | null> {
     text = await readFile(file, "utf8");
   } catch {
     io.err(
-      `${file}: cannot read configuration. Create one with: git-garden init-config --config "${file}"`,
+      `${file}: cannot read configuration. Create one with: git-flower-garden init-config --config "${file}"`,
     );
     return null;
   }
@@ -118,14 +131,14 @@ async function checkGit(io: Io): Promise<boolean> {
     if (isSupportedGitVersion(found)) {
       if (found.major === 2 && found.minor < 44) {
         io.err(
-          `Note: ${found.raw} predates GIT_NO_LAZY_FETCH (Git 2.44). git-garden only reads commits and refs, which partial clones always contain, but upgrading Git is recommended.`,
+          `Note: ${found.raw} predates GIT_NO_LAZY_FETCH (Git 2.44). git-flower-garden only reads commits and refs, which partial clones always contain, but upgrading Git is recommended.`,
         );
       }
       return true;
     }
     const min = MINIMUM_GIT_VERSION;
     io.err(
-      `${found.raw} is too old; git-garden needs Git ${String(min.major)}.${String(min.minor)} or newer.`,
+      `${found.raw} is too old; git-flower-garden needs Git ${String(min.major)}.${String(min.minor)} or newer.`,
     );
   } catch {
     io.err("Git was not found on PATH. Install Git 2.36 or newer.");
@@ -238,7 +251,7 @@ export async function main(
     return 2;
   }
   if (parsed.values.version) {
-    io.out(`git-garden ${version()}`);
+    io.out(`git-flower-garden ${version()}`);
     return 0;
   }
   const [command, ...extra] = parsed.positionals;
@@ -250,6 +263,13 @@ export async function main(
     io.err(`Unexpected argument: ${extra.join(" ")}`);
     return 2;
   }
+  // Only for real commands, so a typo never moves the user's folders.
+  if (COMMANDS.includes(command))
+    for (const note of await migrateLegacyFolders({
+      config: parsed.values.config === undefined,
+      cache: parsed.values["cache-dir"] === undefined,
+    }))
+      io.err(note);
   const file = resolve(parsed.values.config ?? defaultConfigPath());
   const cacheRoot = resolve(parsed.values["cache-dir"] ?? defaultCacheDir());
   const port = parsePort(parsed.values.port, io);
@@ -269,7 +289,7 @@ export async function main(
       }
       io.out(`Wrote ${file}`);
       io.out(
-        'Add repositories, e.g. { "id": "my-project", "path": "C:/code/my-project" }, then run: git-garden validate-config',
+        'Add repositories, e.g. { "id": "my-project", "path": "C:/code/my-project" }, then run: git-flower-garden validate-config',
       );
       return 0;
     }
@@ -312,7 +332,7 @@ export async function main(
         return 1;
       }
       io.out(
-        `git-garden ${version()} is serving ${String(config.repositories.length)} repositories at ${app.url}`,
+        `git-flower-garden ${version()} is serving ${String(config.repositories.length)} repositories at ${app.url}`,
       );
       io.out("Press Ctrl+C to stop.");
       await untilStopped(() => app.close());
@@ -328,7 +348,7 @@ export async function main(
         return 1;
       }
       io.out(
-        `git-garden demo is serving fictional repositories at ${demo.app.url}`,
+        `git-flower-garden demo is serving fictional repositories at ${demo.app.url}`,
       );
       io.out("Press Ctrl+C to stop; the demo repositories are then deleted.");
       await untilStopped(() => demo.close());
@@ -347,12 +367,12 @@ export async function main(
         )) as DiagnosticsBody;
       } catch {
         io.err(
-          `git-garden is not running at http://${config.server.host}:${String(listenPort)}/`,
+          `git-flower-garden is not running at http://${config.server.host}:${String(listenPort)}/`,
         );
         return 1;
       }
       io.out(
-        `git-garden at http://${config.server.host}:${String(listenPort)}/ · up ${String(body.process.uptimeSeconds)} s · ${mib(body.process.rssBytes)} RSS · ${String(body.process.eventClients)} viewer(s)`,
+        `git-flower-garden at http://${config.server.host}:${String(listenPort)}/ · up ${String(body.process.uptimeSeconds)} s · ${mib(body.process.rssBytes)} RSS · ${String(body.process.eventClients)} viewer(s)`,
       );
       for (const e of body.configErrors) io.err(`configuration: ${e}`);
       for (const r of body.repositories) {

@@ -71,7 +71,7 @@ export function fixtureGit(
 }
 
 /** Every commit is created on this ref, which is deleted once real refs exist. */
-const SCRATCH_REF = "refs/git-garden-fixture/build";
+const SCRATCH_REF = "refs/git-flower-garden-fixture/build";
 
 const ISO_WITH_OFFSET =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
@@ -117,7 +117,7 @@ export async function buildFixture(
 
   // A single fast-import process writes every object and ref, which keeps
   // large generated fixtures fast even where process creation is slow.
-  const marksFile = join(dir, ".git", "git-garden-fixture-marks");
+  const marksFile = join(dir, ".git", "git-flower-garden-fixture-marks");
   await git(
     ["fast-import", "--quiet", "--done", `--export-marks=${marksFile}`],
     fastImportStream(spec),

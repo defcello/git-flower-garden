@@ -1,6 +1,6 @@
 /**
  * The running application: continuous monitoring, configuration reload, and
- * the loopback server. Used by `git-garden serve` and the browser tests.
+ * the loopback server. Used by `git-flower-garden serve` and the browser tests.
  *
  * Configuration changes are validated before anything is applied (roadmap
  * section 5.2): an invalid edit keeps the last valid configuration and shows
@@ -12,7 +12,9 @@ import { watch, type FSWatcher } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import {
+  DEFAULT_SECRET_ENV,
   formatConfigError,
+  LEGACY_SECRET_ENV,
   parseConfig,
   type Config,
 } from "../config/config.ts";
@@ -115,7 +117,10 @@ export async function startApp(
     };
   };
   if (config.webhooks.enabled) {
-    const secret = (options.env ?? process.env)[config.webhooks.secretEnv];
+    const env = options.env ?? process.env;
+    let secret = env[config.webhooks.secretEnv];
+    if (!secret && config.webhooks.secretEnv === DEFAULT_SECRET_ENV)
+      secret = env[LEGACY_SECRET_ENV];
     if (!secret) {
       webhookProblem = `Push notifications are enabled, but the environment variable ${config.webhooks.secretEnv} is not set; remotes are polled instead.`;
     } else {

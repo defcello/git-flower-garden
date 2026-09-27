@@ -8,7 +8,7 @@ import { runGit } from "./run-git.ts";
  * kept in their own namespace so identical tag names cannot collide.
  */
 
-/** Transports git-garden will fetch over. `ext::` and `fd::` can run commands. */
+/** Transports git-flower-garden will fetch over. `ext::` and `fd::` can run commands. */
 export const ALLOWED_PROTOCOLS = [
   "https",
   "http",

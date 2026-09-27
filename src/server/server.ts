@@ -237,8 +237,8 @@ function previewHtml(service: RepositoryService): string {
   const body =
     sections.length > 0
       ? `<main>${sections.join("")}</main>`
-      : `<div class="empty"><p>No repositories are configured yet.</p><p>Add entries to <code>repositories</code> in your configuration file, check it with <code>git-garden validate-config</code>, then restart.</p></div>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>git-garden</title><link rel="stylesheet" href="/preview.css"></head><body><header><h1>git-garden <small>local preview</small></h1></header>${body}</body></html>`;
+      : `<div class="empty"><p>No repositories are configured yet.</p><p>Add entries to <code>repositories</code> in your configuration file, check it with <code>git-flower-garden validate-config</code>, then restart.</p></div>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>git-flower-garden</title><link rel="stylesheet" href="/preview.css"></head><body><header><h1>git-flower-garden <small>local preview</small></h1></header>${body}</body></html>`;
 }
 
 /** Load every file of the built UI into memory, keyed by URL path. */

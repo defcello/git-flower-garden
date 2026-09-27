@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/defcello/git-flower-garden/blob/main/git-garden.schema.json",
-  "title": "git-garden configuration",
-  "description": "Configuration version 1. git-garden validates more than this schema can express (IANA time zones, duplicate repository ids, URL safety); run `git-garden validate-config` for the full check.",
+  "$id": "https://github.com/defcello/git-flower-garden/blob/main/git-flower-garden.schema.json",
+  "title": "git-flower-garden configuration",
+  "description": "Configuration version 1. git-flower-garden validates more than this schema can express (IANA time zones, duplicate repository ids, URL safety); run `git-flower-garden validate-config` for the full check.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "repositories"],
@@ -141,7 +141,7 @@
             "minLength": 1
           },
           "remotes": {
-            "description": "For a local path: remotes to monitor through git-garden's own cache.",
+            "description": "For a local path: remotes to monitor through git-flower-garden's own cache.",
             "type": "array",
             "items": {
               "type": "string",
@@ -200,7 +200,7 @@
         "secretEnv": {
           "type": "string",
           "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$",
-          "default": "GIT_GARDEN_WEBHOOK_SECRET",
+          "default": "GIT_FLOWER_GARDEN_WEBHOOK_SECRET",
           "description": "Environment variable that holds the webhook secret. The secret itself never goes in this file."
         },
         "safetyPollSeconds": {

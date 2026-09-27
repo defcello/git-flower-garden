@@ -12,11 +12,14 @@ test-results/
 *.log
 npm-debug.log*
 
-# Local git-garden configuration and caches. Configurations name private
+# Local git-flower-garden configuration and caches. Configurations name private
 # paths and remotes; caches hold private repository objects. Neither belongs
-# in this repository. Commit only git-garden.example.json.
-git-garden.json
+# in this repository. Commit only git-flower-garden.example.json.
+git-flower-garden.json
 *.local.json
+.git-flower-garden/
+# Former name, so older local files stay ignored too.
+git-garden.json
 .git-garden/
 .cache/
 

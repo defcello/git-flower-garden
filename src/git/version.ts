@@ -9,7 +9,7 @@ export interface GitVersion {
 }
 
 /**
- * Oldest Git release providing every capability git-garden relies on:
+ * Oldest Git release providing every capability git-flower-garden relies on:
  * `GIT_CONFIG_GLOBAL` (2.32) and `git worktree list --porcelain -z` (2.36).
  * See docs/decisions/0006-toolchain-baseline.md.
  */

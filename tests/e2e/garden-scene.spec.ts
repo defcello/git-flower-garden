@@ -72,7 +72,7 @@ async function start(repositories: Entry[]) {
 
 test.beforeAll(async () => {
   test.setTimeout(120_000);
-  root = await mkdtemp(join(tmpdir(), "git-garden-scene-"));
+  root = await mkdtemp(join(tmpdir(), "git-flower-garden-scene-"));
   await buildFixture(artProof, join(root, "tour"));
   await buildFixture(forkMerge, join(root, "fork"));
   await buildFixture(threeHeads, join(root, "three"));

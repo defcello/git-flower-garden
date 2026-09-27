@@ -1,6 +1,6 @@
 # Security policy
 
-git-garden reads private repositories and runs a local web service, so security
+git-flower-garden reads private repositories and runs a local web service, so security
 reports are welcome.
 
 ## Supported versions
@@ -24,7 +24,7 @@ In scope, for example:
 
 - A web page on another origin reading private commit data from the local service,
   or triggering Git commands through it.
-- Any path by which git-garden modifies a monitored repository, its hooks, or the
+- Any path by which git-flower-garden modifies a monitored repository, its hooks, or the
   user's Git configuration or credentials.
 - Command or argument injection through configuration, ref names, commit
   messages, or remote URLs.
@@ -32,4 +32,4 @@ In scope, for example:
 - Escaping or markup injection in rendered repository text.
 
 Out of scope: vulnerabilities in Git itself, in credential helpers, or in the
-user's browser, unless git-garden makes them worse.
+user's browser, unless git-flower-garden makes them worse.

@@ -16,9 +16,12 @@ import { seededRandom } from "../oracle/random-dag.ts";
 
 const root = resolve(import.meta.dirname, "../..");
 const schema = JSON.parse(
-  readFileSync(join(root, "git-garden.schema.json"), "utf8"),
+  readFileSync(join(root, "git-flower-garden.schema.json"), "utf8"),
 ) as object;
-const exampleText = readFileSync(join(root, "git-garden.example.json"), "utf8");
+const exampleText = readFileSync(
+  join(root, "git-flower-garden.example.json"),
+  "utf8",
+);
 const example = JSON.parse(exampleText) as Record<string, unknown>;
 // strictRequired is an Ajv lint that rejects `required` inside `not`; the schema is valid JSON Schema.
 const ajv = new Ajv2020({
@@ -214,7 +217,7 @@ describe("validation errors", () => {
       "c.json:1:1: /repositories is required (use [] to start with no repositories)",
     ]);
     expect(errorsFor('{"version": 2, "repositories": []}')).toEqual([
-      "c.json:1:2: /version unsupported version 2; this git-garden reads version 1",
+      "c.json:1:2: /version unsupported version 2; this git-flower-garden reads version 1",
     ]);
   });
 
@@ -407,7 +410,7 @@ describe("webhooks and GitHub mapping (P1-F)", () => {
       enabled: false,
       host: "127.0.0.1",
       port: 4785,
-      secretEnv: "GIT_GARDEN_WEBHOOK_SECRET",
+      secretEnv: "GIT_FLOWER_GARDEN_WEBHOOK_SECRET",
       safetyPollSeconds: 300,
     });
     const bad = parseConfig(
