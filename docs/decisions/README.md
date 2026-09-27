@@ -25,5 +25,6 @@ supersedes the old one and update the roadmap, examples, schema, and tests toget
 | [0015](0015-botanical-renderer-proof.md) | Botanical art direction and Canvas/SVG renderer proof | Accepted |
 | [0016](0016-focus-view-culling.md) | Focus-view row culling and level of detail | Accepted |
 | [0017](0017-botanical-graph-rules.md) | Botanical graph rules: taper, depth, seeds, growth | Accepted |
+| [0018](0018-two-tier-scene-renderer.md) | Two-tier scene renderer: optional WebGL2 relighting over a Canvas 2D baseline | Proposed |
 
 Benchmark and probe evidence (roadmap P0-B onward) also belongs in this directory.
