@@ -56,8 +56,12 @@ thin and translucent; black: opaque), aligned with the albedo (silhouette overla
 Petals glow brightest at their thin edges with darker veins, stamens and the berry stay opaque,
 sepals and leaves are translucent with dark midribs, and grass blade tips glow along the crest. The
 map replaces the layer's constant and the slider still scales it. Toggle with the checkbox or `T`
-(`tmap=1`); "Relit shows: Translucency" displays the effective map. The ridge has none: backlit
-distant forest does not glow. Open: map or constant.
+(`tmap=0` for the constant); "Relit shows: Translucency" displays the effective map. The ridge has
+none: backlit distant forest does not glow.
+
+**Locked (2026-09-27): 50% front fill, 100% translucency, Codex translucency maps**, with Codex
+normal maps and relit (WebGL2) lighting. These are the page's defaults and carry into the GPU tier.
+Realistic shadows are a separate roadmap item (P2-C).
 
 ## What was judged in the first round
 

@@ -263,8 +263,14 @@ decision:
   maps**; performance was fine in both tiers, even on a first-generation
   Surface Pro. Light stays physical, with a translucency term for grass,
   petals, and leaves lit from behind, and a front fill (bounced light) on the
-  hillside and plants only, never the mountains. Open: the fill power, chosen
-  by the maintainer with a slider in the spike.
+  hillside and plants only, never the mountains. **Locked by the maintainer
+  (2026-09-27): front fill 50% of the Sun and Moon mirrored to the viewer's
+  side; translucency 100%, per texel from Codex-generated translucency maps**
+  (sprites and hill; none on the mountains). Art for the GPU tier therefore
+  comes in three maps per layer: flat-lit albedo, normals, and translucency,
+  each checked for alignment and convention. Measurements on the reference
+  hardware were waived: performance was fine in both tiers, even on a
+  first-generation Surface Pro.
 
 ## Verification
 

@@ -81,10 +81,11 @@ timeInput.value = params.get("minutes") ?? String(8 * 60);
 normalsSelect.value = params.get("normals") === "derived" ? "derived" : "codex";
 inspectInput.checked = params.get("inspect") === "1";
 modeSelect.value = params.get("mode") ?? "lit";
-// Chosen by the maintainer (2026-09-27): 15% fill, 50% translucency.
-fillInput.value = params.get("fill") ?? "15";
-translucencyInput.value = params.get("translucency") ?? "50";
-translucencyMapInput.checked = params.get("tmap") === "1";
+// Locked by the maintainer (2026-09-27): 50% fill, 100% translucency, with
+// the Codex translucency maps.
+fillInput.value = params.get("fill") ?? "50";
+translucencyInput.value = params.get("translucency") ?? "100";
+translucencyMapInput.checked = params.get("tmap") !== "0";
 if (params.get("ui") === "0") document.body.classList.add("bare");
 
 function currentState(): LightingState {
