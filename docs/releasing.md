@@ -16,9 +16,10 @@ For maintainers. Users install the staged package; nothing here ships in it.
 It refuses to pack if the staged files contain source maps, type
 declarations, local user paths, the checkout path, test or tooling names, or
 roadmap references, or if the docs name the wrong npm package. The package
-name is `PACKAGE_NAME` in `scripts/stage-release.ts`; the command is always
-`git-garden`. (The npm name `git-garden` belongs to an unrelated tool, so
-never document `npm install --global git-garden`.)
+name (`@defcello/git-flower-garden`), links, and version come from
+`package.json`; the command is always `git-garden`. The README's install
+command is this release's download link, so the tarball name is checked
+against it. (The unscoped npm name `git-garden` belongs to an unrelated tool.)
 
 `npm run rehearse:install` then installs it globally into a scratch npm
 prefix and home, runs init, validate, serve, and demo, updates to a newer
@@ -34,6 +35,6 @@ configuration file is left. CI runs both on Windows, macOS, and Linux.
 4. The `release` workflow checks the tag against `package.json`, rehearses
    on every OS, and creates a **draft** pre-release with the package and its
    SHA-256. Review it, then publish it on GitHub.
-5. npm (optional, by the maintainer): from `release/stage/` after
-   `npm run release:stage` at the tag, `npm publish --tag beta` for a
-   pre-release (or without `--tag` for a stable one).
+5. Releases are GitHub release files only. The staged package is marked
+   `private`, so an accidental `npm publish` fails; publishing to npm would
+   be a separate decision (remove `private` and add a publish step).

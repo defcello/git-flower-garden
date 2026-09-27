@@ -28,7 +28,12 @@ Git graph semantics, and acceptance criteria.
 
 ## Trying it
 
-The quickest look: `npm ci && npm run build && node dist/cli.js demo`, then open
+**Install the beta** (Node.js 24+, Git 2.36+): download the `.tgz` from the
+[latest release](https://github.com/defcello/git-flower-garden/releases) and run
+`npm install --global ./defcello-git-flower-garden-<version>.tgz`; the command is
+`git-garden`. The [user guide](docs/user-guide.md) covers updating and uninstalling.
+
+From a checkout, the quickest look: `npm ci && npm run build && node dist/cli.js demo`, then open
 <http://127.0.0.1:4784/>. The [user guide](docs/user-guide.md) covers
 installation, configuration, and troubleshooting.
 

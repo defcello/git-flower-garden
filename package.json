@@ -1,12 +1,17 @@
 {
-  "name": "git-garden",
+  "name": "@defcello/git-flower-garden",
   "version": "0.2.0-beta.1",
   "private": true,
   "description": "Visualize Git activity as a garden of commits.",
   "license": "MIT",
+  "author": "DefCello",
+  "homepage": "https://github.com/defcello/git-flower-garden#readme",
+  "bugs": {
+    "url": "https://github.com/defcello/git-flower-garden/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/defcello/git-garden.git"
+    "url": "git+https://github.com/defcello/git-flower-garden.git"
   },
   "keywords": [
     "git",

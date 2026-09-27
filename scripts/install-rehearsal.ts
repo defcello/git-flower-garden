@@ -38,10 +38,11 @@ const step = (text: string) => {
 const staged = JSON.parse(
   await readFile(join(repoRoot, "release", "stage", "package.json"), "utf8"),
 ) as { name: string; version: string };
+// npm names a scoped package's tarball "scope-name-version.tgz".
 const tarball = join(
   repoRoot,
   "release",
-  `${staged.name}-${staged.version}.tgz`,
+  `${staged.name.replace(/^@/, "").replace("/", "-")}-${staged.version}.tgz`,
 );
 if (!existsSync(tarball))
   throw new Error(`No staged package at ${tarball}; run npm run release:stage`);

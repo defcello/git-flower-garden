@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/defcello/git-garden/blob/main/git-garden.schema.json",
+  "$id": "https://github.com/defcello/git-flower-garden/blob/main/git-garden.schema.json",
   "title": "git-garden configuration",
   "description": "Configuration version 1. git-garden validates more than this schema can express (IANA time zones, duplicate repository ids, URL safety); run `git-garden validate-config` for the full check.",
   "type": "object",

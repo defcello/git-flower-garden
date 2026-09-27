@@ -15,25 +15,27 @@ Windows, macOS, and Linux are supported.
 
 ## Install
 
+git-garden is distributed as a file on its [releases page](https://github.com/defcello/git-flower-garden/releases). Install
+it with npm, using the file's link or a downloaded copy:
+
 ```sh
-npm install --global git-garden-app
+npm install --global https://github.com/defcello/git-flower-garden/releases/download/v<version>/defcello-git-flower-garden-<version>.tgz
+# or, after downloading it:
+npm install --global ./defcello-git-flower-garden-<version>.tgz
 git-garden --version
 ```
 
-The package is `git-garden-app`; the command it installs is `git-garden`.
-(The npm package named `git-garden` is an unrelated tool.) Installing runs no
-install scripts and adds no other packages. On Windows, a global install goes
-to your user profile and needs no administrator rights.
+The package is `@defcello/git-flower-garden`; the command it installs is
+`git-garden`. Installing runs no install scripts and adds no other packages.
+On Windows, a global install goes to your user profile and needs no
+administrator rights.
 
 On Windows, if PowerShell says running scripts is disabled, your system's
 policy blocks npm's PowerShell launcher: run `git-garden.cmd` instead (or use
 Command Prompt). There is no need to change the policy.
 
-To install a downloaded release file instead: `npm install --global
-./git-garden-app-<version>.tgz`.
-
-**Update:** run the same install command again (stop a running `git-garden`
-first). Your configuration and cache are kept.
+**Update:** install a newer release the same way (stop a running
+`git-garden` first). Your configuration and cache are kept.
 
 **Uninstall:** see [Diagnostics and data](#diagnostics-and-data).
 
@@ -236,7 +238,7 @@ stored, and nothing is sent anywhere except fetches to your own remotes.
 
 ```sh
 git-garden cache --clean-all        # optional: remove cached remote data
-npm uninstall --global git-garden-app
+npm uninstall --global @defcello/git-flower-garden
 ```
 
 This removes the program and the `git-garden` command. Your configuration

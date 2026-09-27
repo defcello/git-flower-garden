@@ -4,10 +4,11 @@ All notable changes to git-garden. The project follows
 [semantic versioning](https://semver.org/); before 1.0, minor versions may
 change configuration or behavior, and the notes say how.
 
-## 0.2.0-beta.1: garden beta (unreleased)
+## 0.2.0-beta.1: garden beta (2026-09-27)
 
-Install with `npm install --global git-garden-app` (the command is still
-`git-garden`). The package contains only the finished program: no sources,
+Install from the [release](https://github.com/defcello/git-flower-garden/releases/tag/v0.2.0-beta.1):
+`npm install --global <link to the .tgz file>`. The package is
+`@defcello/git-flower-garden`; the command is still `git-garden`. The package contains only the finished program: no sources,
 source maps, or development tooling, and no install scripts.
 
 

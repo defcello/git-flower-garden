@@ -15,9 +15,6 @@ import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
-/** The npm package name (the installed command is always `git-garden`). */
-export const PACKAGE_NAME = "git-garden-app";
-
 const repoRoot = resolve(import.meta.dirname, "..");
 // npm's own JavaScript entry point, run with Node (no shell on Windows).
 const npmCli = process.env.npm_execpath;
@@ -36,7 +33,23 @@ const source = JSON.parse(
   engines: Record<string, string>;
   bin: Record<string, string>;
   type: string;
+  name: string;
+  author: string;
+  homepage: string;
+  bugs: { url: string };
+  repository: { type: string; url: string };
 };
+// The package name comes from package.json; the command is always git-garden.
+const PACKAGE_NAME = source.name;
+/** npm's tarball name for a (possibly scoped) package. */
+const TARBALL = `${PACKAGE_NAME.replace(/^@/, "").replace("/", "-")}-${source.version}.tgz`;
+/** Releases are GitHub release files, not npm registry packages (for now). */
+const REPOSITORY = source.repository.url
+  .replace(/^git\+/, "")
+  .replace(/\.git$/, "");
+if (!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(REPOSITORY))
+  throw new Error(`Not a GitHub repository URL: ${REPOSITORY}`);
+const DOWNLOAD = `${REPOSITORY}/releases/download/v${source.version}/${TARBALL}`;
 
 function run(cmd: string, args: string[], cwd: string): string {
   return execFileSync(cmd, args, {
@@ -57,6 +70,9 @@ async function files(dir: string): Promise<string[]> {
 }
 
 await rm(stage, { recursive: true, force: true });
+// Only this version's tarball is left to release.
+for (const old of await readdir(releaseDir).catch(() => []))
+  if (old.endsWith(".tgz")) await rm(join(releaseDir, old));
 await mkdir(stage, { recursive: true });
 
 // Server and CLI: the release build (no maps, declarations, or comments).
@@ -93,7 +109,9 @@ await writeFile(
   readme,
   (await readFile(readme, "utf8"))
     .replaceAll("{{PACKAGE}}", PACKAGE_NAME)
-    .replaceAll("{{INSTALL}}", PACKAGE_NAME)
+    .replaceAll("{{INSTALL}}", DOWNLOAD)
+    .replaceAll("{{RELEASES}}", `${REPOSITORY}/releases`)
+    .replaceAll("{{REPOSITORY}}", REPOSITORY)
     .replaceAll("{{VERSION}}", source.version),
 );
 
@@ -106,6 +124,13 @@ const manifest = {
   type: source.type,
   bin: source.bin,
   engines: source.engines,
+  author: source.author,
+  homepage: source.homepage,
+  bugs: source.bugs,
+  repository: source.repository,
+  // Distributed as GitHub release files; this guards against an accidental
+  // npm publish until publishing there is decided. Global installs work.
+  private: true,
   files: [
     "dist/",
     "docs/",
@@ -148,11 +173,16 @@ for (const file of await files(stage)) {
   if (text.includes(repoRoot))
     problems.push(`${name}: contains the checkout path`);
 }
-// The docs must name the package users actually install.
+// The docs must show how users actually install and remove this package.
+const readmeText = await readFile(join(stage, "README.md"), "utf8");
+if (!readmeText.includes(`npm install --global ${DOWNLOAD}`))
+  problems.push("README.md: does not show this release's install command");
 for (const doc of ["README.md", "docs/user-guide.md"]) {
   const text = await readFile(join(stage, doc), "utf8");
-  if (!text.includes(`npm install --global ${PACKAGE_NAME}`))
-    problems.push(`${doc}: does not show the install command`);
+  if (!text.includes(`npm uninstall --global ${PACKAGE_NAME}`))
+    problems.push(`${doc}: does not show the uninstall command`);
+  if (/{{[A-Z]+}}/.test(text))
+    problems.push(`${doc}: has an unfilled placeholder`);
   if (/npm (un)?install --global git-garden(?!-)/.test(text))
     problems.push(`${doc}: names the unrelated npm package "git-garden"`);
 }
@@ -170,6 +200,10 @@ const packed = JSON.parse(
 ) as { filename: string; entryCount: number; size: number }[];
 const result = packed[0];
 if (!result) throw new Error("npm pack produced nothing");
+if (result.filename !== TARBALL)
+  throw new Error(
+    `npm named the package ${result.filename}; the docs link ${TARBALL}`,
+  );
 const tarball = join(releaseDir, result.filename);
 const sha256 = createHash("sha256")
   .update(await readFile(tarball))

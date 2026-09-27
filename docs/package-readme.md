@@ -23,7 +23,10 @@ npm install --global {{INSTALL}}
 git-garden --version
 ```
 
-The command is `git-garden`. Installing runs no install scripts and adds no
+Or download the `.tgz` file from the [releases page]({{RELEASES}}) and run
+`npm install --global ./<file>.tgz`.
+
+The package is `{{PACKAGE}}`; the command is `git-garden`. Installing runs no install scripts and adds no
 other packages.
 
 On Windows, if PowerShell says running scripts is disabled, your system's
@@ -55,11 +58,9 @@ installed program files are not meant to be changed.
 
 ## Update
 
-```sh
-npm install --global {{INSTALL}}
-```
-
-Your configuration and cache are kept. Stop a running `git-garden` first.
+Install a newer release the same way, with its file or URL from the
+[releases page]({{RELEASES}}). Your configuration and cache are kept. Stop a
+running `git-garden` first.
 
 ## Uninstall
 
@@ -89,6 +90,6 @@ delete the `git-garden` folder that holds it:
 - **Network:** fetches only the remotes you configure, using your existing Git
   credentials. It sends no telemetry and checks for no updates.
 
-## License
+## Source and license
 
-MIT
+Source, issues, and releases: <{{REPOSITORY}}>. MIT license.

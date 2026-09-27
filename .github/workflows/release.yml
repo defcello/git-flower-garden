@@ -3,8 +3,8 @@ name: release
 # Push a version tag (for example v0.2.0-beta.1) to build the end-user
 # package, rehearse install/update/uninstall on every OS, and create a DRAFT
 # GitHub release with the package attached. Nothing is public until a
-# maintainer publishes the draft; npm publishing is a separate, manual step
-# (docs/releasing.md).
+# maintainer publishes the draft. Releases are GitHub files only: this
+# workflow never publishes to npm (docs/releasing.md).
 on:
   push:
     tags: ["v*"]
@@ -59,5 +59,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd release
-          sha256sum *.tgz > SHA256SUMS.txt
-          gh release create "${GITHUB_REF_NAME}" *.tgz SHA256SUMS.txt             --draft --prerelease --verify-tag             --title "git-garden ${GITHUB_REF_NAME#v}"             --notes "Install: npm install --global ./$(ls *.tgz). See CHANGELOG.md."
+          test "$(ls *.tgz | wc -l)" -eq 1
+          file="$(ls *.tgz)"
+          sha256sum "$file" > SHA256SUMS.txt
+          url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${file}"
+          cat > notes.md <<NOTES
+          Beta. Requires Node.js 24 or newer and Git 2.36 or newer.
+
+              npm install --global ${url}
+
+          The command is git-garden. To uninstall:
+          npm uninstall --global @defcello/git-flower-garden
+
+          See the README and CHANGELOG in the package. SHA-256: SHA256SUMS.txt.
+          NOTES
+          gh release create "${GITHUB_REF_NAME}" "$file" SHA256SUMS.txt \
+            --draft --prerelease --verify-tag \
+            --title "git-garden ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md
