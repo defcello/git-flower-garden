@@ -4,7 +4,18 @@ All notable changes to git-garden. The project follows
 [semantic versioning](https://semver.org/); before 1.0, minor versions may
 change configuration or behavior, and the notes say how.
 
-## 0.1.0: functional preview (unreleased until the soak completes)
+## Unreleased
+
+- **Garden preview** (roadmap Phase 2, P2-A review candidate, not yet
+  accepted): botanical artwork over the same graph, as Canvas and SVG
+  compositors, with four lighting studies. On a Blue Ridge hillside, up to 64
+  repositories grow from fixed positions; names, status, and focus icons
+  appear on hover. The technical view remains the default.
+  ([ADR 0015](docs/decisions/0015-botanical-renderer-proof.md))
+- Fixed: focusing an empty repository offered no control to return to the
+  garden (Escape still worked).
+
+## 0.1.0: functional preview (2026-09-27)
 
 The technical view: a reliable, live, gitk-style graph of many repositories.
 Roadmap Phase 1 ([ROADMAP.md](ROADMAP.md)); design decisions and evidence in

@@ -122,7 +122,22 @@ Every 20 s there's a commit or branch change, every 2 minutes a remote push,
 and every hour a 3-minute remote outage. An SSE client reconnects every 10
 minutes, and memory, handles, reads, and errors are sampled every minute.
 
-Result: *in progress at the time of writing; recorded when complete.*
+Result (2026-09-26 17:31 to 2026-09-27 01:30, the v0.1.0 server code, on the
+2-core Core m3 laptop, which was also running builds and browser tests for
+much of the time): **passed.**
+
+| Measure | Result |
+| --- | --- |
+| Changes applied | 1,661 commits, branch moves, and pushes; 3,206 repository reads; 3,709 events delivered |
+| Event stream | 0 errors across 48 reconnects |
+| Errors | 14 push failures and 15 fetch failures, every one inside a scheduled remote outage |
+| Recovery | "Not ready" samples only in the 8 outage windows (3–4 samples each); every source was ready again within a minute of the remote returning |
+| Heap | 9.4–21.4 MiB throughout; hourly peak 21.4 MiB in the first hour, 17.1–17.7 MiB in every later hour |
+| Resident memory | Hourly medians 37.7, 44.0, 44.7, 44.9, 43.7, 44.2, 29.8, 28.3 MiB (72 MiB only at startup) |
+| Handles | At most 12 active; no growth |
+
+No listener, handle, or memory growth; the final sample had all 11 sources
+ready. The log is `tmp/soak/soak-8h.jsonl` (not committed).
 
 ## Gap found later: interaction at the 2,000-node envelope
 

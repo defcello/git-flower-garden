@@ -1,6 +1,6 @@
 # git-garden roadmap
 
-Status: Phase 1 complete in code, including optional GitHub push notifications (P1-F). Open: the 8-hour soak record (ADR 0013), maintainer rehearsals (private GitHub, real webhook, physical sleep/resume), and the 2,000-node interaction target (not met, ADR 0015). Phase 2: P2-A review candidate reviewed and corrected; the maintainer's visual and asset-licensing review is the gate. Updated: 2026-09-27.
+Status: Phase 1 complete in code, including optional GitHub push notifications (P1-F). The 8-hour soak passed (ADR 0013); v0.1.0 is tagged. Open: maintainer rehearsals (private GitHub, real webhook, physical sleep/resume), and the 2,000-node interaction target (not met, ADR 0015). Phase 2: P2-A review candidate reviewed and corrected; the maintainer's visual and asset-licensing review is the gate. Updated: 2026-09-27.
 
 This document is the implementation contract for future sessions and contributors. It takes the repository from its initial README and MIT license to a reliable, beautiful, continuously updated garden of Git repositories. Checkboxes describe future work, not completed capabilities. Milestones are dependency gates, not calendar promises.
 
@@ -413,7 +413,7 @@ Dependencies: P1-D. Suggested release label: `v0.1.0`, functional preview.
 - [x] Run the correctness, performance, and security checks in Sections 12–13.
 - [x] Publish installation/start/stop instructions, authentication troubleshooting, config reference, supported-size statement, and known limitations.
 - [x] Provide a deterministic demo mode so contributors can view the product without credentials or a live repository.
-- [ ] Run an eight-hour monitor session, sleep/resume test, and clean-install rehearsal on all supported operating systems. *(Clean-install rehearsal runs in CI on all three OSes; the 8-hour soak runs locally, see ADR 0013; physical sleep/resume is for the maintainer.)*
+- [ ] Run an eight-hour monitor session, sleep/resume test, and clean-install rehearsal on all supported operating systems. *(Clean-install rehearsal runs in CI on all three OSes; the 8-hour soak passed locally, see ADR 0013; physical sleep/resume is for the maintainer.)*
 - [x] Measure remote cache size and expose diagnostics: source freshness, fetch failures, graph counts, build duration, and cache usage.
 
 Exit: R01–R10 pass through the polling path, documented latency targets are measured, and a new user can configure and observe a repository without contributor assistance. This is the gate before production garden artwork.
