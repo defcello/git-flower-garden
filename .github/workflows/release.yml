@@ -1,0 +1,63 @@
+name: release
+
+# Push a version tag (for example v0.2.0-beta.1) to build the end-user
+# package, rehearse install/update/uninstall on every OS, and create a DRAFT
+# GitHub release with the package attached. Nothing is public until a
+# maintainer publishes the draft; npm publishing is a separate, manual step
+# (docs/releasing.md).
+on:
+  push:
+    tags: ["v*"]
+  # A manual run builds and rehearses the package without releasing it.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rehearse:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Tag matches package version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
+      - run: npm test
+      - run: npm run release:stage
+      - run: npm run rehearse:install
+      - if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: release/*.tgz
+          if-no-files-found: error
+
+  draft:
+    needs: rehearse
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: package
+          path: release
+      - name: Create a draft pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd release
+          sha256sum *.tgz > SHA256SUMS.txt
+          gh release create "${GITHUB_REF_NAME}" *.tgz SHA256SUMS.txt             --draft --prerelease --verify-tag             --title "git-garden ${GITHUB_REF_NAME#v}"             --notes "Install: npm install --global ./$(ls *.tgz). See CHANGELOG.md."

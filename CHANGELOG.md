@@ -4,7 +4,12 @@ All notable changes to git-garden. The project follows
 [semantic versioning](https://semver.org/); before 1.0, minor versions may
 change configuration or behavior, and the notes say how.
 
-## Unreleased
+## 0.2.0-beta.1: garden beta (unreleased)
+
+Install with `npm install --global git-garden-app` (the command is still
+`git-garden`). The package contains only the finished program: no sources,
+source maps, or development tooling, and no install scripts.
+
 
 - **Garden preview** (roadmap Phase 2, P2-A review candidate, not yet
   accepted): botanical artwork over the same graph, as Canvas and SVG

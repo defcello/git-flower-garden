@@ -6,6 +6,7 @@ export default tseslint.config(
   {
     ignores: [
       "dist/",
+      "release/",
       "coverage/",
       "node_modules/",
       "tmp/",

@@ -2,8 +2,8 @@
 
 git-garden shows the live commit graphs of your Git repositories in a browser,
 for a dedicated monitor or a spare window. It reads your repositories; it
-never changes them. This guide covers version 0.1 (the technical view; the
-garden artwork comes later).
+never changes them. This guide covers version 0.2 (beta): the technical view
+and the garden view.
 
 ## Requirements
 
@@ -15,22 +15,30 @@ Windows, macOS, and Linux are supported.
 
 ## Install
 
-From a release tarball (`git-garden-<version>.tgz`):
-
 ```sh
-npm install --global ./git-garden-0.1.0.tgz
+npm install --global git-garden-app
 git-garden --version
 ```
 
-From source:
+The package is `git-garden-app`; the command it installs is `git-garden`.
+(The npm package named `git-garden` is an unrelated tool.) Installing runs no
+install scripts and adds no other packages. On Windows, a global install goes
+to your user profile and needs no administrator rights.
 
-```sh
-git clone https://github.com/defcello/git-garden.git
-cd git-garden
-npm ci
-npm run build
-node dist/cli.js --version        # or: npm install --global .
-```
+On Windows, if PowerShell says running scripts is disabled, your system's
+policy blocks npm's PowerShell launcher: run `git-garden.cmd` instead (or use
+Command Prompt). There is no need to change the policy.
+
+To install a downloaded release file instead: `npm install --global
+./git-garden-app-<version>.tgz`.
+
+**Update:** run the same install command again (stop a running `git-garden`
+first). Your configuration and cache are kept.
+
+**Uninstall:** see [Diagnostics and data](#diagnostics-and-data).
+
+Your configuration file is the only thing you need to edit. The installed
+program files are not meant to be changed; an update replaces them.
 
 ## Try the demo
 
@@ -224,8 +232,19 @@ data. Removing a repository from the configuration stops monitoring it but
 keeps its cache; `git-garden cache --clean <id>` deletes it. Nothing else is
 stored, and nothing is sent anywhere except fetches to your own remotes.
 
-**Uninstall:** `npm uninstall --global git-garden`, then delete the
-configuration file and the cache directory above.
+**Uninstall:**
+
+```sh
+git-garden cache --clean-all        # optional: remove cached remote data
+npm uninstall --global git-garden-app
+```
+
+This removes the program and the `git-garden` command. Your configuration
+file stays for a later install; to remove it, delete its `git-garden` folder
+(`%APPDATA%git-garden` on Windows, `~/Library/Application Support/git-garden`
+on macOS, `~/.config/git-garden` on Linux). If you used `git-garden demo` and
+closed its window instead of pressing Ctrl+C, the next demo removes the
+leftover temporary folder.
 
 ## Supported sizes
 

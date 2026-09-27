@@ -1,6 +1,6 @@
 {
   "name": "git-garden",
-  "version": "0.1.0",
+  "version": "0.2.0-beta.1",
   "private": true,
   "description": "Visualize Git activity as a garden of commits.",
   "license": "MIT",
@@ -50,7 +50,8 @@
     "dev:ui": "vite",
     "test:e2e": "playwright test",
     "rehearse:install": "node scripts/install-rehearsal.ts",
-    "bench:live": "node scripts/bench-live.ts"
+    "bench:live": "node scripts/bench-live.ts",
+    "release:stage": "npm run build && node scripts/stage-release.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
