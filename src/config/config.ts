@@ -54,7 +54,13 @@ export interface RepositoryConfig {
 export interface Config {
   version: typeof CONFIG_VERSION;
   server: { host: (typeof LOOPBACK_HOSTS)[number]; port: number };
-  history: { businessDays: number; weekdays: Weekday[]; timeZone: string };
+  history: {
+    businessDays: number;
+    weekdays: Weekday[];
+    timeZone: string;
+    /** Show only this many of the newest recent commits; null shows them all. */
+    maxRecentCommits: number | null;
+  };
   monitor: {
     localReconcileSeconds: number;
     remotePollSeconds: number;
@@ -276,6 +282,7 @@ export function validateConfig(
     "businessDays",
     "weekdays",
     "timeZone",
+    "maxRecentCommits",
   ]);
   const businessDays = integer(
     "/history/businessDays",
@@ -320,6 +327,17 @@ export function validateConfig(
       timeZone = history.timeZone;
     }
   }
+
+  const maxRecentCommits =
+    history.maxRecentCommits === undefined
+      ? null
+      : integer(
+          "/history/maxRecentCommits",
+          history.maxRecentCommits,
+          1,
+          100_000,
+          1,
+        );
 
   const monitor = section(root, "monitor", [
     "localReconcileSeconds",
@@ -612,7 +630,7 @@ export function validateConfig(
     config: {
       version: CONFIG_VERSION,
       server: { host, port },
-      history: { businessDays, weekdays, timeZone },
+      history: { businessDays, weekdays, timeZone, maxRecentCommits },
       monitor: monitorValues,
       display: { renderer: "technical", reducedMotion },
       repositories,

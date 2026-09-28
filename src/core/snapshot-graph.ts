@@ -11,6 +11,7 @@ export function snapshotGraphInput(
   snapshot: RepositorySnapshot,
   window: HistoryWindow,
   reveal: readonly string[] = [],
+  maxRecent: number | null = null,
 ): GraphInput {
   const heads = snapshot.refs
     .filter(
@@ -26,6 +27,7 @@ export function snapshotGraphInput(
     ),
     window,
     reveal,
+    maxRecent,
   };
 }
 

@@ -157,6 +157,7 @@ describe("example configuration", () => {
         history: {
           businessDays: 2,
           weekdays: ["mon", "tue", "wed", "thu", "fri"],
+          maxRecentCommits: null,
         },
         monitor: {
           localReconcileSeconds: 5,
@@ -337,6 +338,7 @@ describe("validator agrees with the JSON Schema (Ajv) on structural rules", () =
       ["history", "businessDays"],
       ["history", "weekdays"],
       ["history", "timeZone"],
+      ["history", "maxRecentCommits"],
       ["monitor", "remotePollSeconds"],
       ["monitor", "maxConcurrentFetches"],
       ["display", "renderer"],

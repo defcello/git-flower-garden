@@ -1,0 +1,50 @@
+name: pages
+
+# The static demo on GitHub Pages: the garden UI with a snapshot of public
+# repositories (scripts/pages-snapshot.ts). Nothing is live; a daily run
+# takes a fresh snapshot. Scheduled runs use the default branch.
+on:
+  push:
+    branches: [main, feat/pages-demo]
+  schedule:
+    - cron: "17 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # vendor/astronomy-engine, pinned and reviewed (ADR 0019).
+          submodules: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run pages:build
+      - run: npm run pages:snapshot -- dist/pages/demo-data
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist/pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

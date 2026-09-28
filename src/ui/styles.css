@@ -645,6 +645,28 @@ code,
   color: var(--boundary);
 }
 
+/* Laid out in the page flow, except over the garden scene (below). */
+.banners {
+  display: contents;
+}
+/* Over the garden scene the banners float in the sky at the right, clear of
+   the art notice at the left, and stay visible: a notice or problem must not
+   hide behind the unattended scene. */
+.botanical .banners {
+  position: fixed;
+  z-index: 12;
+  right: 20px;
+  top: 76px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(520px, calc(100vw - 40px));
+}
+.botanical .banners .banner {
+  margin: 0;
+  background: #fffef8dc;
+  backdrop-filter: blur(12px);
+}
 .banner ul {
   margin: 6px 0 0;
   padding-left: 18px;

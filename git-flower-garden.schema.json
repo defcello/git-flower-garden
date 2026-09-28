@@ -54,6 +54,12 @@
           "description": "IANA time zone, e.g. America/New_York. Defaults to the system time zone.",
           "type": "string",
           "minLength": 1
+        },
+        "maxRecentCommits": {
+          "description": "Show at most this many of the newest commits from the recent window in each repository; older ones fold into dashed stems with a hidden count. Branch heads, their common ancestors, and worktree HEADs are always shown. Unlimited when omitted.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
         }
       }
     },

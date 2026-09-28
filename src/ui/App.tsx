@@ -12,7 +12,7 @@ import type {
   RemoteStatusJson,
   RepositoryStatusJson,
 } from "../api/types.ts";
-import { useGardenData } from "./api.ts";
+import { STATIC_DEMO, useGardenData } from "./api.ts";
 import { Details } from "./Details.tsx";
 import { BotanicalGraph } from "./BotanicalGraph.tsx";
 import type { Renderer } from "./botanical.ts";
@@ -219,43 +219,46 @@ export function App() {
           missing history.
         </div>
       )}
-      {repositories?.display.notice && (
-        <div className="banner notice" role="note">
-          {repositories.display.notice}
-        </div>
-      )}
-      {repositories && repositories.configErrors.length > 0 && (
-        <div className="banner" role="alert">
-          <strong>
-            The configuration file has problems; the last valid configuration is
-            still in use.
-          </strong>
-          <ul>
-            {repositories.configErrors.map((e) => (
-              <li key={e}>
-                <code>{e}</code>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {repositories?.webhooks.state === "error" && (
-        <div className="banner" role="status">
-          {repositories.webhooks.diagnostic}
-        </div>
-      )}
-      {repositories && repositories.restartNeeded.length > 0 && (
-        <div className="banner" role="status">
-          Restart git-flower-garden to apply changes to{" "}
-          {repositories.restartNeeded.join(", ")}.
-        </div>
-      )}
-      {connectionError && (
-        <div className="banner" role="status">
-          Live updates interrupted ({connectionError}). Showing the last known
-          state.
-        </div>
-      )}
+      <div className="banners">
+        {repositories?.display.notice && (
+          <div className="banner notice" role="note">
+            {repositories.display.notice}
+          </div>
+        )}
+        {repositories && repositories.configErrors.length > 0 && (
+          <div className="banner" role="alert">
+            <strong>
+              The configuration file has problems; the last valid configuration
+              is still in use.
+            </strong>
+            <ul>
+              {repositories.configErrors.map((e) => (
+                <li key={e}>
+                  <code>{e}</code>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {repositories?.webhooks.state === "error" && (
+          <div className="banner" role="status">
+            {repositories.webhooks.diagnostic}
+          </div>
+        )}
+        {repositories && repositories.restartNeeded.length > 0 && (
+          <div className="banner" role="status">
+            Restart git-flower-garden to apply changes to{" "}
+            {repositories.restartNeeded.join(", ")}.
+          </div>
+        )}
+        {connectionError && (
+          <div className="banner" role="status">
+            {STATIC_DEMO
+              ? `Could not load the demo snapshot (${connectionError}).`
+              : `Live updates interrupted (${connectionError}). Showing the last known state.`}
+          </div>
+        )}
+      </div>
       {!repositories ? (
         <p className="loading" role="status">
           Loading…
@@ -613,14 +616,17 @@ const RENDERER_KEY = "git-flower-garden.renderer";
 /** The key under the project's former name, read when the new one is unset. */
 const LEGACY_RENDERER_KEY = "git-garden.renderer";
 
+/** The demo opens on the garden; the installed service on the graph. */
+const defaultRenderer: Renderer = STATIC_DEMO ? "canvas" : "technical";
+
 function loadRenderer(): Renderer {
   try {
     const saved =
       window.localStorage.getItem(RENDERER_KEY) ??
       window.localStorage.getItem(LEGACY_RENDERER_KEY);
-    return saved === "canvas" || saved === "svg" ? saved : "technical";
+    return saved === "canvas" || saved === "svg" ? saved : defaultRenderer;
   } catch {
-    return "technical";
+    return defaultRenderer;
   }
 }
 

@@ -143,6 +143,7 @@ checking. Unknown keys are errors.
 | `history.businessDays` | `2` | How many business days of recent commits to show (1–366) |
 | `history.weekdays` | Monday–Friday | Which days count: `sun` … `sat` |
 | `history.timeZone` | system zone | IANA name, e.g. `America/New_York` |
+| `history.maxRecentCommits` | unlimited | Show at most this many of the newest recent commits per repository (1–100000); older ones fold into dashed stems with a hidden count. Branch heads, their common ancestors, and worktree HEADs always show |
 | `monitor.localReconcileSeconds` | `5` | Change check for local repositories (1–3600) |
 | `monitor.remotePollSeconds` | `60` | Remote fetch interval (10–86400); failures back off up to 15 minutes |
 | `monitor.maxConcurrentFetches` | `2` | Fetches running at once across all repositories (1–16) |

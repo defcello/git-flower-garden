@@ -3,7 +3,8 @@
  *
  * Visible commits M = branch heads ∪ required ancestor anchors ∪ commits in
  * the recent window ∪ worktree HEADs (∪ commits explicitly revealed for
- * inspection). Every other reachable commit is hidden. Edges connect each
+ * inspection). With `maxRecent`, only that many of the newest window commits
+ * are shown; the rest are hidden like any old commit. Every other reachable commit is hidden. Edges connect each
  * visible commit to the first visible commits reached along each parent path:
  *
  * - "direct": the visible parent is an actual Git parent.
@@ -40,6 +41,8 @@ export interface GraphInput {
   window: HistoryWindow;
   /** Commits temporarily revealed, e.g. an old tag being inspected. */
   reveal?: readonly string[];
+  /** Show at most this many window commits, newest first (ties by OID). */
+  maxRecent?: number | null;
 }
 
 export type InclusionReason =
@@ -166,10 +169,17 @@ export function buildVisibleGraph(input: GraphInput): VisibleGraph {
     const node = mark(anchor.oid, "ancestor");
     if (node) node.anchorFor = anchor.heads;
   }
-  for (const oid of reachable) {
-    if (inWindow(window, (commits.get(oid) as TopologyCommit).committerTime))
-      mark(oid, "recent");
+  const recent = [...reachable].filter((oid) =>
+    inWindow(window, (commits.get(oid) as TopologyCommit).committerTime),
+  );
+  const maxRecent = input.maxRecent ?? null;
+  if (maxRecent !== null && recent.length > maxRecent) {
+    const time = (oid: string) =>
+      (commits.get(oid) as TopologyCommit).committerTime;
+    recent.sort((a, b) => time(b) - time(a) || (a < b ? -1 : a > b ? 1 : 0));
+    recent.length = maxRecent;
   }
+  for (const oid of recent) mark(oid, "recent");
   for (const oid of input.worktreeHeads ?? []) mark(oid, "worktree");
   for (const oid of input.reveal ?? []) mark(oid, "inspection");
 

@@ -154,8 +154,9 @@ function oracle(input: GraphInput, visible: Set<string>) {
 }
 
 describe("agrees with a path-enumeration oracle", () => {
-  it("on 1,500 random DAGs with missing objects, shallow boundaries, and random windows", () => {
+  it("on 1,500 random DAGs with missing objects, shallow boundaries, random windows, and commit caps", () => {
     let collapsed = 0;
+    let capped = 0;
     let multi = 0;
     let missingTails = 0;
     for (let seed = 0; seed < 1500; seed++) {
@@ -192,12 +193,15 @@ describe("agrees with a path-enumeration oracle", () => {
         businessDates: [],
         timeZone: "UTC",
       };
+      // A third of the cases cap the recent commits shown.
+      const maxRecent = seed % 3 === 0 ? 1 + Math.floor(random() * 4) : null;
       const input: GraphInput = {
         commits,
         shallowBoundary: shallow,
         heads: heads.map((h, i) => ({ id: `h${String(i)}`, commitOid: h })),
         worktreeHeads,
         window,
+        maxRecent,
       };
       const g = buildVisibleGraph(input);
 
@@ -217,10 +221,20 @@ describe("agrees with a path-enumeration oracle", () => {
         ...worktreeHeads,
         ...oracleAnchors(parentMap, heads).keys(),
       ]);
-      for (const oid of reachable) {
-        const t = (commits.get(oid) as TopologyCommit).committerTime * 1000;
-        if (t >= window.startMs && t <= window.endMs) expected.add(oid);
-      }
+      // Commit times are distinct here, so "newest" needs no tie-break.
+      const recent = [...reachable]
+        .filter((oid) => {
+          const t = (commits.get(oid) as TopologyCommit).committerTime * 1000;
+          return t >= window.startMs && t <= window.endMs;
+        })
+        .sort(
+          (a, b) =>
+            (commits.get(b) as TopologyCommit).committerTime -
+            (commits.get(a) as TopologyCommit).committerTime,
+        );
+      if (maxRecent !== null && recent.length > maxRecent) capped++;
+      for (const oid of recent.slice(0, maxRecent ?? recent.length))
+        expected.add(oid);
       expect([...g.nodes.keys()].sort(), `seed ${String(seed)}`).toEqual(
         [...expected].sort(),
       );
@@ -244,6 +258,7 @@ describe("agrees with a path-enumeration oracle", () => {
     expect(collapsed).toBeGreaterThan(500);
     expect(multi).toBeGreaterThan(50);
     expect(missingTails).toBeGreaterThan(100);
+    expect(capped).toBeGreaterThan(100);
   }, 60_000);
 });
 

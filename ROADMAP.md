@@ -481,6 +481,20 @@ The relit software tier is on branch `feat/software-tier-relight`, [PR #1](https
 - [ ] Any fixes from the items above are committed to the branch, and the check passes again.
 - [ ] Merged to `main`; this gate is checked off and the ledger updated in the same change; the branch is deleted.
 
+### Public demo on GitHub Pages
+
+A static demo at https://defcello.github.io/git-flower-garden/, for trying the garden without installing it, and for maintainer review on other devices (the Surface Pro). Built on branch `feat/pages-demo`, off the step 3 lighting branch, so it carries the relit scene before PR #1 merges. It is not the product: the product stays local (section 1, principle 2), and the demo says so on every page.
+
+- [x] Snapshot of real public repositories through the real app (`npm run pages:snapshot`): treeless clones of eight mid-size projects (git-flower-garden, Git, React, Vite, TypeScript, curl, Neovim, Rustlings), served once, with the API responses saved as JSON. About a minute for all eight.
+- [x] `vite build --mode pages` (`npm run pages:build`): the UI reads the snapshot once instead of the live event stream, opens on the garden, and shows the sky over Asheville on the viewer's clock.
+- [x] Readable plants: each clone is trimmed to the default branch, at most five other branches active in the last 90 days, and the three newest tags; `history.maxRecentCommits` (new, unlimited by default, oracle-tested) shows only the 12 newest recent commits. Untrimmed, React's 975 branches and Git's 1,011 tags grew plants many screens tall: the garden does not yet fit a large plant to its place on the hill.
+- [x] Banners float in the sky over the garden scene instead of hiding behind it.
+- [x] `pages` workflow: builds, snapshots, and deploys on pushes to `main` and `feat/pages-demo`, by hand, and daily (scheduled runs use `main`, so the daily refresh starts after the merge).
+- [ ] Maintainer tries the demo, including on the Surface Pro.
+- [ ] After PR #1 merges, rebase this branch on `main`, merge it, remove `feat/pages-demo` from the workflow and the Pages environment, and delete the branch.
+
+Future, not scheduled: procedurally generated flowers and leaves (part of the vision, not yet on this roadmap) are the point at which to revisit the demo's branch, tag, and commit limits and fit large histories to their plot.
+
 ### P2-C: Hill and Blue Ridge setting
 
 - [ ] Compose layered sky, distant mountain silhouettes with atmospheric perspective, manicured grassy hill, plot shadows, and foreground accents.
