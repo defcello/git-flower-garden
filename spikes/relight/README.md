@@ -5,6 +5,11 @@ A throwaway comparison page for the gate in [ADR 0018](../../docs/decisions/0018
 Nothing here ships; `npm run build` does not include it. If the gate passes, the tiers are rebuilt
 properly in `src/` (steps 3 and 4) and this directory is deleted.
 
+**Step 3 status:** `shading.ts` moved to `src/ui/scene/shading.ts` (the spike imports it from there),
+and the art below ships as the production scene art in `src/ui/assets/scene/` (renamed without
+`-codex`). The software tier in `src/` relights exactly on the CPU instead of using this page's
+keyframes (maintainer decision). This page stays until the GPU tier (step 4) replaces `gpu.ts`.
+
 ## Running it
 
 ```sh

@@ -102,12 +102,17 @@ measured need appears.
 
 ### Software tier: Canvas 2D
 
-- **Keyframed lighting**: backdrop layers and sprites are pre-lit into
-  offscreen canvases for the current `LightingState` by blending authored
-  keyframes (dawn, day, dusk, night) and tinting. The pre-lit layers are
-  rebuilt only when lighting changes meaningfully (sun moved more than about
-  half a degree, or weather changed; in practice about once a minute), never
-  per frame.
+- **Exact lighting, computed rarely** (amended 2026-09-27, maintainer
+  decision; this replaced blended keyframes): a Web Worker lights every
+  texel of the backdrop layers and sprite atlases on the CPU with the same
+  `shade` function the GPU tier's shader mirrors, from the albedo, normal,
+  and translucency maps, and returns bitmaps. It runs only when the light
+  changes meaningfully (the Sun moved about 0.3° or colors changed about
+  0.5%; in practice every minute or two while the Sun is up), never per
+  frame. So the software tier matches the relit look exactly, including the
+  season, the Sun's side, front fill, and translucency, which keyframes
+  could not know; there are no keyframe images and no bake script. The
+  spike's keyframed half showed those limits (step 2).
 - The sky is a Canvas gradient from the same `LightingState` stops, so the
   sky color matches the GPU tier exactly; only the shading of sprites and
   layers is approximated.
@@ -199,9 +204,10 @@ decision:
 - **Backdrop** is separate transparent layers (far, middle, and near ridges,
   the hill), not one flat image. The sky becomes procedural, so it needs no
   art beyond optional cloud sprites.
-- **Software keyframes** are rendered from the same albedo and normals by a
-  development-only script (`scripts/`, never shipped), so the two tiers
-  cannot drift apart in design.
+- **Both tiers light from the same maps with the same `shade` function**
+  (`src/ui/scene/shading.ts`), so they cannot drift apart in design. (The
+  development-time keyframe script first planned here is not needed; see
+  "Software tier".)
 - **Generation**: images are generated with the Codex CLI available on the
   maintainer's machine, as in P2-A. Every prompt goes in
   [docs/art/prompts.md](../art/prompts.md) and every file in the asset
@@ -272,8 +278,43 @@ decision:
   hardware were waived: performance was fine in both tiers, even on a
   first-generation Surface Pro.
 
+- **Step 3, software tier: lighting done** (2026-09-27). The maintainer
+  chose exact CPU relighting over keyframes and promoted the spike art
+  (ridge, hill, and sprites, each with Codex normal and translucency maps)
+  to production, `src/ui/assets/scene/`, with checksums in the asset
+  manifest; the P2-A atlas and backdrop are retired to `docs/art/p2a/`.
+  `src/ui/scene/`: `shading.ts` (moved from the spike, with the locked 50%
+  fill and 100% translucency and a per-texel translucency input),
+  `relight.ts` (pure, tested), `worker.ts` and `client.ts` (one worker per
+  page; the last lit art stays up while the next is computed), and
+  `view.ts` (cover transform, sky bodies, stars, relight key, lit colors).
+  `SceneCanvas.tsx` replaces the CSS-graded backdrop and DOM sky with one
+  Canvas 2D drawing of the sky, Sun, Moon, stars, and relit layers, redrawn
+  only when the light, the lit art, or the window changes. Both garden
+  compositors draw sprites from the relit atlases (a separately lit mirror
+  for mirrored sprites) and procedural stems, knots, and halos in colors
+  lit the same way. Plants' drop shadows now fall away from the Sun and
+  vanish at night. Two decisions made while building, for the maintainer's
+  review: the focus view lights its plant with the noon preview light,
+  because a dusk- or moonlit plant was dark and muddy on the pale
+  inspection card; and without a configured location the garden is lit by
+  the noon preview. All 64 hillside slots were checked against the new hill
+  and still sit on grass, so the table is unchanged. The CSP allows `blob:`
+  images (the SVG compositor's relit atlases) and names `worker-src 'self'`.
+  Measured in headless Chromium on a desktop CPU: 290–470 ms of worker time
+  per relight at 1672×941 layers and a 512-pixel sprite atlas; the focus
+  view's 2,000-commit timings match or beat the previous build on the same
+  machine. **Open in step 3**: sway, the frame-rate cap, the View-menu tier
+  choice (Auto, GPU, Software, Static), the relight cost on the Surface Pro,
+  and a `SceneDescription` shared with the GPU tier (plants are still drawn
+  per plot).
+
 ## Verification
 
+- Unit tests: relighting on synthetic texels (facing and backlit light,
+  translucency maps, alpha, mirrored cells, map corrections), when a relight
+  is needed, lit stem colors, and the shipped art's checksums and sizes
+  against the asset manifest (`tests/ui/relight.test.ts`).
 - Unit tests: astronomy results against published reference cases
   (sunrise and sunset tables, moon phase dates, a high-latitude polar day and
   night), a check that the vendored files match their reviewed SHA-256, and
@@ -295,8 +336,11 @@ decision:
   relighting) needs it, not because of a measured bottleneck. It remains
   optional and never the only path.
 - Two drawing tiers are more code to maintain than one. The shared
-  `SceneDescription`, a single lighting model, and development-time keyframe
-  baking keep the difference to how pixels are shaded.
+  `SceneDescription`, a single lighting model, and one `shade` function for
+  both tiers keep the difference to when pixels are shaded, not how.
+- The software tier spends a fraction of a second of background CPU per
+  relight, a few times a minute at most (measured below), and holds the
+  decoded maps in the worker's memory.
 - The art library roughly doubles in files (albedo and normals, layered
   backdrop). Generation stays reproducible through recorded prompts.
 - No npm runtime dependency is added. One reviewed, pinned submodule

@@ -69,11 +69,16 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
   await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
   await expect(page.locator('canvas[data-ready="true"]')).toHaveCount(7);
   const landscape = page.locator(".landscape");
+  const scene = page.locator(".landscape-scene");
   const note = page.locator(".art-notice");
-  // The fixture configures no location: Live keeps the daytime backdrop.
+  // The fixture configures no location: Live is lit by the noon Sun.
   await expect(landscape).toHaveAttribute("data-sky", "day");
   await expect(note).toContainText("set a location");
-  await expect(page.locator(".sky-sun, .sky-moon, .sky-stars")).toHaveCount(0);
+  // The ridge and hill are relit in a worker (ADR 0018, step 3).
+  await expect(scene).toHaveAttribute("data-art", "ready");
+  await expect(scene).toHaveAttribute("data-lit", "true");
+  await expect(scene).toHaveAttribute("data-sun", "true");
+  await expect(scene).toHaveAttribute("data-stars", "false");
   const sky = page.getByLabel("Sky", { exact: true });
   await expect(sky.locator("option").first()).toHaveText(
     "Live · no location configured",
@@ -95,11 +100,9 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
       await expect(landscape).toHaveAttribute("data-sky", preview.name);
       await expect(note).toContainText("Sky preview");
       await expect(note).toContainText("not live conditions");
-      await expect(page.locator(".sky-sun")).toHaveCount(preview.sun ? 1 : 0);
-      await expect(page.locator(".sky-moon")).toHaveCount(preview.moon ? 1 : 0);
-      await expect(page.locator(".sky-stars")).toHaveCount(
-        preview.stars ? 1 : 0,
-      );
+      await expect(scene).toHaveAttribute("data-sun", String(preview.sun));
+      await expect(scene).toHaveAttribute("data-moon", String(preview.moon));
+      await expect(scene).toHaveAttribute("data-stars", String(preview.stars));
       await page.screenshot({
         path: testInfo.outputPath(`${preview.name}-${String(width)}.png`),
       });
@@ -107,16 +110,26 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
   }
   // The sky is decoration: it never takes pointer input from the garden.
   expect(
-    await page
-      .locator(".landscape-sky")
-      .evaluate((node) => getComputedStyle(node).pointerEvents),
+    await scene.evaluate((node) => getComputedStyle(node).pointerEvents),
   ).toBe("none");
-  // Night is darker than noon, by the lighting model's grade.
+  // The hill is relit: far darker at night than at noon. Sample the grass
+  // once each relight has landed (the light key changes the art).
+  const grass = () =>
+    scene.evaluate((node) => {
+      const canvas = node as HTMLCanvasElement;
+      const data = canvas
+        .getContext("2d")
+        ?.getImageData(canvas.width / 2 - 20, canvas.height * 0.9, 40, 10).data;
+      let sum = 0;
+      for (let i = 0; i < (data?.length ?? 0); i += 4)
+        sum += (data?.[i] ?? 0) + (data?.[i + 1] ?? 0) + (data?.[i + 2] ?? 0);
+      return sum / ((data?.length ?? 4) / 4) / 3;
+    });
+  await sky.selectOption("noon");
+  await expect.poll(grass).toBeGreaterThan(60);
+  const day = await grass();
   await sky.selectOption("night");
-  const night = await landscape.evaluate((node) =>
-    getComputedStyle(node).getPropertyValue("--sky-grade"),
-  );
-  expect(night).toMatch(/brightness\(0\.2/);
+  await expect.poll(grass).toBeLessThan(day / 4);
   await sky.selectOption("live");
   await expect(landscape).toHaveAttribute("data-sky", "day");
   await expect(note).not.toContainText("Sky preview");
@@ -128,8 +141,8 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
   ).toBeLessThanOrEqual(390);
 });
 
-test("missing atlas falls back to the technical drawing", async ({ page }) => {
-  await page.route("**/botanical-atlas-*.png", (route) => route.abort());
+test("missing art falls back to the technical drawing", async ({ page }) => {
+  await page.route("**/sprites-albedo-*.png", (route) => route.abort());
   await page.goto("/");
   await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
   await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");

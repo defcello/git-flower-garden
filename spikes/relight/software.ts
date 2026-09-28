@@ -21,7 +21,7 @@ import {
   LAYERS,
   type Adjustments,
   type LayerLight,
-} from "./shading.ts";
+} from "../../src/ui/scene/shading.ts";
 import {
   layerQuad,
   moonLight,

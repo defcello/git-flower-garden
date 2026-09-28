@@ -46,8 +46,10 @@ const SECURITY_HEADERS = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "X-Frame-Options": "DENY",
   "Cache-Control": "no-store",
+  // blob: images are the scene's relit sprite atlases, made in the page
+  // (ADR 0018); the relighting worker is a same-origin script.
   "Content-Security-Policy":
-    "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "default-src 'none'; script-src 'self'; worker-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 } as const;
 
 const MIME: Record<string, string> = {

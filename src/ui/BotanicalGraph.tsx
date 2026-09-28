@@ -1,5 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import atlasUrl from "./assets/botanical-atlas.png";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   ATLAS_SIZE,
   botanicalScene,
@@ -9,27 +8,8 @@ import {
   type Scene,
 } from "./botanical.ts";
 import { GraphSvg, graphWidth, type GraphSvgProps } from "./GraphSvg.tsx";
+import { useSceneArt, type Channel, type LitArt } from "./scene/client.ts";
 import { blendScenes, TRANSITION_MS, type Frame } from "./transition.ts";
-
-/** One decoded atlas per page, shared by every plot and redraw. */
-let loadedAtlas: HTMLImageElement | null = null;
-let atlasLoading: Promise<HTMLImageElement> | null = null;
-function loadAtlas(): Promise<HTMLImageElement> {
-  atlasLoading ??= new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => {
-      loadedAtlas = image;
-      resolve(image);
-    };
-    image.onerror = () => {
-      // Allow a later attempt (e.g. after the service restarts).
-      atlasLoading = null;
-      reject(new Error("atlas failed to load"));
-    };
-    image.src = atlasUrl;
-  });
-  return atlasLoading;
-}
 
 const GROUND_COLOR = "rgba(38, 52, 24, 0.22)";
 
@@ -77,15 +57,21 @@ function useSceneFrame(scene: Scene, graphId: string): Frame {
     : settled;
 }
 
-/** Canvas artwork plus the same SVG hit/label layer used by the truth renderer. */
+/**
+ * Canvas artwork plus the same SVG hit/label layer used by the truth
+ * renderer. Sprites come from the scene's relit atlases (ADR 0018); if they
+ * cannot be made, the plant falls back to the technical drawing.
+ */
 export function BotanicalGraph(
-  props: GraphSvgProps & { compositor: "canvas" | "svg" },
+  props: GraphSvgProps & {
+    compositor: "canvas" | "svg";
+    /** Which light the artwork takes: the sky's, or daylight for inspection. */
+    light?: Channel;
+  },
 ) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const [failed, setFailed] = useState(false);
-  const artFailed = useCallback(() => {
-    setFailed(true);
-  }, []);
+  const sceneArt = useSceneArt(props.light);
+  const art = sceneArt.state === "ready" ? sceneArt.art : null;
   const scene = useMemo(() => botanicalScene(props.graph), [props.graph]);
   const frame = useSceneFrame(scene, props.graph.id);
   // Parsed once per path string, not on every pan/zoom/animation frame.
@@ -100,8 +86,8 @@ export function BotanicalGraph(
     const element = canvas.current;
     const ctx = element?.getContext("2d");
     if (!element || !ctx) return;
-    let disposed = false;
-    let atlas: HTMLImageElement | null = loadedAtlas;
+    if (!art) return;
+    const lit = (color: string) => art.palette[color] ?? color;
     const path = (d: string) => {
       let p = paths.current.get(d);
       if (!p) {
@@ -111,7 +97,7 @@ export function BotanicalGraph(
       return p;
     };
     const draw = () => {
-      if (disposed || document.hidden || !atlas) return;
+      if (document.hidden) return;
       // Bound backing memory even for tall histories; interaction is vector based.
       const ratio = Math.min(
         window.devicePixelRatio || 1,
@@ -153,22 +139,22 @@ export function BotanicalGraph(
         if (stem.dashed) {
           // Pale under-stroke separates crossings without introducing a junction.
           ctx.setLineDash([]);
-          ctx.strokeStyle = HALO_COLOR;
+          ctx.strokeStyle = lit(HALO_COLOR);
           ctx.lineWidth = stem.width + 2.5;
           ctx.stroke(path(stem.halo));
           ctx.setLineDash([3, 5]);
-          ctx.strokeStyle = stem.color;
+          ctx.strokeStyle = lit(stem.color);
           ctx.lineWidth = stem.width;
           ctx.stroke(path(stem.path));
         } else {
-          ctx.fillStyle = HALO_COLOR;
+          ctx.fillStyle = lit(HALO_COLOR);
           ctx.fill(path(stem.halo));
-          ctx.fillStyle = stem.color;
+          ctx.fillStyle = lit(stem.color);
           ctx.fill(path(stem.path));
         }
       }
       ctx.setLineDash([]);
-      ctx.fillStyle = KNOT_COLOR;
+      ctx.fillStyle = lit(KNOT_COLOR);
       for (const knot of frame.knots) {
         if (!near(knot.y, knot.r)) continue;
         ctx.globalAlpha = knot.alpha;
@@ -183,9 +169,9 @@ export function BotanicalGraph(
         ctx.save();
         ctx.translate(sprite.x, sprite.y);
         ctx.rotate(sprite.rotate);
-        if (sprite.flip) ctx.scale(-1, 1);
+        // A mirrored sprite comes from the mirrored atlas, lit as mirrored.
         ctx.drawImage(
-          atlas,
+          sprite.flip ? art.spritesMirrored : art.sprites,
           (sprite.kind % 2) * CELL_SIZE,
           Math.floor(sprite.kind / 2) * CELL_SIZE,
           CELL_SIZE,
@@ -200,33 +186,20 @@ export function BotanicalGraph(
       ctx.globalAlpha = 1;
       element.dataset.ready = "true";
     };
-    if (atlas) {
-      // Pan, zoom, and animation re-run this effect every frame: draw synchronously.
-      draw();
-    } else {
-      loadAtlas().then(
-        (image) => {
-          atlas = image;
-          draw();
-        },
-        () => {
-          if (!disposed) setFailed(true);
-        },
-      );
-    }
+    // Pan, zoom, animation, and relighting re-run this effect: draw synchronously.
+    draw();
     const redraw = () => {
       draw();
     };
     document.addEventListener("visibilitychange", redraw);
     window.addEventListener("resize", redraw);
     return () => {
-      disposed = true;
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };
-  }, [frame, top, bottom, width, height, transform, props.compositor]);
+  }, [frame, top, bottom, width, height, transform, props.compositor, art]);
 
-  if (failed) return <GraphSvg {...props} />;
+  if (sceneArt.state === "failed") return <GraphSvg {...props} />;
   return (
     <div
       className="botanical-graph"
@@ -243,12 +216,14 @@ export function BotanicalGraph(
           aria-hidden="true"
         >
           <g transform={transform}>
-            <BotanicalMarks
-              frame={frame}
-              top={top}
-              bottom={bottom}
-              onError={artFailed}
-            />
+            {art && (
+              <BotanicalMarks
+                frame={frame}
+                top={top}
+                bottom={bottom}
+                art={art}
+              />
+            )}
           </g>
         </svg>
       )}
@@ -261,15 +236,16 @@ const BotanicalMarks = memo(function BotanicalMarks({
   frame,
   top,
   bottom,
-  onError,
+  art,
 }: {
   frame: Frame;
   top: number;
   bottom: number;
-  onError: () => void;
+  art: LitArt;
 }) {
   const near = (y: number, reach: number) =>
     y + reach >= top && y - reach <= bottom;
+  const lit = (color: string) => art.palette[color] ?? color;
   return (
     <>
       {frame.grounds.map((ground) =>
@@ -294,20 +270,20 @@ const BotanicalMarks = memo(function BotanicalMarks({
           >
             <path
               d={stem.halo}
-              stroke={HALO_COLOR}
+              stroke={lit(HALO_COLOR)}
               strokeWidth={stem.width + 2.5}
             />
             <path
               d={stem.path}
-              stroke={stem.color}
+              stroke={lit(stem.color)}
               strokeWidth={stem.width}
               strokeDasharray="3 5"
             />
           </g>
         ) : (
           <g key={stem.key} opacity={stem.alpha}>
-            <path d={stem.halo} fill={HALO_COLOR} />
-            <path d={stem.path} fill={stem.color} />
+            <path d={stem.halo} fill={lit(HALO_COLOR)} />
+            <path d={stem.path} fill={lit(stem.color)} />
           </g>
         ),
       )}
@@ -318,7 +294,7 @@ const BotanicalMarks = memo(function BotanicalMarks({
             cx={knot.x}
             cy={knot.y}
             r={knot.r}
-            fill={KNOT_COLOR}
+            fill={lit(KNOT_COLOR)}
             opacity={knot.alpha}
           />
         ) : null,
@@ -331,7 +307,7 @@ const BotanicalMarks = memo(function BotanicalMarks({
           <g
             key={sprite.key}
             opacity={sprite.alpha}
-            transform={`translate(${String(sprite.x)} ${String(sprite.y)}) rotate(${String(degrees)})${sprite.flip ? " scale(-1 1)" : ""}`}
+            transform={`translate(${String(sprite.x)} ${String(sprite.y)}) rotate(${String(degrees)})`}
           >
             <svg
               x={-size / 2}
@@ -341,10 +317,9 @@ const BotanicalMarks = memo(function BotanicalMarks({
               viewBox={`${String((sprite.kind % 2) * CELL_SIZE)} ${String(Math.floor(sprite.kind / 2) * CELL_SIZE)} ${String(CELL_SIZE)} ${String(CELL_SIZE)}`}
             >
               <image
-                href={atlasUrl}
+                href={sprite.flip ? art.spritesMirroredUrl : art.spritesUrl}
                 width={ATLAS_SIZE}
                 height={ATLAS_SIZE}
-                onError={onError}
               />
             </svg>
           </g>
