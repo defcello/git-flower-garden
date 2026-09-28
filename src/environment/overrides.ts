@@ -11,23 +11,12 @@ import {
 import type { Place } from "./astronomy.ts";
 
 /** Asheville, North Carolina, in the Blue Ridge. */
-export const BLUE_RIDGE: Place = {
+const BLUE_RIDGE: Place = {
   latitude: 35.5951,
   longitude: -82.5515,
   elevationMeters: 650,
 };
-export const BLUE_RIDGE_ZONE = "America/New_York";
-
-/**
- * The sky's place when none is configured: Blacksburg, Virginia, in the
- * Blue Ridge (maintainer choice, 2026-09-28).
- */
-export const BLACKSBURG: Place = {
-  latitude: 37.2296,
-  longitude: -80.4139,
-  elevationMeters: 634,
-};
-export const BLACKSBURG_ZONE = "America/New_York";
+const BLUE_RIDGE_ZONE = "America/New_York";
 
 /** Longyearbyen, Svalbard: midnight Sun in June, polar night in December. */
 const SVALBARD: Place = {

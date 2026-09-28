@@ -4,7 +4,7 @@
  * duplicate IDs are all errors, reported together with a JSON Pointer and a
  * line/column so the user can fix everything in one pass.
  */
-import { BLACKSBURG, BLACKSBURG_ZONE } from "../environment/overrides.ts";
+import { BLACKSBURG, BLACKSBURG_ZONE } from "../environment/places.ts";
 import { isAbsolute, resolve } from "node:path";
 import {
   WEEKDAYS,

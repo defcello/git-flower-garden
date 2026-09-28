@@ -12,7 +12,7 @@ import {
   instantOfLocalTime,
   localTimeOfDay,
 } from "../environment/environment.ts";
-import { BLACKSBURG, BLACKSBURG_ZONE } from "../environment/overrides.ts";
+import { BLACKSBURG, BLACKSBURG_ZONE } from "../environment/places.ts";
 import {
   SKY_BOOKMARKS,
   bookmarkSetting,
