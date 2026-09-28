@@ -185,3 +185,54 @@ export function relight(
   }
   return out;
 }
+
+/** A band of rows cut from a layer, lit on its own core (band.ts). */
+export interface Band {
+  /** First row of the layer in this band. */
+  row: number;
+  source: LayerSource;
+}
+
+/**
+ * Cut a layer into `parts` bands of whole rows (copies, so each can be
+ * transferred to its own worker). Lighting is per texel, so bands lit apart
+ * and joined (`joinBands`) match the layer lit whole, byte for byte.
+ */
+export function splitBands(source: LayerSource, parts: number): Band[] {
+  const { width, height } = source.albedo;
+  const bands: Band[] = [];
+  for (let i = 0; i < parts; i++) {
+    const row = Math.floor((height * i) / parts);
+    const end = Math.floor((height * (i + 1)) / parts);
+    const rows = end - row;
+    bands.push({
+      row,
+      source: {
+        albedo: {
+          width,
+          height: rows,
+          data: source.albedo.data.slice(row * width * 4, end * width * 4),
+        },
+        normals: {
+          width,
+          height: rows,
+          data: source.normals.data.slice(row * width * 4, end * width * 4),
+        },
+        translucency:
+          source.translucency?.slice(row * width, end * width) ?? null,
+      },
+    });
+  }
+  return bands;
+}
+
+/** Join lit bands (RGBA, in any order) into the whole layer's RGBA. */
+export function joinBands(
+  width: number,
+  height: number,
+  lit: readonly { row: number; rgba: Uint8ClampedArray }[],
+): Uint8ClampedArray<ArrayBuffer> {
+  const out = new Uint8ClampedArray(width * height * 4);
+  for (const { row, rgba } of lit) out.set(rgba, row * width * 4);
+  return out;
+}
