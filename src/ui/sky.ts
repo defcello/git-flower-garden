@@ -9,6 +9,7 @@ import type { EnvironmentJson } from "../api/types.ts";
 import type { Place } from "../environment/astronomy.ts";
 import {
   environmentSnapshot,
+  loopAdvance,
   type EnvironmentSnapshot,
 } from "../environment/environment.ts";
 import { lightingState, type LightingState } from "../environment/lighting.ts";
@@ -136,4 +137,47 @@ export function describeSky(sky: Sky): string {
   const sun = `sun ${String(Math.round(state.sun.altitude))}°`;
   const moonAltitude = `${String(Math.round(moon.altitude))}°`;
   return `${snapshot.localTime} at ${where} · ${state.twilight} · ${sun} · ${phase} at ${moonAltitude}`;
+}
+
+/** The loop plays a whole day in 30 seconds. */
+export const LOOP_DAY_MS = 30_000;
+
+/**
+ * While `looping`, move a fixed sky on smoothly, a day per `LOOP_DAY_MS`,
+ * one step per animation frame (none while the page is hidden). The scene
+ * repaints as each relight lands (SceneCanvas.tsx).
+ */
+export function useSkyLoop(
+  looping: boolean,
+  update: (change: (setting: SkySetting) => SkySetting) => void,
+): void {
+  useEffect(() => {
+    if (!looping) return;
+    const rate = (24 * 3_600_000) / LOOP_DAY_MS;
+    let last: number | null = null;
+    let frame = 0;
+    const step = (now: number) => {
+      const elapsed = last === null ? 0 : Math.min(now - last, 250);
+      last = now;
+      if (elapsed > 0)
+        update((setting) =>
+          setting.mode === "fixed"
+            ? {
+                ...setting,
+                time: loopAdvance(
+                  setting.time,
+                  elapsed * rate,
+                  setting.timeZone,
+                ),
+                bookmark: null,
+              }
+            : setting,
+        );
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [looping, update]);
 }

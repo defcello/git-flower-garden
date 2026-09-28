@@ -646,25 +646,51 @@ code,
 }
 
 /* Laid out in the page flow, except over the garden scene (below). */
+.hud,
+.hud-notes,
 .banners {
   display: contents;
 }
-/* Over the garden scene the banners float in the sky at the right, clear of
-   the art notice at the left, and stay visible: a notice or problem must not
-   hide behind the unattended scene. */
-.botanical .banners {
+/*
+ * Over the garden scene, the top bar, the art notice, and the banners float
+ * in one column at the top, each below the last, so none overlaps another
+ * however the bar wraps. The notes sit side by side under the bar: the art
+ * notice at the left, banners at the right. Banners stay visible: a notice
+ * or problem must not hide behind the unattended scene.
+ */
+.botanical .hud {
   position: fixed;
-  z-index: 12;
-  right: 20px;
-  top: 76px;
+  z-index: 20;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
+  pointer-events: none;
+}
+.botanical .hud > * {
+  pointer-events: auto;
+}
+.botanical .hud-notes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 16px;
+  padding: 12px 20px 0;
+  pointer-events: none;
+}
+.botanical .banners {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
   gap: 8px;
-  width: min(520px, calc(100vw - 40px));
+  max-width: 520px;
+  margin-left: auto;
+  pointer-events: auto;
 }
 .botanical .banners .banner {
   margin: 0;
-  background: #fffef8dc;
+  background: var(--glass);
   backdrop-filter: blur(12px);
 }
 .banner ul {
@@ -711,6 +737,10 @@ code,
   --accent: #305e3c;
   --boundary: #9a3b2a;
   --worktree: #c28a2c;
+  --hover-row: rgba(47, 125, 79, 0.1);
+  /* Panels over the scene: the top bar, notes, toolbars, and the drawer. */
+  --glass: #fffef8dc;
+  --glass-strong: #fffef8e8;
   /* The stage: the 1920×1080 design space (ADR 0018 "Resolution"), as
      large as fits the window, centered. The sky, the landscape, and the
      plants share it, so the whole scene always shows at 16:9 and every
@@ -725,6 +755,23 @@ code,
   color-scheme: light;
   /* Beyond the stage's edges. */
   background: #0f1611;
+}
+/* After civil dusk the panels over the scene turn dark, so the focus view
+   and the controls do not glare against the night. Plants in the focus
+   view stay lit by daylight for legibility. */
+.botanical.night {
+  --bg: #121814;
+  --card: #1b231e;
+  --ink: #e4ece5;
+  --muted: #a5b4a9;
+  --line: #3a4a40;
+  --accent: #8fd6a9;
+  --boundary: #e07a64;
+  --worktree: #e0a948;
+  --hover-row: rgba(143, 214, 169, 0.12);
+  --glass: #151c18dc;
+  --glass-strong: #151c18ec;
+  color-scheme: dark;
 }
 .landscape,
 .botanical .garden-scene {
@@ -780,21 +827,18 @@ code,
   transform: none;
 }
 .botanical .topbar {
-  background: #fffef8dc;
+  background: var(--glass);
   border-color: #ffffff80;
   backdrop-filter: blur(12px);
 }
 /* In the sky, clear of every hillside slot and focus icon, and never a
    pointer target. */
 .botanical .art-notice {
-  position: fixed;
-  z-index: 12;
-  left: 20px;
-  top: 76px;
+  flex: 1 1 360px;
+  max-width: 720px;
   pointer-events: none;
-  width: min(720px, calc(100vw - 40px));
   margin: 0;
-  background: #fffef8dc;
+  background: var(--glass);
   backdrop-filter: blur(12px);
 }
 /* The hillside is the stage, like the landscape it is planted on, so slot
@@ -865,7 +909,7 @@ code,
   top: var(--icon-y);
   width: 44px;
   height: 44px;
-  background: #fffef8e8;
+  background: var(--glass-strong);
   backdrop-filter: blur(9px);
   transform: translate(-50%, -50%);
   /* Invisible but reachable: hovering the icon itself reveals it. */
@@ -905,7 +949,7 @@ code,
   max-width: 330px;
   padding: 8px 12px;
   border-radius: 10px 10px 0 0;
-  background: #fffef8e8;
+  background: var(--glass-strong);
   backdrop-filter: blur(9px);
 }
 .botanical .garden-scene .plot-card .status {
@@ -914,7 +958,7 @@ code,
   margin: 0;
   padding: 7px 12px;
   border-radius: 0 10px 10px 10px;
-  background: #fffef8e8;
+  background: var(--glass-strong);
   box-shadow: 0 8px 22px #213f2524;
   backdrop-filter: blur(9px);
 }
@@ -961,11 +1005,24 @@ code,
 .botanical .focus-side,
 .botanical .focus-head,
 .botanical .toolbar button {
-  background: #fffef8e8;
+  background: var(--glass-strong);
   backdrop-filter: blur(12px);
 }
 .botanical .focus-main {
   padding-top: 6px;
+}
+/* The top bar and notes float (.hud); focus content starts below them. */
+.botanical .focus {
+  margin-top: var(--hud-height, 64px);
+  height: calc(100dvh - var(--hud-height, 64px));
+}
+.botanical .drawer {
+  top: var(--hud-height, 64px);
+}
+@media (max-width: 900px) {
+  .botanical .focus {
+    height: auto;
+  }
 }
 .botanical .focus-graph {
   background: transparent;
@@ -1011,7 +1068,7 @@ code,
   font-size: 12px;
 }
 .botanical .plot {
-  background: #fffef8ed;
+  background: var(--glass-strong);
   border-radius: 18px;
   box-shadow: 0 8px 24px #213f2526;
 }
@@ -1022,7 +1079,7 @@ code,
   margin-bottom: 8px;
 }
 .botanical .focus-graph {
-  background: #fffef8ed;
+  background: var(--glass-strong);
 }
 .botanical-graph {
   position: relative;
@@ -1045,7 +1102,7 @@ code,
 }
 .botanical-overlay .commit text {
   paint-order: stroke;
-  stroke: #fffef8;
+  stroke: var(--card);
   stroke-width: 3px;
   stroke-linejoin: round;
 }
@@ -1128,4 +1185,35 @@ code,
 /* Last-known state: the plant fades like a wilting one. */
 .botanical .garden-scene .plot.wilting .plot-graph {
   filter: saturate(0.45) brightness(0.92);
+}
+
+/* Short screens (a phone on its side): a compact top bar and notes, and the
+   art key (also in the Legend) left out, so the scene keeps most of the
+   height. */
+@media (max-height: 560px) {
+  .botanical .topbar {
+    gap: 4px 12px;
+    padding: 4px 12px;
+    flex-wrap: wrap;
+  }
+  .botanical .topbar .summary,
+  .botanical .art-key {
+    display: none;
+  }
+  .botanical .topbar h1 {
+    font-size: 15px;
+  }
+  .botanical .preview-control select,
+  .botanical .time-control input[type="range"] {
+    min-height: 30px;
+  }
+  .botanical .hud-notes {
+    gap: 6px 12px;
+    padding: 6px 12px 0;
+  }
+  .botanical .art-notice,
+  .botanical .banners .banner {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
 }

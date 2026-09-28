@@ -18,6 +18,17 @@ export const BLUE_RIDGE: Place = {
 };
 export const BLUE_RIDGE_ZONE = "America/New_York";
 
+/**
+ * The sky's place when none is configured: Blacksburg, Virginia, in the
+ * Blue Ridge (maintainer choice, 2026-09-28).
+ */
+export const BLACKSBURG: Place = {
+  latitude: 37.2296,
+  longitude: -80.4139,
+  elevationMeters: 634,
+};
+export const BLACKSBURG_ZONE = "America/New_York";
+
 /** Longyearbyen, Svalbard: midnight Sun in June, polar night in December. */
 const SVALBARD: Place = {
   latitude: 78.2232,

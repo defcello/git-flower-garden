@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import type { CSSProperties } from "react";
+import type { LightingState } from "../environment/lighting.ts";
 import type {
   GraphJson,
   GraphNodeJson,
@@ -35,7 +36,13 @@ import { SceneCanvas } from "./SceneCanvas.tsx";
 import { useShownLight } from "./scene/client.ts";
 import { SkyControls } from "./SkyControls.tsx";
 import { DAYTIME, DESIGN, plantShadowStyle } from "./scene/view.ts";
-import { LIVE, describeSky, useSky, type SkySetting } from "./sky.ts";
+import {
+  LIVE,
+  describeSky,
+  useSky,
+  useSkyLoop,
+  type SkySetting,
+} from "./sky.ts";
 
 interface Selection {
   repoId: string;
@@ -58,6 +65,8 @@ export function App() {
   // viewer's own choice is remembered in this browser only.
   const [renderer, setRenderer] = useState<Renderer>(loadRenderer);
   const [skySetting, setSkySetting] = useState<SkySetting>(LIVE);
+  const [looping, setLooping] = useState(false);
+  useSkyLoop(looping && renderer !== "technical", setSkySetting);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
@@ -140,11 +149,15 @@ export function App() {
   const light = sky?.state ?? DAYTIME;
   // Plant shadows change with the relit art, not ahead of it.
   const shownLight = useShownLight(light);
+  // The top bar and notes float over the scene; the focus view and the
+  // drawer start below them (styles.css --hud-height).
+  const appRef = useHudHeight();
   const stageScale = useStageScale();
 
   return (
     <div
-      className={`app${renderer !== "technical" ? " botanical" : ""}`}
+      ref={appRef}
+      className={`app${renderer !== "technical" ? " botanical" : ""}${renderer !== "technical" && isNight(shownLight) ? " night" : ""}`}
       style={
         renderer !== "technical" ? plantShadowStyle(shownLight) : undefined
       }
@@ -159,94 +172,102 @@ export function App() {
           <div className="landscape-vignette" />
         </div>
       )}
-      <header className="topbar">
-        <h1>git-flower-garden</h1>
-        {repositories && (
-          <span className="summary">
-            {repos.length} {repos.length === 1 ? "repository" : "repositories"}{" "}
-            · last {repositories.display.businessDays} business days ·{" "}
-            {timeZone}
-          </span>
-        )}
-        <label className="preview-control">
-          View
-          <select
-            aria-label="Renderer"
-            value={renderer}
-            onChange={(event) => {
-              const next = event.target.value as Renderer;
-              setRenderer(next);
-              saveRenderer(next);
-            }}
-          >
-            <option value="technical">Technical</option>
-            <option value="canvas">Garden preview · Canvas</option>
-            <option value="svg">Garden preview · SVG</option>
-          </select>
-        </label>
-        {renderer !== "technical" && (
-          <SkyControls
-            setting={skySetting}
-            sky={sky}
-            environment={environment}
-            onChange={setSkySetting}
-          />
-        )}
-        <Legend />
-      </header>
-      {renderer !== "technical" && (
-        <div className="art-notice" role="note">
-          {sky?.snapshot.source === "preview" ? (
-            <strong className="sky-preview-badge">Sky preview</strong>
-          ) : null}{" "}
-          Art preview ·{" "}
-          {sky
-            ? `${sky.snapshot.source === "preview" ? "not live conditions: " : "live sky, "}${describeSky(sky)}.`
-            : "daytime sky; set a location under environment to follow the real sky."}{" "}
-          Flowers = branch heads · leaves = commits · fruit = tags · gold
-          markers = worktrees. Dashed stems hide history; red boundaries mean
-          missing history.
+      <div className="hud">
+        <header className="topbar">
+          <h1>git-flower-garden</h1>
+          {repositories && (
+            <span className="summary">
+              {repos.length}{" "}
+              {repos.length === 1 ? "repository" : "repositories"} · last{" "}
+              {repositories.display.businessDays} business days · {timeZone}
+            </span>
+          )}
+          <label className="preview-control">
+            View
+            <select
+              aria-label="Renderer"
+              value={renderer}
+              onChange={(event) => {
+                const next = event.target.value as Renderer;
+                setRenderer(next);
+                saveRenderer(next);
+              }}
+            >
+              <option value="technical">Technical</option>
+              <option value="canvas">Garden preview · Canvas</option>
+              <option value="svg">Garden preview · SVG</option>
+            </select>
+          </label>
+          {renderer !== "technical" && (
+            <SkyControls
+              setting={skySetting}
+              sky={sky}
+              environment={environment}
+              onChange={setSkySetting}
+              looping={looping}
+              onLoopingChange={setLooping}
+            />
+          )}
+          <Legend />
+        </header>
+        <div className="hud-notes">
+          {renderer !== "technical" && (
+            <div className="art-notice" role="note">
+              {sky?.snapshot.source === "preview" ? (
+                <strong className="sky-preview-badge">Sky preview</strong>
+              ) : null}{" "}
+              Art preview ·{" "}
+              {sky
+                ? `${sky.snapshot.source === "preview" ? "not live conditions: " : "live sky, "}${describeSky(sky)}.`
+                : "noon sky; the real sky is off (environment.enabled)."}{" "}
+              <span className="art-key">
+                Flowers = branch heads · leaves = commits · fruit = tags · gold
+                markers = worktrees. Dashed stems hide history; red boundaries
+                mean missing history.
+              </span>
+            </div>
+          )}
+          <div className="banners">
+            {repositories?.display.notice && (
+              <div className="banner notice" role="note">
+                {repositories.display.notice}
+              </div>
+            )}
+            {repositories && repositories.configErrors.length > 0 && (
+              <div className="banner" role="alert">
+                <strong>
+                  The configuration file has problems; the last valid
+                  configuration is still in use.
+                </strong>
+                <ul>
+                  {repositories.configErrors.map((e) => (
+                    <li key={e}>
+                      <code>{e}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {repositories?.webhooks.state === "error" && (
+              <div className="banner" role="status">
+                {repositories.webhooks.diagnostic}
+              </div>
+            )}
+            {repositories && repositories.restartNeeded.length > 0 && (
+              <div className="banner" role="status">
+                Restart git-flower-garden to apply changes to{" "}
+                {repositories.restartNeeded.join(", ")}.
+              </div>
+            )}
+            {connectionError && (
+              <div className="banner" role="status">
+                {STATIC_DEMO
+                  ? `Could not load the demo snapshot (${connectionError}).`
+                  : `Live updates interrupted (${connectionError}). Showing the last known state.`}
+              </div>
+            )}
+          </div>
         </div>
-      )}
-      <div className="banners">
-        {repositories?.display.notice && (
-          <div className="banner notice" role="note">
-            {repositories.display.notice}
-          </div>
-        )}
-        {repositories && repositories.configErrors.length > 0 && (
-          <div className="banner" role="alert">
-            <strong>
-              The configuration file has problems; the last valid configuration
-              is still in use.
-            </strong>
-            <ul>
-              {repositories.configErrors.map((e) => (
-                <li key={e}>
-                  <code>{e}</code>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {repositories?.webhooks.state === "error" && (
-          <div className="banner" role="status">
-            {repositories.webhooks.diagnostic}
-          </div>
-        )}
-        {repositories && repositories.restartNeeded.length > 0 && (
-          <div className="banner" role="status">
-            Restart git-flower-garden to apply changes to{" "}
-            {repositories.restartNeeded.join(", ")}.
-          </div>
-        )}
-        {connectionError && (
-          <div className="banner" role="status">
-            {STATIC_DEMO
-              ? `Could not load the demo snapshot (${connectionError}).`
-              : `Live updates interrupted (${connectionError}). Showing the last known state.`}
-          </div>
-        )}
       </div>
       {!repositories ? (
         <p className="loading" role="status">
@@ -823,4 +844,34 @@ function measureStage(): number {
     window.innerWidth / DESIGN.width,
     window.innerHeight / DESIGN.height,
   );
+}
+
+/** After civil dusk: the panels over the scene turn dark (styles.css). */
+function isNight(light: LightingState): boolean {
+  return light.sun.altitude < -6;
+}
+
+/**
+ * Publish the floating top area's height as --hud-height on the app, so
+ * content below it (the focus view, the drawer) starts clear of it however
+ * the top bar wraps.
+ */
+function useHudHeight() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const app = ref.current;
+    const hud = app?.querySelector(".hud");
+    if (!app || !hud) return;
+    const observer = new ResizeObserver(() => {
+      app.style.setProperty(
+        "--hud-height",
+        `${String(Math.ceil(hud.getBoundingClientRect().height))}px`,
+      );
+    });
+    observer.observe(hud);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  return ref;
 }

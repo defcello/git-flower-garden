@@ -53,6 +53,8 @@ const result = parseConfig(
     version: 1,
     history: { timeZone: "America/New_York" },
     monitor: { localReconcileSeconds: 1 },
+    // The live sky follows the real clock; tests use previews and the slider.
+    environment: { enabled: false },
     repositories: [
       { id: "tour", label: "Garden tour", path: "garden tour" },
       { id: "fork", label: "Fork and merge", path: "fork-merge" },

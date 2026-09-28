@@ -149,10 +149,10 @@ checking. Unknown keys are errors.
 | `monitor.maxConcurrentFetches` | `2` | Fetches running at once across all repositories (1–16) |
 | `monitor.fetchTimeoutSeconds` | `120` | Per-fetch limit; raise it for a very large first fetch (10–3600) |
 | `display.reducedMotion` | `false` | Reduce motion further (the OS setting is always honored) |
-| `environment.enabled` | `false` | Follow the real sun, moon, and stars in the garden view |
-| `environment.latitude`, `environment.longitude` | (required when enabled) | Your location in degrees; north and east are positive |
-| `environment.elevationMeters` | `0` | Height above sea level |
-| `environment.timeZone` | `history.timeZone` | Zone for the local time shown with the sky |
+| `environment.enabled` | `true` | Follow the real sun, moon, and stars in the garden view; `false` lights it by a fixed noon sun |
+| `environment.latitude`, `environment.longitude` | Blacksburg, Virginia | Your location in degrees; north and east are positive. Give both or neither |
+| `environment.elevationMeters` | `0` (Blacksburg: `634`) | Height above sea level |
+| `environment.timeZone` | `history.timeZone` (Blacksburg: `America/New_York`) | Zone for the local time shown with the sky |
 | `repositories` | (required) | List of sources, below. `[]` shows a welcome page. |
 
 Each repository needs a unique `id` (lowercase letters, digits, `.`, `_`, or
@@ -177,25 +177,29 @@ Each repository needs a unique `id` (lowercase letters, digits, `.`, `_`, or
 
 ### The sky
 
-With `environment.enabled` and your coordinates, the garden view's sky follows
-the real sun and moon: dawn, daylight, dusk, twilight, and night, the moon's
+The garden view's sky follows the real sun and moon, over Blacksburg,
+Virginia, until you give your own coordinates: dawn, daylight, dusk, twilight, and night, the moon's
 phase (lit on the side facing the sun), and stars. The mountains, the hill,
 and the plants are lit by that same sun and moon: shading follows where the
 sun really is, backlit petals and grass glow, and a moonlit night is dim.
-Without a location, the garden is lit by a fixed noon sun. The focus view
-always shows its plant in daylight, so it stays easy to read at night.
+With `"enabled": false`, the garden is lit by a fixed noon sun. The focus
+view always shows its plant in daylight, so it stays easy to read; after
+dusk its panels, and the controls, turn dark.
 Everything is computed on your computer; no location lookup happens and
 nothing is sent anywhere. Weather is not available yet.
 
 ```json
-"environment": { "enabled": true, "latitude": 35.6, "longitude": -82.55 }
+"environment": { "latitude": 35.6, "longitude": -82.55 }
 ```
 
 The sky is a panorama: east is always on the left and west on the right, with
 the noon sun in the middle, whichever way your monitor faces. Heights above
-the horizon are real. The **Sky** menu (garden view) also offers previews
-such as sunrise, full moon, or polar night; previews are labelled
-**Sky preview** and are never taken for live conditions.
+the horizon are real. The **Time** slider (garden view) shows the sky at any
+time of that day, and **Loop** plays the day round, a day every 30 seconds.
+The **Sky** menu returns to **Live**, or jumps to a preview such as sunrise,
+full moon, or polar night, which sets the slider, date, and place. Any
+chosen time is labelled **Sky preview** and is never taken for live
+conditions.
 
 ## Authentication troubleshooting
 

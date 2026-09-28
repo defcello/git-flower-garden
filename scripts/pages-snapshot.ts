@@ -43,13 +43,6 @@ const REPOSITORIES = [
   { id: "rustlings", label: "Rustlings", repo: "rust-lang/rustlings" },
 ];
 
-/** The sky follows the real Sun and Moon over Asheville, in the Blue Ridge. */
-const ENVIRONMENT = {
-  enabled: true,
-  latitude: 35.5951,
-  longitude: -82.5515,
-  elevationMeters: 650,
-};
 const TIME_ZONE = "America/New_York";
 
 /** Branches kept besides the default branch, newest first. */
@@ -172,7 +165,6 @@ const parsed = parseConfig(
       label,
       path: id,
     })),
-    environment: ENVIRONMENT,
   }),
   work,
 );

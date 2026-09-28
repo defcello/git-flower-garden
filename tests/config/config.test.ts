@@ -421,20 +421,37 @@ describe("environment (real-time sky, ADR 0018)", () => {
   const parse = (environment: unknown) =>
     parseConfig(JSON.stringify({ ...base, environment }), dir);
 
-  it("is off by default", () => {
-    const result = parseConfig(JSON.stringify(base), dir);
-    expect(result.ok && result.config.environment).toEqual({ enabled: false });
+  it("defaults to the sky over Blacksburg, Virginia, in its own time zone", () => {
+    const result = parseConfig(
+      JSON.stringify({ ...base, history: { timeZone: "Europe/Paris" } }),
+      dir,
+    );
+    expect(result.ok && result.config.environment).toEqual({
+      enabled: true,
+      place: { latitude: 37.2296, longitude: -80.4139, elevationMeters: 634 },
+      timeZone: "America/New_York",
+    });
+    expect(
+      parse({ enabled: false }).ok && parse({ enabled: false }),
+    ).toMatchObject({
+      config: { environment: { enabled: false } },
+    });
   });
 
-  it("needs an explicit place when enabled; there is no location lookup", () => {
-    const result = parse({ enabled: true });
+  it("needs both coordinates or neither; there is no location lookup", () => {
+    const result = parse({ enabled: true, latitude: 35.6 });
     expect(result.ok ? [] : result.errors.map((e) => e.pointer)).toEqual([
-      "/environment/latitude",
       "/environment/longitude",
     ]);
-    expect(schemaValid({ ...base, environment: { enabled: true } })).toBe(
+    expect(schemaValid({ ...base, environment: { latitude: 35.6 } })).toBe(
       false,
     );
+    expect(schemaValid({ ...base, environment: { enabled: true } })).toBe(true);
+    // Switched off, an incomplete place is ignored.
+    expect(parse({ enabled: false, latitude: 35.6 }).ok).toBe(true);
+    expect(
+      schemaValid({ ...base, environment: { enabled: false, latitude: 35.6 } }),
+    ).toBe(true);
   });
 
   it("uses the history time zone unless it names its own", () => {

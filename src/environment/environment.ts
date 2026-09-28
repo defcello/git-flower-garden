@@ -89,6 +89,25 @@ export function instantOfLocalTime(
   return new Date(time);
 }
 
+/**
+ * `time` moved on by `ms`, wrapping at local midnight back to the start of
+ * the same local day, so a loop replays one day (its length, 23 to 25 hours
+ * on a daylight-saving change, from the zone's own clocks).
+ */
+export function loopAdvance(
+  time: number,
+  ms: number,
+  timeZone: string,
+): number {
+  const { date } = localTimeOfDay(new Date(time), timeZone);
+  const start = instantOfLocalTime(date, 0, timeZone).getTime();
+  const [y = 0, m = 1, d = 1] = date.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  const length = instantOfLocalTime(next, 0, timeZone).getTime() - start;
+  const offset = (((time + ms - start) % length) + length) % length;
+  return start + offset;
+}
+
 export function environmentSnapshot(
   time: Date,
   place: Place,

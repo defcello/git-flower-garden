@@ -2,7 +2,8 @@
  * Sky controls in the top bar: a bookmark list (Live and the developer
  * previews) and a time-of-day slider. Choosing a bookmark sets the slider,
  * date, and place to match; moving the slider keeps the date and place and
- * shows a custom time, which the bookmark list reports as such.
+ * shows a custom time, which the bookmark list reports as such. Loop plays
+ * the chosen day round and round, a day every 30 seconds.
  */
 import { useState } from "react";
 import type { EnvironmentJson } from "../api/types.ts";
@@ -11,7 +12,7 @@ import {
   instantOfLocalTime,
   localTimeOfDay,
 } from "../environment/environment.ts";
-import { BLUE_RIDGE, BLUE_RIDGE_ZONE } from "../environment/overrides.ts";
+import { BLACKSBURG, BLACKSBURG_ZONE } from "../environment/overrides.ts";
 import {
   SKY_BOOKMARKS,
   bookmarkSetting,
@@ -29,21 +30,25 @@ export function SkyControls({
   sky,
   environment,
   onChange,
+  looping,
+  onLoopingChange,
 }: {
   setting: SkySetting;
   sky: Sky | null;
   environment: EnvironmentJson | null;
   onChange: (next: SkySetting) => void;
+  looping: boolean;
+  onLoopingChange: (looping: boolean) => void;
 }) {
   const [today] = useState(
-    () => localTimeOfDay(new Date(), BLUE_RIDGE_ZONE).date,
+    () => localTimeOfDay(new Date(), BLACKSBURG_ZONE).date,
   );
-  // What the slider moves through: the shown sky's day and place. With no
-  // place configured, live is the plain noon sky; the slider then shows noon
-  // today over the Blue Ridge, the place the previews use.
+  // What the slider moves through: the shown sky's day and place. With the
+  // real sky turned off, live is the plain noon sky; the slider then shows
+  // noon today over Blacksburg, the default place.
   const shown: { place: Place; timeZone: string } = sky
     ? { place: sky.snapshot.place, timeZone: sky.snapshot.timeZone }
-    : { place: BLUE_RIDGE, timeZone: BLUE_RIDGE_ZONE };
+    : { place: BLACKSBURG, timeZone: BLACKSBURG_ZONE };
   const local = sky
     ? localTimeOfDay(sky.snapshot.time, sky.snapshot.timeZone)
     : { date: today, minutes: 12 * 60 };
@@ -58,14 +63,15 @@ export function SkyControls({
           aria-label="Sky"
           value={bookmark}
           onChange={(event) => {
-            onChange(bookmarkSetting(event.target.value));
+            const next = bookmarkSetting(event.target.value);
+            // The live sky follows the clock; it cannot also loop.
+            if (next.mode === "live") onLoopingChange(false);
+            onChange(next);
           }}
         >
           {SKY_BOOKMARKS.map(({ value, label }) => (
             <option key={value} value={value}>
-              {value === "live" && !environment
-                ? "Live · no location configured"
-                : label}
+              {value === "live" && !environment ? "Live · real sky off" : label}
             </option>
           ))}
           {bookmark === "custom" && (
@@ -100,6 +106,30 @@ export function SkyControls({
           }}
         />
         <output className="time-readout">{clock(local.minutes)}</output>
+      </label>
+      <label className="preview-control loop-control">
+        <input
+          type="checkbox"
+          checked={looping}
+          onChange={(event) => {
+            const on = event.target.checked;
+            // Looping starts from the time shown, as a custom time.
+            if (on && setting.mode === "live")
+              onChange({
+                mode: "fixed",
+                time: instantOfLocalTime(
+                  local.date,
+                  local.minutes,
+                  shown.timeZone,
+                ).getTime(),
+                place: shown.place,
+                timeZone: shown.timeZone,
+                bookmark: null,
+              });
+            onLoopingChange(on);
+          }}
+        />
+        Loop
       </label>
     </>
   );

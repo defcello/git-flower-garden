@@ -46,7 +46,13 @@ describe("demo mode", () => {
         repositories: { id: string; status: { state: string } }[];
       };
       expect(body.display.notice).toMatch(/^Demo mode/);
-      expect(body.display.environment).toBeNull();
+      // No place configured: the sky over Blacksburg, Virginia.
+      expect(body.display.environment).toEqual({
+        latitude: 37.2296,
+        longitude: -80.4139,
+        elevationMeters: 634,
+        timeZone: "America/New_York",
+      });
       expect(body.repositories.map((r) => r.id)).toEqual([
         "garden-tour",
         "fork-merge",

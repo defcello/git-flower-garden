@@ -28,9 +28,9 @@
     }
   ],
   "environment": {
-    "enabled": false,
-    "latitude": 35.5951,
-    "longitude": -82.5515,
-    "elevationMeters": 650
+    "enabled": true,
+    "latitude": 37.2296,
+    "longitude": -80.4139,
+    "elevationMeters": 634
   }
 }
