@@ -474,7 +474,7 @@ Exit: the complete graph fixture suite can be inspected in both renderers with i
 
 The relit software tier is on branch `feat/software-tier-relight`, [PR #1](https://github.com/defcello/git-flower-garden/pull/1). It merges to `main` when every item below is checked, and not before. No further step 3 work goes on this branch: sway, the frame-rate cap, and the View-menu tier choice start from `main` after the merge, so the review stays about lighting alone.
 
-- [ ] CI (`npm run check`) passes on the PR on Ubuntu, Windows, and macOS.
+- [x] CI (`npm run check`) passes on the PR on Ubuntu, Windows, and macOS: run 36364697396 on `21b348b`, after fixing the Windows failure that had kept `main` red since step 1 (the vendored astronomy-engine hashes broke under CRLF checkout).
 - [ ] Maintainer visual review at 1920×1080 on the dedicated monitor: the Sunrise, Noon, Sunset, Full moon, and Night previews and the live sky, in both garden compositors, plus the focus view.
 - [ ] Maintainer accepts or changes the two calls made while building: the focus view lit by daylight, and the noon light when no location is configured (ADR 0018, "Progress", step 3).
 - [ ] Relight measured on the Surface Pro and recorded in ADR 0018. Proposed bar, for the maintainer to confirm: each relight finishes within 2 seconds of worker time, and hover, focus, and zoom stay responsive while it runs.
