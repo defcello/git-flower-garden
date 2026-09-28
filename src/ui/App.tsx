@@ -32,6 +32,7 @@ import {
   type HillsideSlot,
 } from "./hillside.ts";
 import { SceneCanvas } from "./SceneCanvas.tsx";
+import { useShownLight } from "./scene/client.ts";
 import { SkyControls } from "./SkyControls.tsx";
 import { DAYTIME, DESIGN, plantShadowStyle } from "./scene/view.ts";
 import { LIVE, describeSky, useSky, type SkySetting } from "./sky.ts";
@@ -137,12 +138,16 @@ export function App() {
     : undefined;
 
   const light = sky?.state ?? DAYTIME;
+  // Plant shadows change with the relit art, not ahead of it.
+  const shownLight = useShownLight(light);
   const stageScale = useStageScale();
 
   return (
     <div
       className={`app${renderer !== "technical" ? " botanical" : ""}`}
-      style={renderer !== "technical" ? plantShadowStyle(light) : undefined}
+      style={
+        renderer !== "technical" ? plantShadowStyle(shownLight) : undefined
+      }
     >
       {renderer !== "technical" && (
         <div

@@ -188,6 +188,39 @@ test("the scene always shows whole at 16:9, and the time slider and bookmarks ag
   await slider.fill(String(22 * 60));
   await expect(scene).toHaveAttribute("data-sun", "false");
   await expect(scene).toHaveAttribute("data-stars", "true");
+  // Drag through the day. The sky never runs ahead of the relit art: every
+  // painted frame shows one light, and the scene catches up when dragging stops.
+  await page.evaluate(() => {
+    const canvas =
+      document.querySelector<HTMLCanvasElement>(".landscape-scene");
+    const state = window as unknown as { mixed: number; frames: number };
+    state.mixed = 0;
+    state.frames = 0;
+    const sample = () => {
+      const { skyLight, artLight } = canvas?.dataset ?? {};
+      state.frames++;
+      if (skyLight !== artLight) state.mixed++;
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  for (let minutes = 5 * 60; minutes <= 21 * 60; minutes += 30)
+    await slider.fill(String(minutes));
+  await expect
+    .poll(() => scene.evaluate((node) => node.dataset.artLight))
+    .toBe(await scene.evaluate((node) => node.dataset.skyLight));
+  const frames = await page.evaluate(() => {
+    const { mixed, frames } = window as unknown as {
+      mixed: number;
+      frames: number;
+    };
+    return { mixed, frames };
+  });
+  expect(frames.frames).toBeGreaterThan(10);
+  expect(frames.mixed).toBe(0);
+  await expect(page.locator(".time-readout")).toHaveText("21:00");
+  await expect(scene).toHaveAttribute("data-sun", "false");
+
   // Live returns to the clock.
   await sky.selectOption("live");
   await expect(landscape).toHaveAttribute("data-sky", "day");

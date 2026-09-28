@@ -27,6 +27,7 @@ import {
   STEM_COLOR,
 } from "../botanical.ts";
 import type { LitBitmaps, WorkerRequest, WorkerResponse } from "./protocol.ts";
+import type { LightingState } from "../../environment/lighting.ts";
 import type { LightParams } from "./shading.ts";
 import { DAYTIME, lightKey, litColor, sceneLight } from "./view.ts";
 
@@ -35,6 +36,12 @@ export type Channel = "scene" | "inspection";
 export interface LitArt extends LitBitmaps {
   /** The light it was lit with (view.ts `lightKey`). */
   key: string;
+  /**
+   * The lighting state it was lit for. Everything else in the scene (sky,
+   * Sun, Moon, stars, shadows) is drawn from this, not from the newest
+   * request, so a frame never mixes two times of day.
+   */
+  light: LightingState;
   /** Object URLs of the sprite atlases, for the SVG compositor. */
   spritesUrl: string;
   spritesMirroredUrl: string;
@@ -58,17 +65,18 @@ const wanted: Record<Channel, string> = { scene: "", inspection: "" };
 const listeners = new Set<() => void>();
 let worker: Worker | null = null;
 let nextId = 1;
-const pending = new Map<
-  number,
-  { channel: Channel; key: string; params: LightParams }
->();
+interface Request {
+  params: LightParams;
+  light: LightingState;
+}
+const pending = new Map<number, { channel: Channel; key: string } & Request>();
 /**
  * One relight in flight per channel; while it runs, only the newest light
  * asked for waits. Dragging the time of day never queues a backlog of
  * relights: the scene catches up with the slider, one relight behind.
  */
 const inFlight: Record<Channel, boolean> = { scene: false, inspection: false };
-const queued: Record<Channel, LightParams | null> = {
+const queued: Record<Channel, Request | null> = {
   scene: null,
   inspection: null,
 };
@@ -142,6 +150,7 @@ function received(message: WorkerResponse) {
     art: {
       ...message.bitmaps,
       key: request.key,
+      light: request.light,
       palette,
       spritesUrl,
       spritesMirroredUrl,
@@ -182,21 +191,22 @@ function start(): Worker | null {
   return worker;
 }
 
-function request(channel: Channel, params: LightParams): void {
+function request(channel: Channel, light: LightingState): void {
   if (snapshots[channel].state === "failed") return;
+  const params = sceneLight(light);
   const key = lightKey(params);
   if (key === wanted[channel]) return;
   if (start() === null) return;
   wanted[channel] = key;
-  if (inFlight[channel]) queued[channel] = params;
-  else post(channel, params);
+  if (inFlight[channel]) queued[channel] = { params, light };
+  else post(channel, { params, light });
 }
 
-function post(channel: Channel, params: LightParams): void {
+function post(channel: Channel, { params, light }: Request): void {
   if (worker === null) return;
   inFlight[channel] = true;
   const id = nextId++;
-  pending.set(id, { channel, key: lightKey(params), params });
+  pending.set(id, { channel, key: lightKey(params), params, light });
   const message: WorkerRequest = {
     type: "relight",
     id,
@@ -206,9 +216,9 @@ function post(channel: Channel, params: LightParams): void {
   worker.postMessage(message);
 }
 
-/** Ask for the scene lit by `params`; a no-op when that light is current or pending. */
-export function requestLight(params: LightParams): void {
-  request("scene", params);
+/** Ask for the scene lit for `light`; a no-op when that light is current or pending. */
+export function requestLight(light: LightingState): void {
+  request("scene", light);
 }
 
 function subscribe(listener: () => void) {
@@ -222,7 +232,17 @@ function subscribe(listener: () => void) {
 export function useSceneArt(channel: Channel = "scene"): SceneArt {
   useEffect(() => {
     // The inspection light never changes: ask for it on first use.
-    if (channel === "inspection") request("inspection", sceneLight(DAYTIME));
+    if (channel === "inspection") request("inspection", DAYTIME);
   }, [channel]);
   return useSyncExternalStore(subscribe, () => snapshots[channel]);
+}
+
+/**
+ * The lighting the scene shows: the state the current art was lit for, so
+ * the sky, shadows, and relit art change together, in one frame. Until art
+ * is ready (or when it failed), the requested state.
+ */
+export function useShownLight(requested: LightingState): LightingState {
+  const scene = useSceneArt();
+  return scene.state === "ready" ? scene.art.light : requested;
 }
