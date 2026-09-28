@@ -301,12 +301,16 @@ decision:
   the noon preview. All 64 hillside slots were checked against the new hill
   and still sit on grass, so the table is unchanged. The CSP allows `blob:`
   images (the SVG compositor's relit atlases) and names `worker-src 'self'`.
-  Measured in headless Chromium on a desktop CPU: 290–470 ms of worker time
-  per relight at 1672×941 layers and a 512-pixel sprite atlas; the focus
+  Measured in headless Chromium on a first-generation Surface Pro (Core
+  i5-3317U, 2 cores and 4 threads, 4 GB), the machine these sessions ran on
+  (confirmed by the maintainer, 2026-09-28): 290–470 ms of worker time per
+  relight at 1672×941 layers and a 512-pixel sprite atlas, and 378–592 ms
+  per relight back to back while the time of day loops, well within the
+  2-second bar. The 2017 reference machine (Core m3) was not measured
+  separately; the focus
   view's 2,000-commit timings match or beat the previous build on the same
   machine. **Open in step 3**: sway, the frame-rate cap, the View-menu tier
-  choice (Auto, GPU, Software, Static), the relight cost on the Surface Pro,
-  and a `SceneDescription` shared with the GPU tier (plants are still drawn
+  choice (Auto, GPU, Software, Static), and a `SceneDescription` shared with the GPU tier (plants are still drawn
   per plot).
 
 ## Verification
