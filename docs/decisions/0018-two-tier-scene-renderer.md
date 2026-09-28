@@ -317,7 +317,7 @@ decision:
   scene, the focus view included, turn dark (its plant stays daylit).
   Without a configured place the sky is Blacksburg, Virginia's, rather than
   a fixed noon (`environment.enabled` now defaults to true; `false` keeps
-  the noon light). Built on `feat/pages-demo`, which merges after PR #1.
+  the noon light). Built on `feat/pages-demo`, merged after PR #1 as PR #2.
   **Time slider, loop, and cores** (2026-09-28, same branch): the time of
   day can be dragged or looped (a day every 30 seconds), so relights are no
   longer rare. The scene repaints only when a whole frame is lit: sky, Sun,

@@ -5,7 +5,7 @@ name: pages
 # takes a fresh snapshot. Scheduled runs use the default branch.
 on:
   push:
-    branches: [main, feat/pages-demo]
+    branches: [main]
   schedule:
     - cron: "17 11 * * *"
   workflow_dispatch:
