@@ -31,15 +31,15 @@ import {
   hillsideSlots,
   type HillsideSlot,
 } from "./hillside.ts";
+import { SceneCanvas } from "./SceneCanvas.tsx";
+import { DAYTIME, plantShadowStyle } from "./scene/view.ts";
 import {
   SKY_CHOICES,
   describeSky,
-  landscapeStyle,
   parseSkyChoice,
   useSky,
   type SkyChoice,
 } from "./sky.ts";
-import { SkyLayer } from "./SkyLayer.tsx";
 
 interface Selection {
   repoId: string;
@@ -141,19 +141,20 @@ export function App() {
     ? repos.find((r) => r.id === selection.repoId)
     : undefined;
 
+  const light = sky?.state ?? DAYTIME;
+
   return (
-    <div className={`app${renderer !== "technical" ? " botanical" : ""}`}>
+    <div
+      className={`app${renderer !== "technical" ? " botanical" : ""}`}
+      style={renderer !== "technical" ? plantShadowStyle(light) : undefined}
+    >
       {renderer !== "technical" && (
         <div
           className="landscape"
           aria-hidden="true"
           data-sky={sky ? (sky.snapshot.preview ?? "live") : "day"}
-          style={sky ? landscapeStyle(sky.state) : undefined}
         >
-          <div className="landscape-background" />
-          {sky && <div className="landscape-glow" />}
-          {sky && <SkyLayer state={sky.state} />}
-          <div className="landscape-hill" />
+          <SceneCanvas state={light} />
           <div className="landscape-vignette" />
         </div>
       )}
@@ -212,7 +213,7 @@ export function App() {
           Art preview ·{" "}
           {sky
             ? `${sky.snapshot.source === "preview" ? "not live conditions: " : "live sky, "}${describeSky(sky)}.`
-            : "daytime backdrop; set a location under environment to follow the real sky."}{" "}
+            : "daytime sky; set a location under environment to follow the real sky."}{" "}
           Flowers = branch heads · leaves = commits · fruit = tags · gold
           markers = worktrees. Dashed stems hide history; red boundaries mean
           missing history.

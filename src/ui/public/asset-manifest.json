@@ -1,19 +1,21 @@
 {
   "version": 1,
-  "scope": "P2-A art direction proof; not a full production asset library",
+  "scope": "Relit scene art (ADR 0018): flat-lit albedo, normal, and translucency maps for the sprites, ridge, and hill. The P2-A atlas and backdrop are retired to docs/art/p2a/.",
   "assets": [
     {
-      "id": "botanical-atlas",
-      "file": "botanical-atlas.png",
-      "author": "Generated for git-garden with OpenAI image generation, directed by Codex",
+      "id": "sprites-albedo",
+      "file": "scene/sprites-albedo.png",
+      "sha256": "7b7a33fea8b3be35bf743df9612d66ed7712e4ef487a733bf64c318a921a525d",
+      "role": "Flat-lit albedo: plant sprites",
+      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
       "source": "Original text-to-image generation; no reference images supplied",
       "license": "MIT (project distribution license; see root LICENSE)",
       "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
       "provenance": {
-        "date": "2026-09-26",
-        "tool": "built-in image_gen",
-        "prompt": "docs/art/prompts.md#botanical-atlas",
-        "edits": "None; original RGBA output copied unchanged"
+        "date": "2026-09-27",
+        "tool": "codex exec, built-in image generation",
+        "prompt": "docs/art/prompts.md#sprite-atlas-flat-lit-albedo",
+        "edits": "None; original output copied unchanged. At load, alpha below 8 snaps to 0 and 240 or above to 255 (keyed transparency is noisy)"
       },
       "dimensions": {
         "width": 1254,
@@ -48,32 +50,170 @@
         }
       ],
       "scaleVariants": [
-        "One source atlas; runtime resampling at bounded DPR up to 2"
+        "Resampled to a 512×512 atlas (256-pixel cells) before relighting; a mirrored copy is lit for mirrored sprites"
       ],
       "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
     },
     {
-      "id": "blue-ridge-day",
-      "file": "blue-ridge-day.png",
-      "author": "Generated for git-garden with OpenAI image generation, directed by Codex",
-      "source": "Original text-to-image generation; illustrative Blue Ridge setting, not a geolocated photograph",
+      "id": "sprites-normal",
+      "file": "scene/sprites-normal.png",
+      "sha256": "a18af84f16f14d893fad269deb5f74c4b34eb0a2d82e289e3addcc1b2c32ec67",
+      "role": "Normal map for sprites-albedo",
+      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
+      "source": "Original text-to-image generation; no reference images supplied",
       "license": "MIT (project distribution license; see root LICENSE)",
       "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
       "provenance": {
-        "date": "2026-09-26",
-        "tool": "built-in image_gen",
-        "prompt": "docs/art/prompts.md#blue-ridge-backdrop",
-        "edits": "None; CSS color grading used only for labeled lighting studies"
+        "date": "2026-09-27",
+        "tool": "codex exec, built-in image generation",
+        "prompt": "docs/art/prompts.md#sprite-atlas-normal-map",
+        "edits": "None; original output copied unchanged. Unit normals, OpenGL convention (x right, y up, z toward the viewer); silhouette taken from the albedo at load; the image has a checkerboard baked in outside the sprites, ignored"
+      },
+      "dimensions": {
+        "width": 1254,
+        "height": 1254
+      },
+      "alpha": false,
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
+    },
+    {
+      "id": "sprites-translucency",
+      "file": "scene/sprites-translucency.png",
+      "sha256": "dd9cc5612fa91663588bef3700874d38eb4b23be6951fd0ffa9f9ba55ccdd053",
+      "role": "Translucency map for sprites-albedo",
+      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
+      "source": "Original text-to-image generation; no reference images supplied",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-09-27",
+        "tool": "codex exec, built-in image generation",
+        "prompt": "docs/art/prompts.md#sprite-atlas-translucency-map",
+        "edits": "None; original output copied unchanged. Gray: white passes light, black is opaque; read as luminance inside the albedo's silhouette"
+      },
+      "dimensions": {
+        "width": 1254,
+        "height": 1254
+      },
+      "alpha": false,
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
+    },
+    {
+      "id": "ridge-albedo",
+      "file": "scene/ridge-albedo.png",
+      "sha256": "3394340ceb8187c28081b2e202fe5d01d706f598eed86ef841a628240cc4a8f5",
+      "role": "Flat-lit albedo: Blue Ridge ridges, transparent sky",
+      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
+      "source": "Original text-to-image generation; no reference images supplied",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-09-27",
+        "tool": "codex exec, built-in image generation",
+        "prompt": "docs/art/prompts.md#ridge-layer-flat-lit-albedo",
+        "edits": "None; original output copied unchanged. At load, alpha below 8 snaps to 0 and 240 or above to 255 (keyed transparency is noisy)"
+      },
+      "dimensions": {
+        "width": 1672,
+        "height": 941
+      },
+      "alpha": true,
+      "anchor": [0.5, 1],
+      "scaleVariants": [
+        "Drawn to the 1920×1080 design frame, cover-scaled to the viewport and upscaled above 1080p"
+      ],
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
+    },
+    {
+      "id": "ridge-normal",
+      "file": "scene/ridge-normal.png",
+      "sha256": "6e760eeead7cc0f702d9e9a0847be6d1b53e0cd02157f36c9deaf08420645659",
+      "role": "Normal map for ridge-albedo",
+      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
+      "source": "Original text-to-image generation; no reference images supplied",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-09-27",
+        "tool": "codex exec, built-in image generation",
+        "prompt": "docs/art/prompts.md#ridge-layer-normal-map",
+        "edits": "None; original output copied unchanged. Unit normals, OpenGL convention (x right, y up, z toward the viewer); silhouette taken from the albedo at load"
       },
       "dimensions": {
         "width": 1672,
         "height": 941
       },
       "alpha": false,
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
+    },
+    {
+      "id": "hill-albedo",
+      "file": "scene/hill-albedo.png",
+      "sha256": "3b93325f296b26b5e392cd9dcb03e63e6a38f5035d56033ccce7036adf3afcf3",
+      "role": "Flat-lit albedo: grassy hill, transparent above",
+      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
+      "source": "Original text-to-image generation; no reference images supplied",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-09-27",
+        "tool": "codex exec, built-in image generation",
+        "prompt": "docs/art/prompts.md#hill-layer-flat-lit-albedo",
+        "edits": "None; original output copied unchanged. At load, alpha below 8 snaps to 0 and 240 or above to 255 (keyed transparency is noisy)"
+      },
+      "dimensions": {
+        "width": 1672,
+        "height": 941
+      },
+      "alpha": true,
       "anchor": [0.5, 1],
       "scaleVariants": [
-        "One source; CSS cover at viewport size, including upscaled 4K review"
+        "Drawn to the 1920×1080 design frame, cover-scaled to the viewport and upscaled above 1080p"
       ],
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
+    },
+    {
+      "id": "hill-normal",
+      "file": "scene/hill-normal.png",
+      "sha256": "3eae52c37bedb6346cc168943d065cb0b7567b200fa92d3490c081ba8fea43c5",
+      "role": "Normal map for hill-albedo",
+      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
+      "source": "Original text-to-image generation; no reference images supplied",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-09-27",
+        "tool": "codex exec, built-in image generation",
+        "prompt": "docs/art/prompts.md#hill-layer-normal-map",
+        "edits": "None; original output copied unchanged. Came back with its X axis inverted: negated at load (worker.ts, flipX); otherwise as ridge-normal"
+      },
+      "dimensions": {
+        "width": 1672,
+        "height": 941
+      },
+      "alpha": false,
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
+    },
+    {
+      "id": "hill-translucency",
+      "file": "scene/hill-translucency.png",
+      "sha256": "1fb71820b9ebab2a3a530bbed12ed8e8fa87f398f91e65107ee53e8c7ab3eeed",
+      "role": "Translucency map for hill-albedo",
+      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
+      "source": "Original text-to-image generation; no reference images supplied",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-09-27",
+        "tool": "codex exec, built-in image generation",
+        "prompt": "docs/art/prompts.md#hill-layer-translucency-map",
+        "edits": "None; original output copied unchanged. Gray: white passes light, black is opaque; read as luminance inside the albedo's silhouette"
+      },
+      "dimensions": {
+        "width": 1672,
+        "height": 941
+      },
+      "alpha": false,
       "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
     }
   ],

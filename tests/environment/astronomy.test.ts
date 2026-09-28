@@ -38,8 +38,14 @@ describe("vendored astronomy-engine", () => {
       "690dd98cb13ba4db77c6327deea852a816892bb9debbad5943405c66972f8023",
     ],
   ])("%s is the reviewed file", (file, sha256) => {
-    const bytes = readFileSync(join(vendor, file));
-    expect(createHash("sha256").update(bytes).digest("hex")).toBe(sha256);
+    // Hash with LF endings: the root .gitattributes does not reach into the
+    // submodule, so Git with core.autocrlf (the Windows default) checks these
+    // files out with CRLF. The reviewed files contain no CR of their own.
+    const text = readFileSync(join(vendor, file), "utf8").replace(
+      /\r\n/g,
+      "\n",
+    );
+    expect(createHash("sha256").update(text).digest("hex")).toBe(sha256);
   });
 
   // Published instants (U.S. Naval Observatory), to within two minutes.

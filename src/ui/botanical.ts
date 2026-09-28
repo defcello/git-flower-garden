@@ -1,5 +1,6 @@
 import type { GraphJson } from "../api/types.ts";
 import { edgeCurve, edgePath } from "./edge-path.ts";
+import { SPRITE_ATLAS } from "./scene/atlas.ts";
 
 export type Renderer = "technical" | "canvas" | "svg";
 
@@ -53,8 +54,9 @@ export interface Scene {
   grounds: Ground[];
 }
 
-// Measured source dimensions, not the requested generation dimensions.
-export const ATLAS_SIZE = 1254;
+// The relit sprite atlas (scene/protocol.ts): 2×2 cells, in `kind` order
+// (coral flower, lavender flower, leaf pair, berry).
+export const ATLAS_SIZE = SPRITE_ATLAS;
 export const CELL_SIZE = ATLAS_SIZE / 2;
 
 export const STEM_COLOR = "#456b39";

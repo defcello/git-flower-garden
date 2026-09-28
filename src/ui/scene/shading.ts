@@ -1,14 +1,14 @@
 /**
- * Shading shared by both tiers (ADR 0018 step 2 spike). The WebGL2 shader in
- * gpu.ts mirrors `shade` line for line; the software tier bakes its keyframes
- * with `shade` on the CPU, so the two can only differ in *when* light is
- * computed, not how.
+ * Shading shared by both tiers (ADR 0018). The software tier runs `shade`
+ * on the CPU for every texel whenever the light changes (relight.ts); the
+ * GPU tier's shader mirrors it line for line, so the two tiers can only
+ * differ in *when* light is computed, not how. Pure: no DOM.
  */
 import type {
   Color,
   LightingState,
   Vector3,
-} from "../../src/environment/lighting.ts";
+} from "../../environment/lighting.ts";
 
 export const SUN_GAIN = 1.1;
 export const MOON_GAIN = 2.6;
@@ -61,6 +61,12 @@ export interface Adjustments {
   translucency: number;
 }
 
+/**
+ * Locked by the maintainer (2026-09-27, ADR 0018 step 2): front fill at 50%
+ * of the Sun and Moon, and translucency at 100% of each texel's map.
+ */
+export const LOCKED: Adjustments = { fill: 0.5, translucency: 1 };
+
 export interface LayerLight {
   /** Depth haze, 0 for the foreground. */
   haze: number;
@@ -109,7 +115,9 @@ function through(n: Vector3, l: Vector3): number {
 
 /**
  * Lit linear color for one texel. `albedo` is linear RGB; `n` is a unit
- * normal (x right, y up, z toward the viewer). Writes into `out`.
+ * normal (x right, y up, z toward the viewer). `map`, when given, is the
+ * texel's own translucency (0..1) from a translucency map, replacing the
+ * layer's constant. Writes into `out`.
  */
 export function shade(
   albedo: Color,
@@ -117,8 +125,9 @@ export function shade(
   p: LightParams,
   layer: LayerLight,
   out: [number, number, number],
+  map?: number,
 ): void {
-  const t = layer.translucency * p.translucency;
+  const t = (map ?? layer.translucency) * p.translucency;
   const f = layer.fill ? p.fill : 0;
   const sun =
     diffuse(n, p.sunDir) + t * through(n, p.sunDir) + f * diffuse(n, p.sunFill);

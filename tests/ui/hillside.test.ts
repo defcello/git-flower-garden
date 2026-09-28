@@ -8,12 +8,12 @@ import {
 } from "../../src/ui/hillside.ts";
 import { generate } from "../../scripts/hillside-slots.ts";
 
-/** Minimal decoder for the backdrop: 8-bit RGB, non-interlaced PNG. */
+/** Minimal decoder for the hill layer: 8-bit RGBA, non-interlaced PNG. */
 function decodePng(file: string) {
   const buf = readFileSync(file);
   const width = buf.readUInt32BE(16);
   const height = buf.readUInt32BE(20);
-  expect([buf[24], buf[25], buf[28]]).toEqual([8, 2, 0]);
+  expect([buf[24], buf[25], buf[28]]).toEqual([8, 6, 0]);
   const chunks: Buffer[] = [];
   for (let at = 8; at < buf.length;) {
     const length = buf.readUInt32BE(at);
@@ -22,15 +22,15 @@ function decodePng(file: string) {
     at += length + 12;
   }
   const raw = inflateSync(Buffer.concat(chunks));
-  const stride = width * 3;
+  const stride = width * 4;
   const px = new Uint8Array(height * stride);
   for (let y = 0; y < height; y++) {
     const filter = raw[y * (stride + 1)] ?? 0;
     for (let i = 0; i < stride; i++) {
       const v = raw[y * (stride + 1) + 1 + i] ?? 0;
-      const a = i >= 3 ? (px[y * stride + i - 3] ?? 0) : 0;
+      const a = i >= 4 ? (px[y * stride + i - 4] ?? 0) : 0;
       const b = y > 0 ? (px[(y - 1) * stride + i] ?? 0) : 0;
-      const c = i >= 3 && y > 0 ? (px[(y - 1) * stride + i - 3] ?? 0) : 0;
+      const c = i >= 4 && y > 0 ? (px[(y - 1) * stride + i - 4] ?? 0) : 0;
       let p = 0;
       if (filter === 1) p = a;
       else if (filter === 2) p = b;
@@ -50,19 +50,21 @@ function decodePng(file: string) {
   return { width, height, px };
 }
 
-const image = decodePng("src/ui/assets/blue-ridge-day.png");
+// The relit scene's hill layer (ADR 0018): transparent above the grass.
+const image = decodePng("src/ui/assets/scene/hill-albedo.png");
 
-/** Grass, lit or shaded: green well above blue, unlike sky, haze, and the blue-green forest. */
+/** Solid grass: an opaque texel of the hill layer, green well above blue. */
 function isGrass(xPercent: number, yPercent: number): boolean {
   const x = Math.round((xPercent / 100) * (image.width - 1));
   const y = Math.round((yPercent / 100) * (image.height - 1));
-  const i = (y * image.width + x) * 3;
-  const [r, g, b] = [
+  const i = (y * image.width + x) * 4;
+  const [r, g, b, a] = [
     image.px[i] ?? 0,
     image.px[i + 1] ?? 0,
     image.px[i + 2] ?? 0,
+    image.px[i + 3] ?? 0,
   ];
-  return g - b > 25 && r > b && g > 50;
+  return a >= 240 && g - b > 25 && r > b && g > 50;
 }
 
 describe("hillside slots", () => {
@@ -71,9 +73,9 @@ describe("hillside slots", () => {
     expect(generate()).toEqual(HILLSIDE_SLOTS);
   });
 
-  it("the classifier separates sky, forest, and grass on the backdrop", () => {
+  it("the classifier separates sky, ridges, and grass on the hill layer", () => {
     expect(isGrass(50, 20)).toBe(false); // sky
-    expect(isGrass(80, 66)).toBe(false); // forest ridge
+    expect(isGrass(85, 62)).toBe(false); // ridges, behind the hill
     expect(isGrass(50, 85)).toBe(true);
   });
 

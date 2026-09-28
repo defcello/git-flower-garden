@@ -7,6 +7,16 @@ change configuration or behavior, and the notes say how.
 
 ## Unreleased
 
+- **The garden is lit by the real sun and moon.** The painted daytime
+  backdrop is replaced by separate mountain and hill layers, relit together
+  with the flowers, leaves, fruit, and stems from the sun's and moon's actual
+  positions: low sun from the side, backlit petals and grass, dim moonlit
+  nights. Lighting runs on the CPU in the background about once a minute or
+  two, so no graphics acceleration is needed. The focus view shows its plant
+  in daylight for legibility. Loading the garden view now downloads about
+  11 MB of artwork from the local service.
+  ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
+
 - **Real-time sky** in the garden view: set `environment.enabled` with your
   latitude and longitude, and the sky follows the sun and moon, computed
   offline (no location lookup, nothing sent anywhere). The Sky menu replaces

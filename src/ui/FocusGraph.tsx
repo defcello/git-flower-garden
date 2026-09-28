@@ -78,7 +78,10 @@ function rowWindow(
  */
 export function FocusGraph(props: FocusGraphProps) {
   const { graph } = props;
-  const Drawing = props.renderer === "technical" ? GraphSvg : BotanicalGraph;
+  // The focus card is an inspection surface: its plant is lit by daylight,
+  // not by a dusk or moonlit sky (scene/client.ts "inspection").
+  const Drawing =
+    props.renderer === "technical" ? GraphSvg : InspectionBotanicalGraph;
   const container = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
   // Null until the container is first measured; the tree is then framed once
@@ -277,4 +280,10 @@ export function FocusGraph(props: FocusGraphProps) {
       </div>
     </div>
   );
+}
+
+function InspectionBotanicalGraph(
+  props: Omit<Parameters<typeof BotanicalGraph>[0], "light">,
+) {
+  return <BotanicalGraph {...props} light="inspection" />;
 }

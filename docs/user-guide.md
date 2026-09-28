@@ -178,9 +178,13 @@ Each repository needs a unique `id` (lowercase letters, digits, `.`, `_`, or
 
 With `environment.enabled` and your coordinates, the garden view's sky follows
 the real sun and moon: dawn, daylight, dusk, twilight, and night, the moon's
-phase (lit on the side facing the sun), and stars. Everything is computed on
-your computer; no location lookup happens and nothing is sent anywhere.
-Weather is not available yet.
+phase (lit on the side facing the sun), and stars. The mountains, the hill,
+and the plants are lit by that same sun and moon: shading follows where the
+sun really is, backlit petals and grass glow, and a moonlit night is dim.
+Without a location, the garden is lit by a fixed noon sun. The focus view
+always shows its plant in daylight, so it stays easy to read at night.
+Everything is computed on your computer; no location lookup happens and
+nothing is sent anywhere. Weather is not available yet.
 
 ```json
 "environment": { "enabled": true, "latitude": 35.6, "longitude": -82.55 }
@@ -291,9 +295,9 @@ text. See [SECURITY.md](../SECURITY.md) to report a problem.
 
 ## Known limitations (0.1)
 
-- The garden view is a preview. Its backdrop is one painted daytime image,
-  graded for the time of day; the painted sunlight comes from the upper left
-  whatever the sun's real position. Weather is not built yet.
+- The garden view is a preview. Its lighting is recomputed every minute or two
+  rather than continuously, nothing sways yet, and shadows are simple.
+  Weather is not built yet.
 - There is no "retry now" button for a failing remote; it retries on its own
   with backoff (at most 15 minutes).
 - For a local repository with monitored `remotes`, remote *tags* come from the

@@ -10,7 +10,12 @@
  * the hill is lower.
  */
 
-/** Hill crest of src/ui/assets/blue-ridge-day.png, % of height per 2 % of width (measured). */
+/**
+ * Hill crest of the P2-A backdrop (now docs/art/p2a/blue-ridge-day.png), %
+ * of height per 2 % of width (measured). The table was generated against it;
+ * tests/ui/hillside.test.ts checks it against the relit hill layer that
+ * replaced it (ADR 0018), whose crest is higher, so every slot stays on grass.
+ */
 export const CREST = [
   79.1, 78.4, 77.8, 77.4, 76.7, 76.2, 75.8, 75.3, 74.9, 74.6, 74.2, 73.9, 73.5,
   73.2, 72.9, 72.6, 72.4, 72.2, 71.9, 71.7, 71.5, 71.3, 71.2, 71.1, 71.1, 71,
