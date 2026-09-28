@@ -4,6 +4,7 @@
  * duplicate IDs are all errors, reported together with a JSON Pointer and a
  * line/column so the user can fix everything in one pass.
  */
+import { BLACKSBURG, BLACKSBURG_ZONE } from "../environment/places.ts";
 import { isAbsolute, resolve } from "node:path";
 import {
   WEEKDAYS,
@@ -54,7 +55,13 @@ export interface RepositoryConfig {
 export interface Config {
   version: typeof CONFIG_VERSION;
   server: { host: (typeof LOOPBACK_HOSTS)[number]; port: number };
-  history: { businessDays: number; weekdays: Weekday[]; timeZone: string };
+  history: {
+    businessDays: number;
+    weekdays: Weekday[];
+    timeZone: string;
+    /** Show only this many of the newest recent commits; null shows them all. */
+    maxRecentCommits: number | null;
+  };
   monitor: {
     localReconcileSeconds: number;
     remotePollSeconds: number;
@@ -102,6 +109,9 @@ export function systemTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
+/** Where the sky is computed when no place is configured. */
+export const DEFAULT_PLACE = { ...BLACKSBURG, timeZone: BLACKSBURG_ZONE };
+
 export const DEFAULTS = {
   server: { host: "127.0.0.1", port: 4783 },
   history: {
@@ -115,7 +125,15 @@ export const DEFAULTS = {
     fetchTimeoutSeconds: 120,
   },
   display: { renderer: "technical", reducedMotion: false },
-  environment: { enabled: false },
+  environment: {
+    enabled: true,
+    place: {
+      latitude: DEFAULT_PLACE.latitude,
+      longitude: DEFAULT_PLACE.longitude,
+      elevationMeters: DEFAULT_PLACE.elevationMeters,
+    },
+    timeZone: DEFAULT_PLACE.timeZone,
+  },
 } as const;
 
 type Obj = Record<string, unknown>;
@@ -276,6 +294,7 @@ export function validateConfig(
     "businessDays",
     "weekdays",
     "timeZone",
+    "maxRecentCommits",
   ]);
   const businessDays = integer(
     "/history/businessDays",
@@ -320,6 +339,17 @@ export function validateConfig(
       timeZone = history.timeZone;
     }
   }
+
+  const maxRecentCommits =
+    history.maxRecentCommits === undefined
+      ? null
+      : integer(
+          "/history/maxRecentCommits",
+          history.maxRecentCommits,
+          1,
+          100_000,
+          1,
+        );
 
   const monitor = section(root, "monitor", [
     "localReconcileSeconds",
@@ -433,22 +463,26 @@ export function validateConfig(
   const environmentEnabled = boolean(
     "/environment/enabled",
     environment.enabled,
-    false,
+    true,
   );
+  // With neither coordinate given, the sky is Blacksburg's (maintainer
+  // choice); there is no automatic location lookup. Given one, give both.
+  const placeGiven =
+    environment.latitude !== undefined || environment.longitude !== undefined;
+  // When the sky is off, the place is unused and may be incomplete.
+  const pair = (fallback: number) =>
+    placeGiven && environmentEnabled ? null : fallback;
   const coordinate = (
     key: string,
     min: number,
     max: number,
-    required: boolean,
+    fallback: number | null,
   ): number => {
     const v = environment[key];
     const pointer = at("/environment", key);
     if (v === undefined) {
-      if (required)
-        err(
-          pointer,
-          "is required when the environment is enabled (no automatic location lookup)",
-        );
+      if (fallback !== null) return fallback;
+      err(pointer, "is required with the other coordinate");
       return 0;
     }
     if (typeof v !== "number" || !Number.isFinite(v) || v < min || v > max) {
@@ -457,10 +491,26 @@ export function validateConfig(
     }
     return v;
   };
-  const latitude = coordinate("latitude", -90, 90, environmentEnabled);
-  const longitude = coordinate("longitude", -180, 180, environmentEnabled);
-  const elevationMeters = coordinate("elevationMeters", -500, 9000, false);
-  let environmentTimeZone = timeZone;
+  const latitude = coordinate(
+    "latitude",
+    -90,
+    90,
+    pair(DEFAULT_PLACE.latitude),
+  );
+  const longitude = coordinate(
+    "longitude",
+    -180,
+    180,
+    pair(DEFAULT_PLACE.longitude),
+  );
+  const elevationMeters = coordinate(
+    "elevationMeters",
+    -500,
+    9000,
+    placeGiven ? 0 : (DEFAULT_PLACE.elevationMeters ?? 0),
+  );
+  // The default place's sky shows its own local time.
+  let environmentTimeZone = placeGiven ? timeZone : DEFAULT_PLACE.timeZone;
   if (environment.timeZone !== undefined) {
     if (
       typeof environment.timeZone !== "string" ||
@@ -612,7 +662,7 @@ export function validateConfig(
     config: {
       version: CONFIG_VERSION,
       server: { host, port },
-      history: { businessDays, weekdays, timeZone },
+      history: { businessDays, weekdays, timeZone, maxRecentCommits },
       monitor: monitorValues,
       display: { renderer: "technical", reducedMotion },
       repositories,

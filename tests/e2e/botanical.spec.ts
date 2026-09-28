@@ -71,18 +71,16 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
   const landscape = page.locator(".landscape");
   const scene = page.locator(".landscape-scene");
   const note = page.locator(".art-notice");
-  // The fixture configures no location: Live is lit by the noon Sun.
+  // The fixture turns the real sky off: Live is lit by the noon Sun.
   await expect(landscape).toHaveAttribute("data-sky", "day");
-  await expect(note).toContainText("set a location");
+  await expect(note).toContainText("real sky is off");
   // The ridge and hill are relit in a worker (ADR 0018, step 3).
   await expect(scene).toHaveAttribute("data-art", "ready");
   await expect(scene).toHaveAttribute("data-lit", "true");
   await expect(scene).toHaveAttribute("data-sun", "true");
   await expect(scene).toHaveAttribute("data-stars", "false");
   const sky = page.getByLabel("Sky", { exact: true });
-  await expect(sky.locator("option").first()).toHaveText(
-    "Live · no location configured",
-  );
+  await expect(sky.locator("option").first()).toHaveText("Live · real sky off");
 
   const cases = [
     { name: "noon", sun: true, moon: false, stars: false },
@@ -139,6 +137,142 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
+});
+
+test("the scene always shows whole at 16:9, and the time slider and bookmarks agree", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
+  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+  const landscape = page.locator(".landscape");
+  const scene = page.locator(".landscape-scene");
+  await expect(scene).toHaveAttribute("data-art", "ready");
+  // Taller, wider, and phone windows: the stage fits inside, centered, at
+  // 16:9, and the plants share it with the landscape.
+  for (const [width, height] of [
+    [1440, 1080],
+    [2560, 1080],
+    [390, 844],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect
+      .poll(async () => (await landscape.boundingBox())?.width)
+      .toBeCloseTo(Math.min(width, (height * 16) / 9), 0);
+    const stage = await landscape.boundingBox();
+    const garden = await page.locator(".garden-scene").boundingBox();
+    expect(stage?.height).toBeCloseTo(((stage?.width ?? 0) * 9) / 16, 0);
+    expect(stage?.x).toBeCloseTo((width - (stage?.width ?? 0)) / 2, 0);
+    expect(stage?.y).toBeCloseTo((height - (stage?.height ?? 0)) / 2, 0);
+    expect(garden).toEqual(stage);
+  }
+  await page.setViewportSize({ width: 1920, height: 1080 });
+
+  const sky = page.getByLabel("Sky", { exact: true });
+  const slider = page.getByLabel("Time of day");
+  const note = page.locator(".art-notice");
+  // A bookmark sets the slider to its local time (01:06 EDT).
+  await sky.selectOption("full-moon");
+  await expect(slider).toHaveValue(String(60 + 6));
+  await expect(page.locator(".time-readout")).toHaveText("01:06");
+  // Moving the slider keeps the bookmark's date and place, shows a custom
+  // time, and relights the scene.
+  await slider.fill(String(12 * 60));
+  await expect(sky).toHaveValue("custom");
+  await expect(landscape).toHaveAttribute("data-sky", "custom");
+  await expect(note).toContainText("Sky preview");
+  await expect(note).toContainText("May 23, 2024, 12:00 EDT");
+  await expect(scene).toHaveAttribute("data-sun", "true");
+  await slider.fill(String(22 * 60));
+  await expect(scene).toHaveAttribute("data-sun", "false");
+  await expect(scene).toHaveAttribute("data-stars", "true");
+  // Drag through the day. The sky never runs ahead of the relit art: every
+  // painted frame shows one light, and the scene catches up when dragging stops.
+  await page.evaluate(() => {
+    const canvas =
+      document.querySelector<HTMLCanvasElement>(".landscape-scene");
+    const state = window as unknown as { mixed: number; frames: number };
+    state.mixed = 0;
+    state.frames = 0;
+    const sample = () => {
+      const { skyLight, artLight } = canvas?.dataset ?? {};
+      state.frames++;
+      if (skyLight !== artLight) state.mixed++;
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  for (let minutes = 5 * 60; minutes <= 21 * 60; minutes += 30)
+    await slider.fill(String(minutes));
+  const frames = await page.evaluate(() => {
+    const { mixed, frames } = window as unknown as {
+      mixed: number;
+      frames: number;
+    };
+    return { mixed, frames };
+  });
+  expect(frames.frames).toBeGreaterThan(10);
+  expect(frames.mixed).toBe(0);
+  await expect(page.locator(".time-readout")).toHaveText("21:00");
+  // The scene catches up to 21:00 (after sunset), sky and art together.
+  await expect(scene).toHaveAttribute("data-sun", "false");
+  expect(await scene.evaluate((node) => node.dataset.artLight)).toBe(
+    await scene.evaluate((node) => node.dataset.skyLight),
+  );
+
+  // Live returns to the clock.
+  await sky.selectOption("live");
+  await expect(landscape).toHaveAttribute("data-sky", "day");
+  await expect(note).not.toContainText("Sky preview");
+});
+
+test("loop plays the day round, panels turn dark at night, and the top bar and notes never overlap", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
+  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+  const app = page.locator(".app");
+  const sky = page.getByLabel("Sky", { exact: true });
+  const slider = page.getByLabel("Time of day");
+  const loop = page.getByLabel("Loop");
+
+  // Night theme follows the shown sky: dark after civil dusk only.
+  await sky.selectOption("night");
+  await expect(app).toHaveClass(/\bnight\b/);
+  await sky.selectOption("noon");
+  await expect(app).not.toHaveClass(/\bnight\b/);
+
+  // Loop: 48 minutes a second, wrapping at midnight to the same day.
+  await slider.fill(String(23 * 60 + 40));
+  await loop.check();
+  await expect(sky).toHaveValue("custom");
+  await expect
+    .poll(async () => Number(await slider.inputValue()), { timeout: 5000 })
+    .toBeLessThan(120);
+  await expect(page.locator(".art-notice")).toContainText("Jun 20, 2024");
+  await loop.uncheck();
+  const stopped = await slider.inputValue();
+  await page.waitForTimeout(500);
+  await expect(slider).toHaveValue(stopped);
+  // Live stops a loop.
+  await loop.check();
+  await sky.selectOption("live");
+  await expect(loop).not.toBeChecked();
+
+  // A phone on its side: the bar wraps, and the notes sit below it.
+  await page.setViewportSize({ width: 915, height: 412 });
+  await page.mouse.move(400, 200);
+  const bar = await page.locator(".topbar").boundingBox();
+  const note = await page.locator(".art-notice").boundingBox();
+  expect(bar).not.toBeNull();
+  expect(note).not.toBeNull();
+  expect(note?.y ?? 0).toBeGreaterThanOrEqual(
+    (bar?.y ?? 0) + (bar?.height ?? 0),
+  );
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(915);
 });
 
 test("missing art falls back to the technical drawing", async ({ page }) => {

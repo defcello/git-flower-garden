@@ -6,13 +6,14 @@ import {
   useState,
 } from "react";
 import type { CSSProperties } from "react";
+import type { LightingState } from "../environment/lighting.ts";
 import type {
   GraphJson,
   GraphNodeJson,
   RemoteStatusJson,
   RepositoryStatusJson,
 } from "../api/types.ts";
-import { useGardenData } from "./api.ts";
+import { STATIC_DEMO, useGardenData } from "./api.ts";
 import { Details } from "./Details.tsx";
 import { BotanicalGraph } from "./BotanicalGraph.tsx";
 import type { Renderer } from "./botanical.ts";
@@ -32,13 +33,15 @@ import {
   type HillsideSlot,
 } from "./hillside.ts";
 import { SceneCanvas } from "./SceneCanvas.tsx";
-import { DAYTIME, plantShadowStyle } from "./scene/view.ts";
+import { useShownLight } from "./scene/client.ts";
+import { SkyControls } from "./SkyControls.tsx";
+import { DAYTIME, DESIGN, plantShadowStyle } from "./scene/view.ts";
 import {
-  SKY_CHOICES,
+  LIVE,
   describeSky,
-  parseSkyChoice,
   useSky,
-  type SkyChoice,
+  useSkyLoop,
+  type SkySetting,
 } from "./sky.ts";
 
 interface Selection {
@@ -61,7 +64,9 @@ export function App() {
   // The technical view stays the default until the garden is accepted; a
   // viewer's own choice is remembered in this browser only.
   const [renderer, setRenderer] = useState<Renderer>(loadRenderer);
-  const [skyChoice, setSkyChoice] = useState<SkyChoice>("live");
+  const [skySetting, setSkySetting] = useState<SkySetting>(LIVE);
+  const [looping, setLooping] = useState(false);
+  useSkyLoop(looping && renderer !== "technical", setSkySetting);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
@@ -73,7 +78,7 @@ export function App() {
   const environment = repositories?.display.environment ?? null;
   const sky = useSky(
     renderer !== "technical" ? environment : null,
-    renderer !== "technical" ? skyChoice : "live",
+    renderer !== "technical" ? skySetting : LIVE,
   );
   // The hillside has 64 fixed plant slots; dense planting is intended (focus
   // view isolates one plant). Larger gardens use the card layout.
@@ -142,11 +147,20 @@ export function App() {
     : undefined;
 
   const light = sky?.state ?? DAYTIME;
+  // Plant shadows change with the relit art, not ahead of it.
+  const shownLight = useShownLight(light);
+  // The top bar and notes float over the scene; the focus view and the
+  // drawer start below them (styles.css --hud-height).
+  const appRef = useHudHeight();
+  const stageScale = useStageScale();
 
   return (
     <div
-      className={`app${renderer !== "technical" ? " botanical" : ""}`}
-      style={renderer !== "technical" ? plantShadowStyle(light) : undefined}
+      ref={appRef}
+      className={`app${renderer !== "technical" ? " botanical" : ""}${renderer !== "technical" && isNight(shownLight) ? " night" : ""}`}
+      style={
+        renderer !== "technical" ? plantShadowStyle(shownLight) : undefined
+      }
     >
       {renderer !== "technical" && (
         <div
@@ -158,104 +172,103 @@ export function App() {
           <div className="landscape-vignette" />
         </div>
       )}
-      <header className="topbar">
-        <h1>git-flower-garden</h1>
-        {repositories && (
-          <span className="summary">
-            {repos.length} {repos.length === 1 ? "repository" : "repositories"}{" "}
-            · last {repositories.display.businessDays} business days ·{" "}
-            {timeZone}
-          </span>
-        )}
-        <label className="preview-control">
-          View
-          <select
-            aria-label="Renderer"
-            value={renderer}
-            onChange={(event) => {
-              const next = event.target.value as Renderer;
-              setRenderer(next);
-              saveRenderer(next);
-            }}
-          >
-            <option value="technical">Technical</option>
-            <option value="canvas">Garden preview · Canvas</option>
-            <option value="svg">Garden preview · SVG</option>
-          </select>
-        </label>
-        {renderer !== "technical" && (
+      <div className="hud">
+        <header className="topbar">
+          <h1>git-flower-garden</h1>
+          {repositories && (
+            <span className="summary">
+              {repos.length}{" "}
+              {repos.length === 1 ? "repository" : "repositories"} · last{" "}
+              {repositories.display.businessDays} business days · {timeZone}
+            </span>
+          )}
           <label className="preview-control">
-            Sky
+            View
             <select
-              aria-label="Sky"
-              value={skyChoice}
+              aria-label="Renderer"
+              value={renderer}
               onChange={(event) => {
-                setSkyChoice(parseSkyChoice(event.target.value));
+                const next = event.target.value as Renderer;
+                setRenderer(next);
+                saveRenderer(next);
               }}
             >
-              {SKY_CHOICES.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {value === "live" && !environment
-                    ? "Live · no location configured"
-                    : label}
-                </option>
-              ))}
+              <option value="technical">Technical</option>
+              <option value="canvas">Garden preview · Canvas</option>
+              <option value="svg">Garden preview · SVG</option>
             </select>
           </label>
-        )}
-        <Legend />
-      </header>
-      {renderer !== "technical" && (
-        <div className="art-notice" role="note">
-          {sky?.snapshot.source === "preview" ? (
-            <strong className="sky-preview-badge">Sky preview</strong>
-          ) : null}{" "}
-          Art preview ·{" "}
-          {sky
-            ? `${sky.snapshot.source === "preview" ? "not live conditions: " : "live sky, "}${describeSky(sky)}.`
-            : "daytime sky; set a location under environment to follow the real sky."}{" "}
-          Flowers = branch heads · leaves = commits · fruit = tags · gold
-          markers = worktrees. Dashed stems hide history; red boundaries mean
-          missing history.
+          {renderer !== "technical" && (
+            <SkyControls
+              setting={skySetting}
+              sky={sky}
+              environment={environment}
+              onChange={setSkySetting}
+              looping={looping}
+              onLoopingChange={setLooping}
+            />
+          )}
+          <Legend />
+        </header>
+        <div className="hud-notes">
+          {renderer !== "technical" && (
+            <div className="art-notice" role="note">
+              {sky?.snapshot.source === "preview" ? (
+                <strong className="sky-preview-badge">Sky preview</strong>
+              ) : null}{" "}
+              Art preview ·{" "}
+              {sky
+                ? `${sky.snapshot.source === "preview" ? "not live conditions: " : "live sky, "}${describeSky(sky)}.`
+                : "noon sky; the real sky is off (environment.enabled)."}{" "}
+              <span className="art-key">
+                Flowers = branch heads · leaves = commits · fruit = tags · gold
+                markers = worktrees. Dashed stems hide history; red boundaries
+                mean missing history.
+              </span>
+            </div>
+          )}
+          <div className="banners">
+            {repositories?.display.notice && (
+              <div className="banner notice" role="note">
+                {repositories.display.notice}
+              </div>
+            )}
+            {repositories && repositories.configErrors.length > 0 && (
+              <div className="banner" role="alert">
+                <strong>
+                  The configuration file has problems; the last valid
+                  configuration is still in use.
+                </strong>
+                <ul>
+                  {repositories.configErrors.map((e) => (
+                    <li key={e}>
+                      <code>{e}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {repositories?.webhooks.state === "error" && (
+              <div className="banner" role="status">
+                {repositories.webhooks.diagnostic}
+              </div>
+            )}
+            {repositories && repositories.restartNeeded.length > 0 && (
+              <div className="banner" role="status">
+                Restart git-flower-garden to apply changes to{" "}
+                {repositories.restartNeeded.join(", ")}.
+              </div>
+            )}
+            {connectionError && (
+              <div className="banner" role="status">
+                {STATIC_DEMO
+                  ? `Could not load the demo snapshot (${connectionError}).`
+                  : `Live updates interrupted (${connectionError}). Showing the last known state.`}
+              </div>
+            )}
+          </div>
         </div>
-      )}
-      {repositories?.display.notice && (
-        <div className="banner notice" role="note">
-          {repositories.display.notice}
-        </div>
-      )}
-      {repositories && repositories.configErrors.length > 0 && (
-        <div className="banner" role="alert">
-          <strong>
-            The configuration file has problems; the last valid configuration is
-            still in use.
-          </strong>
-          <ul>
-            {repositories.configErrors.map((e) => (
-              <li key={e}>
-                <code>{e}</code>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {repositories?.webhooks.state === "error" && (
-        <div className="banner" role="status">
-          {repositories.webhooks.diagnostic}
-        </div>
-      )}
-      {repositories && repositories.restartNeeded.length > 0 && (
-        <div className="banner" role="status">
-          Restart git-flower-garden to apply changes to{" "}
-          {repositories.restartNeeded.join(", ")}.
-        </div>
-      )}
-      {connectionError && (
-        <div className="banner" role="status">
-          Live updates interrupted ({connectionError}). Showing the last known
-          state.
-        </div>
-      )}
+      </div>
       {!repositories ? (
         <p className="loading" role="status">
           Loading…
@@ -290,6 +303,11 @@ export function App() {
         <main
           className={`garden${sceneMode ? " garden-scene" : ""}`}
           aria-label="All repositories"
+          style={
+            sceneMode
+              ? ({ "--stage-scale": String(stageScale) } as CSSProperties)
+              : undefined
+          }
         >
           {repos.map((repo, index) => (
             <Plot
@@ -613,14 +631,17 @@ const RENDERER_KEY = "git-flower-garden.renderer";
 /** The key under the project's former name, read when the new one is unset. */
 const LEGACY_RENDERER_KEY = "git-garden.renderer";
 
+/** The demo opens on the garden; the installed service on the graph. */
+const defaultRenderer: Renderer = STATIC_DEMO ? "canvas" : "technical";
+
 function loadRenderer(): Renderer {
   try {
     const saved =
       window.localStorage.getItem(RENDERER_KEY) ??
       window.localStorage.getItem(LEGACY_RENDERER_KEY);
-    return saved === "canvas" || saved === "svg" ? saved : "technical";
+    return saved === "canvas" || saved === "svg" ? saved : defaultRenderer;
   } catch {
-    return "technical";
+    return defaultRenderer;
   }
 }
 
@@ -799,3 +820,58 @@ function Legend() {
 }
 
 export { graphWidth };
+
+/**
+ * The stage's size relative to the 1920×1080 design space: how much the
+ * plants scale so they keep their size on the landscape (styles.css).
+ */
+function useStageScale(): number {
+  const [scale, setScale] = useState(measureStage);
+  useEffect(() => {
+    const update = () => {
+      setScale(measureStage());
+    };
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  return scale;
+}
+
+function measureStage(): number {
+  return Math.min(
+    window.innerWidth / DESIGN.width,
+    window.innerHeight / DESIGN.height,
+  );
+}
+
+/** After civil dusk: the panels over the scene turn dark (styles.css). */
+function isNight(light: LightingState): boolean {
+  return light.sun.altitude < -6;
+}
+
+/**
+ * Publish the floating top area's height as --hud-height on the app, so
+ * content below it (the focus view, the drawer) starts clear of it however
+ * the top bar wraps.
+ */
+function useHudHeight() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const app = ref.current;
+    const hud = app?.querySelector(".hud");
+    if (!app || !hud) return;
+    const observer = new ResizeObserver(() => {
+      app.style.setProperty(
+        "--hud-height",
+        `${String(Math.ceil(hud.getBoundingClientRect().height))}px`,
+      );
+    });
+    observer.observe(hud);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  return ref;
+}

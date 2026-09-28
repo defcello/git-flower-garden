@@ -3,16 +3,20 @@
  * scene art once, then relights every layer on request, off the main
  * thread, and returns ready-to-draw bitmaps. Requests arrive only when the
  * light changes meaningfully (view.ts `lightKey`), about every minute or two
- * while the Sun is up.
+ * while the Sun is up, or continuously while the time slider moves or loops.
+ *
+ * The texels are lit on every spare core: each layer is cut into bands of
+ * rows, one per band worker (band.ts), all lit at once and joined here.
+ * Lighting is per texel, so the result matches lighting the layer whole.
  */
+import type { BandLayers, BandRequest, BandResponse } from "./band.ts";
 import {
+  joinBands,
   mirrorCells,
   prepareLayer,
-  relight,
-  type LayerSource,
+  splitBands,
   type Pixels,
 } from "./relight.ts";
-import { LAYERS } from "./shading.ts";
 import { SPRITE_ATLAS } from "./atlas.ts";
 import {
   type ArtUrls,
@@ -21,12 +25,22 @@ import {
   type WorkerResponse,
 } from "./protocol.ts";
 
-interface Art {
-  ridge: LayerSource;
-  hill: LayerSource;
-  sprites: LayerSource;
-  spritesMirrored: LayerSource;
+interface Size {
+  width: number;
+  height: number;
 }
+
+/** What stays here once the layers are handed out: sizes and band rows. */
+interface Art {
+  size: Record<keyof BandLayers, Size>;
+  bands: { worker: Worker; rows: Record<keyof BandLayers, number> }[];
+}
+
+/** One band per core, leaving one for the page; at least one, at most 8. */
+const BANDS = Math.max(
+  1,
+  Math.min(8, (globalThis.navigator.hardwareConcurrency || 2) - 1),
+);
 
 async function load(url: string, size?: number): Promise<Pixels> {
   const response = await fetch(url);
@@ -73,11 +87,113 @@ async function loadArt(urls: ArtUrls): Promise<Art> {
       prepareLayer(albedo, normals, translucency),
     ),
   ]);
-  return { ridge, hill, sprites, spritesMirrored: mirrorCells(sprites, 2) };
+  const layers: BandLayers = {
+    ridge,
+    hill,
+    sprites,
+    spritesMirrored: mirrorCells(sprites, 2),
+  };
+  const names = Object.keys(layers) as (keyof BandLayers)[];
+  const cut = Object.fromEntries(
+    names.map((name) => [name, splitBands(layers[name], BANDS)]),
+  ) as Record<keyof BandLayers, ReturnType<typeof splitBands>>;
+  const bands = Array.from({ length: BANDS }, (_, i) => {
+    const worker = new Worker(new URL("./band.ts", import.meta.url), {
+      type: "module",
+    });
+    worker.addEventListener("error", (event) => {
+      reply({
+        type: "error",
+        message: event.message || "a relighting band worker failed",
+      });
+    });
+    const band = (name: keyof BandLayers) =>
+      cut[name][i] as (typeof cut)[keyof BandLayers][number];
+    const request: BandRequest = {
+      type: "init",
+      layers: {
+        ridge: band("ridge").source,
+        hill: band("hill").source,
+        sprites: band("sprites").source,
+        spritesMirrored: band("spritesMirrored").source,
+      },
+    };
+    // Hand the band over: the whole layers are not kept here.
+    worker.postMessage(request, {
+      transfer: names.flatMap((name) => {
+        const s = band(name).source;
+        return [s.albedo.data.buffer, s.normals.data.buffer].concat(
+          s.translucency ? [s.translucency.buffer] : [],
+        );
+      }),
+    });
+    return {
+      worker,
+      rows: Object.fromEntries(
+        names.map((name) => [name, band(name).row]),
+      ) as Record<keyof BandLayers, number>,
+    };
+  });
+  const size = Object.fromEntries(
+    names.map((name) => [
+      name,
+      { width: layers[name].albedo.width, height: layers[name].albedo.height },
+    ]),
+  ) as Record<keyof BandLayers, Size>;
+  return { size, bands };
 }
 
-function canvasOf(source: LayerSource, rgba: Uint8ClampedArray<ArrayBuffer>) {
-  const { width, height } = source.albedo;
+let nextBandId = 1;
+
+/** Light every band at once and join each layer's bands. */
+async function lightBands(
+  layers: Art,
+  params: WorkerRequest & { type: "relight" },
+): Promise<Record<keyof BandLayers, Uint8ClampedArray<ArrayBuffer> | null>> {
+  const id = nextBandId++;
+  const results = await Promise.all(
+    layers.bands.map(
+      ({ worker }) =>
+        new Promise<BandResponse>((resolve) => {
+          const listen = (event: MessageEvent<BandResponse>) => {
+            if (event.data.id !== id) return;
+            worker.removeEventListener("message", listen);
+            resolve(event.data);
+          };
+          worker.addEventListener("message", listen);
+          const request: BandRequest = {
+            type: "relight",
+            id,
+            params: params.params,
+            spritesOnly: params.spritesOnly,
+          };
+          worker.postMessage(request);
+        }),
+    ),
+  );
+  const join = (name: keyof BandLayers) => {
+    const lit = results.map((result, i) => ({
+      row: layers.bands[i]?.rows[name] ?? 0,
+      rgba: result[name],
+    }));
+    if (lit.some((band) => band.rgba === null)) return null;
+    const { width, height } = layers.size[name];
+    return joinBands(
+      width,
+      height,
+      lit as { row: number; rgba: Uint8ClampedArray }[],
+    );
+  };
+  return {
+    ridge: join("ridge"),
+    hill: join("hill"),
+    sprites: join("sprites"),
+    spritesMirrored: join("spritesMirrored"),
+  };
+}
+
+function canvasOf(size: Size, rgba: Uint8ClampedArray<ArrayBuffer>) {
+  const { width, height } = size;
   const canvas = new OffscreenCanvas(width, height);
   const context = canvas.getContext("2d");
   if (context === null) throw new Error("no 2d context in the worker");
@@ -100,22 +216,17 @@ async function handle(request: WorkerRequest): Promise<void> {
   if (art === null) throw new Error("relight before init");
   const layers = await art;
   const start = performance.now();
-  const p = request.params;
-  const ridge = request.spritesOnly
-    ? null
-    : canvasOf(layers.ridge, relight(layers.ridge, p, LAYERS.ridge));
-  const hill = request.spritesOnly
-    ? null
-    : canvasOf(layers.hill, relight(layers.hill, p, LAYERS.hill));
-  const sprites = canvasOf(
-    layers.sprites,
-    relight(layers.sprites, p, LAYERS.sprites),
-  );
-  const spritesMirrored = canvasOf(
-    layers.spritesMirrored,
-    relight(layers.spritesMirrored, p, LAYERS.sprites),
-  );
+  const lit = await lightBands(layers, request);
   const lightMs = performance.now() - start;
+  const ridge = lit.ridge && canvasOf(layers.size.ridge, lit.ridge);
+  const hill = lit.hill && canvasOf(layers.size.hill, lit.hill);
+  if (lit.sprites === null || lit.spritesMirrored === null)
+    throw new Error("sprite bands missing");
+  const sprites = canvasOf(layers.size.sprites, lit.sprites);
+  const spritesMirrored = canvasOf(
+    layers.size.spritesMirrored,
+    lit.spritesMirrored,
+  );
   // PNG copies of the atlases for the SVG compositor's <image> elements.
   const [spritesPng, spritesMirroredPng] = await Promise.all([
     sprites.convertToBlob(),

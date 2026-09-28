@@ -6,8 +6,10 @@ import { lightingState } from "../../src/environment/lighting.ts";
 import { previewSnapshot } from "../../src/environment/overrides.ts";
 import {
   mirrorCells,
+  joinBands,
   prepareLayer,
   relight,
+  splitBands,
   type Pixels,
 } from "../../src/ui/scene/relight.ts";
 import { LAYERS } from "../../src/ui/scene/shading.ts";
@@ -191,6 +193,42 @@ describe("relighting", () => {
     expect(twice.albedo.data).toEqual(layer.albedo.data);
     expect(twice.normals.data).toEqual(layer.normals.data);
     expect(() => mirrorCells(layer, 3)).toThrow(/cells/);
+  });
+});
+
+describe("lighting in bands on several cores", () => {
+  it("matches the layer lit whole, byte for byte, for any number of bands", () => {
+    let seed = 11;
+    const byte = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed >>> 24;
+    };
+    const width = 13;
+    const height = 7;
+    const pixels = (alpha: boolean): Pixels => ({
+      width,
+      height,
+      data: Uint8ClampedArray.from({ length: width * height * 4 }, (_, i) =>
+        i % 4 === 3 && !alpha ? 255 : byte(),
+      ),
+    });
+    const layer = prepareLayer(pixels(true), pixels(false), pixels(false));
+    const params = sceneLight(sunset);
+    const whole = relight(layer, params, LAYERS.hill);
+    for (const parts of [1, 2, 3, 4, 7]) {
+      const bands = splitBands(layer, parts);
+      expect(bands.reduce((rows, b) => rows + b.source.albedo.height, 0)).toBe(
+        height,
+      );
+      // Reversed: the order bands come back in does not matter.
+      const lit = bands
+        .map((band) => ({
+          row: band.row,
+          rgba: relight(band.source, params, LAYERS.hill),
+        }))
+        .reverse();
+      expect(joinBands(width, height, lit)).toEqual(whole);
+    }
   });
 });
 

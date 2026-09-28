@@ -312,6 +312,25 @@ decision:
   machine. **Open in step 3**: sway, the frame-rate cap, the View-menu tier
   choice (Auto, GPU, Software, Static), and a `SceneDescription` shared with the GPU tier (plants are still drawn
   per plot).
+  **Maintainer review of the two decisions** (2026-09-28): daylight in the
+  focus view stays for daylight hours; after civil dusk the panels over the
+  scene, the focus view included, turn dark (its plant stays daylit).
+  Without a configured place the sky is Blacksburg, Virginia's, rather than
+  a fixed noon (`environment.enabled` now defaults to true; `false` keeps
+  the noon light). Built on `feat/pages-demo`, merged after PR #1 as PR #2.
+  **Time slider, loop, and cores** (2026-09-28, same branch): the time of
+  day can be dragged or looped (a day every 30 seconds), so relights are no
+  longer rare. The scene repaints only when a whole frame is lit: sky, Sun,
+  Moon, stars, and shadows are drawn for the light of the art on screen.
+  The worker now lights each layer in bands of rows, one band worker per
+  spare core (`band.ts`; byte-identical to lighting whole, tested). On a
+  4-core desktop in headless Chromium, lighting fell from about 540 ms to
+  280 ms per relight, but a looping scene still repaints only about twice
+  a second: the four cores are saturated, and overlapping the next
+  relight's lighting with the last one's packing gained nothing, so it was
+  left out. An inlined `shade` kernel was no faster than the function (the
+  engine inlines it) and was dropped. Smooth looping needs the GPU tier
+  (step 4).
 
 ## Verification
 

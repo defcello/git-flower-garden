@@ -10,6 +10,7 @@ import type { LightingState } from "../environment/lighting.ts";
 import { requestLight, useSceneArt, type LitArt } from "./scene/client.ts";
 import {
   DESIGN,
+  lightKey,
   moonLight,
   MOON_COLOR,
   sceneLight,
@@ -64,8 +65,9 @@ function draw(
   const g = element.getContext("2d", { alpha: false });
   if (!g) return;
   const ratio = Math.min(window.devicePixelRatio || 1, 2);
-  const W = Math.max(1, Math.round(window.innerWidth * ratio));
-  const H = Math.max(1, Math.round(window.innerHeight * ratio));
+  // The canvas fills the 16:9 stage (styles.css), so nothing is cropped.
+  const W = Math.max(1, Math.round(element.clientWidth * ratio));
+  const H = Math.max(1, Math.round(element.clientHeight * ratio));
   if (element.width !== W || element.height !== H) {
     element.width = W;
     element.height = H;
@@ -128,6 +130,9 @@ function draw(
   element.dataset.moon = String(sky.moon !== null);
   element.dataset.stars = String(sky.stars.length > 0);
   element.dataset.lit = String(lit);
+  // For tests: the light the sky was drawn for, and the light of the art.
+  element.dataset.skyLight = lightKey(sceneLight(state));
+  if (art) element.dataset.artLight = art.key;
 }
 
 export function SceneCanvas({ state }: { state: LightingState }) {
@@ -136,14 +141,17 @@ export function SceneCanvas({ state }: { state: LightingState }) {
   const art = scene.state === "ready" ? scene.art : null;
 
   useEffect(() => {
-    requestLight(sceneLight(state));
+    requestLight(state);
   }, [state]);
 
+  // Draw the sky for the light the art was lit for, never ahead of it: the
+  // canvas repaints only when a whole frame (sky and relit layers) is ready.
+  const shown = art?.light ?? state;
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
     const redraw = () => {
-      if (!document.hidden) draw(element, state, art);
+      if (!document.hidden) draw(element, shown, art);
     };
     redraw();
     document.addEventListener("visibilitychange", redraw);
@@ -152,7 +160,7 @@ export function SceneCanvas({ state }: { state: LightingState }) {
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };
-  }, [state, art]);
+  }, [shown, art]);
 
   return (
     <canvas

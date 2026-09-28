@@ -35,7 +35,7 @@ function needsGraph(repo: RepositoryStatusJson): boolean {
  * EventSource reconnects on its own, and the first message after a reconnect
  * resynchronizes everything.
  */
-export function useGardenData(): GardenData {
+function useLiveData(): GardenData {
   const [repositories, setRepositories] = useState<RepositoriesJson | null>(
     null,
   );
@@ -124,3 +124,68 @@ export function useGardenData(): GardenData {
 
   return { repositories, graphs, connectionError, fetchedAt };
 }
+
+/**
+ * The static GitHub Pages demo (`vite build --mode pages`): a snapshot of the
+ * API responses, saved by scripts/pages-snapshot.ts and loaded once. There is
+ * no service to watch the repositories, so nothing updates.
+ */
+function useSnapshotData(): GardenData {
+  const [data, setData] = useState<GardenData>({
+    repositories: null,
+    graphs: new Map(),
+    fetchedAt: 0,
+    connectionError: null,
+  });
+  useEffect(() => {
+    const controller = new AbortController();
+    const base = `${import.meta.env.BASE_URL}demo-data/`;
+    void (async () => {
+      try {
+        const [snapshot, repositories] = await Promise.all([
+          getJson<{ takenAt: number }>(
+            `${base}snapshot.json`,
+            controller.signal,
+          ),
+          getJson<RepositoriesJson>(
+            `${base}repositories.json`,
+            controller.signal,
+          ),
+        ]);
+        const graphs = await Promise.all(
+          repositories.repositories
+            .filter(needsGraph)
+            .map((repo) =>
+              getJson<GraphJson>(
+                `${base}graphs/${encodeURIComponent(repo.id)}.json`,
+                controller.signal,
+              ),
+            ),
+        );
+        setData({
+          repositories,
+          graphs: new Map(graphs.map((graph) => [graph.id, graph])),
+          // Ages and the recent window read as of the snapshot.
+          fetchedAt: snapshot.takenAt,
+          connectionError: null,
+        });
+      } catch (error) {
+        if (!controller.signal.aborted)
+          setData((previous) => ({
+            ...previous,
+            connectionError:
+              error instanceof Error ? error.message : String(error),
+          }));
+      }
+    })();
+    return () => {
+      controller.abort();
+    };
+  }, []);
+  return data;
+}
+
+/** True in the static GitHub Pages demo. */
+export const STATIC_DEMO = import.meta.env.MODE === "pages";
+
+export const useGardenData = STATIC_DEMO ? useSnapshotData : useLiveData;

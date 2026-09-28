@@ -169,4 +169,38 @@ describe("RepositoryService", () => {
     expect(service.notifyGithub("new/garden")).toEqual(["tour"]);
     service.stop();
   });
+
+  it("applies a new recent-commit cap on reload and makes clients refetch", async () => {
+    const dir = await tempDir();
+    const fixture = await buildFixture(gardenTour, join(dir, "repo"));
+    const config = (maxRecentCommits?: number) => {
+      const result = parseConfig(
+        JSON.stringify({
+          version: 1,
+          history: { timeZone: "America/New_York", maxRecentCommits },
+          repositories: [{ id: "tour", path: fixture.dir }],
+        }),
+        dir,
+      );
+      if (!result.ok) throw new Error("bad config");
+      return result.config;
+    };
+    const service = new RepositoryService(config(), {
+      now: () => Date.parse("2026-09-22T15:00:00-04:00"),
+    });
+    await service.refresh("tour");
+    const recent = (await service.graph("tour"))?.graph.nodes;
+    const recentCount = [...(recent?.values() ?? [])].filter((n) =>
+      n.reasons.includes("recent"),
+    ).length;
+    expect(recentCount).toBeGreaterThan(1);
+
+    await service.applyConfig(config(1));
+    expect(service.view("tour")?.revision).toBe(2);
+    const capped = (await service.graph("tour"))?.graph.nodes;
+    expect(
+      [...(capped?.values() ?? [])].filter((n) => n.reasons.includes("recent")),
+    ).toHaveLength(1);
+    service.stop();
+  });
 });

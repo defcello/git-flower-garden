@@ -502,7 +502,14 @@ export class RepositoryService {
         this.entries.delete(id);
       } else {
         entry.config = repo;
-        entry.view = { ...entry.view, label: repo.label };
+        // A new commit cap changes what the graph shows: clients must refetch.
+        const recapped =
+          before.history.maxRecentCommits !== next.history.maxRecentCommits;
+        entry.view = {
+          ...entry.view,
+          label: repo.label,
+          revision: entry.view.revision + (recapped ? 1 : 0),
+        };
         entry.lastGraph = null; // history or display settings may have changed
       }
     }
@@ -990,12 +997,18 @@ export class RepositoryService {
       window.startMs,
       Math.floor(now / 60_000),
       revealed.join(","),
+      this.config.history.maxRecentCommits,
     ].join("|");
     if (entry.lastGraph?.key === key) return entry.lastGraph.view;
 
     const t0 = performance.now();
     const graph = buildVisibleGraph(
-      snapshotGraphInput(snapshot, window, revealed),
+      snapshotGraphInput(
+        snapshot,
+        window,
+        revealed,
+        this.config.history.maxRecentCommits,
+      ),
     );
     const layout = layoutGraph(graph, { priority: lanePriority(snapshot) });
     const missing = [...graph.nodes.keys()].filter(
