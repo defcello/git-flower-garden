@@ -32,14 +32,9 @@ import {
   type HillsideSlot,
 } from "./hillside.ts";
 import { SceneCanvas } from "./SceneCanvas.tsx";
-import { DAYTIME, plantShadowStyle } from "./scene/view.ts";
-import {
-  SKY_CHOICES,
-  describeSky,
-  parseSkyChoice,
-  useSky,
-  type SkyChoice,
-} from "./sky.ts";
+import { SkyControls } from "./SkyControls.tsx";
+import { DAYTIME, DESIGN, plantShadowStyle } from "./scene/view.ts";
+import { LIVE, describeSky, useSky, type SkySetting } from "./sky.ts";
 
 interface Selection {
   repoId: string;
@@ -61,7 +56,7 @@ export function App() {
   // The technical view stays the default until the garden is accepted; a
   // viewer's own choice is remembered in this browser only.
   const [renderer, setRenderer] = useState<Renderer>(loadRenderer);
-  const [skyChoice, setSkyChoice] = useState<SkyChoice>("live");
+  const [skySetting, setSkySetting] = useState<SkySetting>(LIVE);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
@@ -73,7 +68,7 @@ export function App() {
   const environment = repositories?.display.environment ?? null;
   const sky = useSky(
     renderer !== "technical" ? environment : null,
-    renderer !== "technical" ? skyChoice : "live",
+    renderer !== "technical" ? skySetting : LIVE,
   );
   // The hillside has 64 fixed plant slots; dense planting is intended (focus
   // view isolates one plant). Larger gardens use the card layout.
@@ -142,6 +137,7 @@ export function App() {
     : undefined;
 
   const light = sky?.state ?? DAYTIME;
+  const stageScale = useStageScale();
 
   return (
     <div
@@ -184,24 +180,12 @@ export function App() {
           </select>
         </label>
         {renderer !== "technical" && (
-          <label className="preview-control">
-            Sky
-            <select
-              aria-label="Sky"
-              value={skyChoice}
-              onChange={(event) => {
-                setSkyChoice(parseSkyChoice(event.target.value));
-              }}
-            >
-              {SKY_CHOICES.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {value === "live" && !environment
-                    ? "Live · no location configured"
-                    : label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SkyControls
+            setting={skySetting}
+            sky={sky}
+            environment={environment}
+            onChange={setSkySetting}
+          />
         )}
         <Legend />
       </header>
@@ -293,6 +277,11 @@ export function App() {
         <main
           className={`garden${sceneMode ? " garden-scene" : ""}`}
           aria-label="All repositories"
+          style={
+            sceneMode
+              ? ({ "--stage-scale": String(stageScale) } as CSSProperties)
+              : undefined
+          }
         >
           {repos.map((repo, index) => (
             <Plot
@@ -805,3 +794,28 @@ function Legend() {
 }
 
 export { graphWidth };
+
+/**
+ * The stage's size relative to the 1920×1080 design space: how much the
+ * plants scale so they keep their size on the landscape (styles.css).
+ */
+function useStageScale(): number {
+  const [scale, setScale] = useState(measureStage);
+  useEffect(() => {
+    const update = () => {
+      setScale(measureStage());
+    };
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+  return scale;
+}
+
+function measureStage(): number {
+  return Math.min(
+    window.innerWidth / DESIGN.width,
+    window.innerHeight / DESIGN.height,
+  );
+}

@@ -11,12 +11,12 @@ import {
 import type { Place } from "./astronomy.ts";
 
 /** Asheville, North Carolina, in the Blue Ridge. */
-const BLUE_RIDGE: Place = {
+export const BLUE_RIDGE: Place = {
   latitude: 35.5951,
   longitude: -82.5515,
   elevationMeters: 650,
 };
-const BLUE_RIDGE_ZONE = "America/New_York";
+export const BLUE_RIDGE_ZONE = "America/New_York";
 
 /** Longyearbyen, Svalbard: midnight Sun in June, polar night in December. */
 const SVALBARD: Place = {

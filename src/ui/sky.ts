@@ -1,10 +1,12 @@
 /**
  * The garden's sky from the lighting model (ADR 0018): the live sky at the
- * configured place, or a labelled preview. The scene is drawn from it by
- * SceneCanvas.tsx.
+ * configured place, or the sky at a chosen time. A time is chosen with the
+ * time-of-day slider or a bookmark (a developer preview, which also sets the
+ * date and place). The scene is drawn from it by SceneCanvas.tsx.
  */
 import { useEffect, useMemo, useState } from "react";
 import type { EnvironmentJson } from "../api/types.ts";
+import type { Place } from "../environment/astronomy.ts";
 import {
   environmentSnapshot,
   type EnvironmentSnapshot,
@@ -13,14 +15,26 @@ import { lightingState, type LightingState } from "../environment/lighting.ts";
 import {
   PREVIEWS,
   isPreviewName,
-  previewSnapshot,
   type PreviewName,
 } from "../environment/overrides.ts";
 
-/** "live" follows the configured place and the clock; otherwise a preview. */
-export type SkyChoice = "live" | PreviewName;
+/**
+ * "live" follows the configured place and the clock; "fixed" shows one
+ * instant, from a bookmark or the slider (`bookmark` null: a custom time).
+ */
+export type SkySetting =
+  | { mode: "live" }
+  | {
+      mode: "fixed";
+      time: number;
+      place: Place;
+      timeZone: string;
+      bookmark: PreviewName | null;
+    };
 
-export const SKY_CHOICES: { value: SkyChoice; label: string }[] = [
+export const LIVE: SkySetting = { mode: "live" };
+
+export const SKY_BOOKMARKS: { value: "live" | PreviewName; label: string }[] = [
   { value: "live", label: "Live" },
   ...Object.entries(PREVIEWS).map(([value, preview]) => ({
     value: value as PreviewName,
@@ -28,8 +42,17 @@ export const SKY_CHOICES: { value: SkyChoice; label: string }[] = [
   })),
 ];
 
-export function parseSkyChoice(value: string): SkyChoice {
-  return isPreviewName(value) ? value : "live";
+/** The setting a bookmark stands for: live, or a preview's instant and place. */
+export function bookmarkSetting(value: string): SkySetting {
+  if (!isPreviewName(value)) return LIVE;
+  const preview = PREVIEWS[value];
+  return {
+    mode: "fixed",
+    time: Date.parse(preview.time),
+    place: preview.place,
+    timeZone: preview.timeZone,
+    bookmark: value,
+  };
 }
 
 export interface Sky {
@@ -40,16 +63,18 @@ export interface Sky {
 const LIVE_REFRESH_MS = 60_000;
 
 /**
- * The current sky, or null when "live" is chosen but no place is configured
- * (the garden is then lit by `DAYTIME`). Live skies are recomputed
- * once a minute while the page is visible, and at once when it is shown.
+ * The current sky, or null when live is chosen but no place is configured
+ * (the garden is then lit by `DAYTIME`). Live skies are recomputed once a
+ * minute while the page is visible, and at once when it is shown. A fixed
+ * time is marked as a preview (`custom` when no bookmark names it), so it is
+ * never taken for live conditions.
  */
 export function useSky(
   environment: EnvironmentJson | null,
-  choice: SkyChoice,
+  setting: SkySetting,
 ): Sky | null {
   const [now, setNow] = useState(() => Date.now());
-  const live = choice === "live" && environment !== null;
+  const live = setting.mode === "live" && environment !== null;
   useEffect(() => {
     if (!live) return;
     let timer: ReturnType<typeof setInterval> | null = null;
@@ -77,7 +102,13 @@ export function useSky(
   const timeZone = environment?.timeZone;
   return useMemo(() => {
     let snapshot: EnvironmentSnapshot;
-    if (choice !== "live") snapshot = previewSnapshot(choice);
+    if (setting.mode === "fixed")
+      snapshot = environmentSnapshot(
+        new Date(setting.time),
+        setting.place,
+        setting.timeZone,
+        setting.bookmark ?? "custom",
+      );
     else if (
       latitude === undefined ||
       longitude === undefined ||
@@ -91,7 +122,7 @@ export function useSky(
         timeZone,
       );
     return { snapshot, state: lightingState(snapshot) };
-  }, [choice, now, latitude, longitude, elevationMeters, timeZone]);
+  }, [setting, now, latitude, longitude, elevationMeters, timeZone]);
 }
 
 export function describeSky(sky: Sky): string {

@@ -684,6 +684,15 @@ code,
   gap: 8px;
   font-size: 12px;
 }
+.time-control input[type="range"] {
+  width: clamp(120px, 16vw, 280px);
+  min-height: 36px;
+  accent-color: var(--accent);
+}
+.time-readout {
+  min-width: 5ch;
+  font-variant-numeric: tabular-nums;
+}
 .preview-control select {
   max-width: 190px;
   min-height: 36px;
@@ -702,24 +711,40 @@ code,
   --accent: #305e3c;
   --boundary: #9a3b2a;
   --worktree: #c28a2c;
+  /* The stage: the 1920×1080 design space (ADR 0018 "Resolution"), as
+     large as fits the window, centered. The sky, the landscape, and the
+     plants share it, so the whole scene always shows at 16:9 and every
+     plant stands on its own patch of hill. */
+  --stage-width: min(100vw, 100vh * 16 / 9);
+  --stage-width: min(100vw, 100dvh * 16 / 9);
+  --stage-height: calc(var(--stage-width) * 9 / 16);
   min-height: 100vh;
   position: relative;
   isolation: isolate;
   color: var(--ink);
   color-scheme: light;
+  /* Beyond the stage's edges. */
+  background: #0f1611;
 }
 .landscape,
-.landscape > div {
+.botanical .garden-scene {
   position: fixed;
   inset: 0;
-  pointer-events: none;
+  margin: auto;
+  width: var(--stage-width);
+  height: var(--stage-height);
 }
 .landscape {
   z-index: -3;
   overflow: hidden;
+  pointer-events: none;
   background: #9fccef;
 }
-/* Sky and relit landscape, drawn by SceneCanvas.tsx at the display's
+.landscape > div {
+  position: absolute;
+  inset: 0;
+}
+/* Sky and relit landscape, drawn by SceneCanvas.tsx at the stage's
    resolution; the canvas sizes its own backing store. */
 .landscape-scene {
   display: block;
@@ -772,11 +797,9 @@ code,
   background: #fffef8dc;
   backdrop-filter: blur(12px);
 }
-/* The hillside is the viewport, like the fixed backdrop it is planted on,
-   so slot percentages land on the same grass at any scroll or bar height. */
+/* The hillside is the stage, like the landscape it is planted on, so slot
+   percentages land on the same grass at any window size. */
 .botanical .garden-scene {
-  position: fixed;
-  inset: 0;
   z-index: 1;
   display: block;
   padding: 0;
@@ -814,9 +837,10 @@ code,
   left: var(--slot-x);
   top: var(--slot-y);
   width: max-content;
-  /* Grow from the slot: the tree's center at the base sits on the point. */
+  /* Grow from the slot: the tree's center at the base sits on the point.
+     Plants scale with the stage (App.tsx sets --stage-scale). */
   transform: translate(calc(-1 * var(--anchor-x)), -100%)
-    scale(var(--plant-scale));
+    scale(calc(var(--plant-scale) * var(--stage-scale, 1)));
   transform-origin: var(--anchor-x) 100%;
   /* Cast away from the Sun (sky.ts plantShadowStyle); none at night. */
   filter: drop-shadow(
@@ -969,11 +993,6 @@ code,
   .botanical .topbar,
   .botanical .art-notice {
     transition: none;
-  }
-}
-@media (max-width: 700px) {
-  .botanical .garden-scene .plot {
-    --plant-scale: 0.52 !important;
   }
 }
 .botanical::after {

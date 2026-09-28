@@ -64,8 +64,9 @@ function draw(
   const g = element.getContext("2d", { alpha: false });
   if (!g) return;
   const ratio = Math.min(window.devicePixelRatio || 1, 2);
-  const W = Math.max(1, Math.round(window.innerWidth * ratio));
-  const H = Math.max(1, Math.round(window.innerHeight * ratio));
+  // The canvas fills the 16:9 stage (styles.css), so nothing is cropped.
+  const W = Math.max(1, Math.round(element.clientWidth * ratio));
+  const H = Math.max(1, Math.round(element.clientHeight * ratio));
   if (element.width !== W || element.height !== H) {
     element.width = W;
     element.height = H;

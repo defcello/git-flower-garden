@@ -141,6 +141,59 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
   ).toBeLessThanOrEqual(390);
 });
 
+test("the scene always shows whole at 16:9, and the time slider and bookmarks agree", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
+  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+  const landscape = page.locator(".landscape");
+  const scene = page.locator(".landscape-scene");
+  await expect(scene).toHaveAttribute("data-art", "ready");
+  // Taller, wider, and phone windows: the stage fits inside, centered, at
+  // 16:9, and the plants share it with the landscape.
+  for (const [width, height] of [
+    [1440, 1080],
+    [2560, 1080],
+    [390, 844],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect
+      .poll(async () => (await landscape.boundingBox())?.width)
+      .toBeCloseTo(Math.min(width, (height * 16) / 9), 0);
+    const stage = await landscape.boundingBox();
+    const garden = await page.locator(".garden-scene").boundingBox();
+    expect(stage?.height).toBeCloseTo(((stage?.width ?? 0) * 9) / 16, 0);
+    expect(stage?.x).toBeCloseTo((width - (stage?.width ?? 0)) / 2, 0);
+    expect(stage?.y).toBeCloseTo((height - (stage?.height ?? 0)) / 2, 0);
+    expect(garden).toEqual(stage);
+  }
+  await page.setViewportSize({ width: 1920, height: 1080 });
+
+  const sky = page.getByLabel("Sky", { exact: true });
+  const slider = page.getByLabel("Time of day");
+  const note = page.locator(".art-notice");
+  // A bookmark sets the slider to its local time (01:06 EDT).
+  await sky.selectOption("full-moon");
+  await expect(slider).toHaveValue(String(60 + 6));
+  await expect(page.locator(".time-readout")).toHaveText("01:06");
+  // Moving the slider keeps the bookmark's date and place, shows a custom
+  // time, and relights the scene.
+  await slider.fill(String(12 * 60));
+  await expect(sky).toHaveValue("custom");
+  await expect(landscape).toHaveAttribute("data-sky", "custom");
+  await expect(note).toContainText("Sky preview");
+  await expect(note).toContainText("May 23, 2024, 12:00 EDT");
+  await expect(scene).toHaveAttribute("data-sun", "true");
+  await slider.fill(String(22 * 60));
+  await expect(scene).toHaveAttribute("data-sun", "false");
+  await expect(scene).toHaveAttribute("data-stars", "true");
+  // Live returns to the clock.
+  await sky.selectOption("live");
+  await expect(landscape).toHaveAttribute("data-sky", "day");
+  await expect(note).not.toContainText("Sky preview");
+});
+
 test("missing art falls back to the technical drawing", async ({ page }) => {
   await page.route("**/sprites-albedo-*.png", (route) => route.abort());
   await page.goto("/");

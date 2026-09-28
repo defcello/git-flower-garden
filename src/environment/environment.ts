@@ -37,6 +37,58 @@ export function formatLocalTime(time: Date, timeZone: string): string {
   }).format(time);
 }
 
+/** A local calendar date (`YYYY-MM-DD`) and minutes after local midnight. */
+export interface LocalTimeOfDay {
+  date: string;
+  minutes: number;
+}
+
+/** The local date and time of day of `time` in `timeZone`. */
+export function localTimeOfDay(time: Date, timeZone: string): LocalTimeOfDay {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(time)
+      .map((part) => [part.type, part.value]),
+  );
+  return {
+    date: `${parts.year ?? ""}-${parts.month ?? ""}-${parts.day ?? ""}`,
+    minutes: Number(parts.hour) * 60 + Number(parts.minute),
+  };
+}
+
+/**
+ * The instant when the clocks in `timeZone` show `minutes` after midnight on
+ * `date`. In a daylight-saving gap, a nearby instant; in a repeated hour,
+ * one of the two.
+ */
+export function instantOfLocalTime(
+  date: string,
+  minutes: number,
+  timeZone: string,
+): Date {
+  const asUtc = (local: LocalTimeOfDay) => {
+    const [y = 0, m = 1, d = 1] = local.date.split("-").map(Number);
+    return Date.UTC(y, m - 1, d, 0, local.minutes);
+  };
+  const target = asUtc({ date, minutes });
+  // Correct by the zone's offset; twice settles on the offset at the result.
+  let time = target;
+  for (let i = 0; i < 3; i++) {
+    const shown = asUtc(localTimeOfDay(new Date(time), timeZone));
+    if (shown === target) break;
+    time += target - shown;
+  }
+  return new Date(time);
+}
+
 export function environmentSnapshot(
   time: Date,
   place: Place,

@@ -62,6 +62,16 @@ const pending = new Map<
   number,
   { channel: Channel; key: string; params: LightParams }
 >();
+/**
+ * One relight in flight per channel; while it runs, only the newest light
+ * asked for waits. Dragging the time of day never queues a backlog of
+ * relights: the scene catches up with the slider, one relight behind.
+ */
+const inFlight: Record<Channel, boolean> = { scene: false, inspection: false };
+const queued: Record<Channel, LightParams | null> = {
+  scene: null,
+  inspection: null,
+};
 
 function closeAll(b: LitBitmaps) {
   for (const bitmap of [b.ridge, b.hill, b.sprites, b.spritesMirrored])
@@ -101,6 +111,12 @@ function received(message: WorkerResponse) {
   }
   const request = pending.get(message.id);
   pending.delete(message.id);
+  if (request !== undefined) {
+    inFlight[request.channel] = false;
+    const next = queued[request.channel];
+    queued[request.channel] = null;
+    if (next !== null) post(request.channel, next);
+  }
   const current = request ? snapshots[request.channel] : null;
   // Never replace newer art with older (a later light was asked for).
   if (
@@ -170,18 +186,24 @@ function request(channel: Channel, params: LightParams): void {
   if (snapshots[channel].state === "failed") return;
   const key = lightKey(params);
   if (key === wanted[channel]) return;
-  const w = start();
-  if (w === null) return;
+  if (start() === null) return;
   wanted[channel] = key;
+  if (inFlight[channel]) queued[channel] = params;
+  else post(channel, params);
+}
+
+function post(channel: Channel, params: LightParams): void {
+  if (worker === null) return;
+  inFlight[channel] = true;
   const id = nextId++;
-  pending.set(id, { channel, key, params });
+  pending.set(id, { channel, key: lightKey(params), params });
   const message: WorkerRequest = {
     type: "relight",
     id,
     params,
     spritesOnly: channel === "inspection",
   };
-  w.postMessage(message);
+  worker.postMessage(message);
 }
 
 /** Ask for the scene lit by `params`; a no-op when that light is current or pending. */
