@@ -5,7 +5,34 @@ follows
 [semantic versioning](https://semver.org/); before 1.0, minor versions may
 change configuration or behavior, and the notes say how.
 
-## Unreleased
+## 0.3.0-beta.1: renamed, real sky (2026-09-28)
+
+Install or update from the
+[release](https://github.com/defcello/git-flower-garden/releases/tag/v0.3.0-beta.1):
+`npm install --global <link to the .tgz file>`. Stop a running
+`git-garden` first. Coming from 0.2.0-beta.1, the same command replaces
+`git-garden` with `git-flower-garden`, and the first run moves your folders
+(below); from 0.1, git-flower-garden tells you how to remove the old
+program. Both upgrades are rehearsed on Windows, macOS, and Linux before
+each release.
+
+### Security
+
+- **Remote URLs no longer appear on Git's command line.** Fetches pass the
+  URL to Git through its environment, which other users on the same
+  computer cannot read, unlike a process's arguments. This matters for a
+  local clone whose remote URL contains a token.
+- **Access tokens in configured URLs are rejected**, like passwords
+  already were (for example `https://ghp_…@github.com/…`); use a credential
+  helper or SSH agent. A configuration with one no longer loads until it is
+  removed; the error says where.
+- **Private files are private.** The cache of fetched repositories and a
+  configuration file written by `init-config` are now readable by you
+  alone; an existing cache folder is tightened on the next fetch.
+- The build and release workflows pin their GitHub Actions to exact
+  commits.
+
+### Changes
 
 - **The garden is lit by the real sun and moon.** The painted daytime
   backdrop is replaced by separate mountain and hill layers, relit together

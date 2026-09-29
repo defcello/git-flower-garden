@@ -142,10 +142,24 @@ function isObject(value: unknown): value is Obj {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const NO_SECRETS = "use a credential helper or SSH agent";
+
+/**
+ * A URL user name that is really a secret: a GitHub or GitLab token (which
+ * work as a user name), an encoded `user:password`, or anything long enough
+ * to be a token. Git user names are short (GitHub's are at most 39).
+ */
+function looksLikeToken(user: string): boolean {
+  return (
+    /^(gh[pousr]_|github_pat_|glpat-)|%3a/i.test(user) || user.length >= 40
+  );
+}
+
 /**
  * Validate a remote URL. Accepts https/http/ssh/git/file URLs and scp-like
  * `user@host:path`. Rejects command-running transports (`ext::`, `fd::`),
- * leading dashes, and inline passwords. Returns an error message or null.
+ * leading dashes, and inline passwords or tokens. Returns an error message or
+ * null.
  */
 export function checkRemoteUrl(url: string): string | null {
   if (url.length === 0) return "must not be empty";
@@ -162,12 +176,16 @@ export function checkRemoteUrl(url: string): string | null {
     }
     const authority = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(url)?.[1] ?? "";
     const at = authority.lastIndexOf("@");
-    if (at !== -1 && authority.slice(0, at).includes(":")) {
-      return "must not contain a password; use a credential helper or SSH agent";
-    }
+    const user = at === -1 ? "" : authority.slice(0, at);
+    if (user.includes(":")) return `must not contain a password; ${NO_SECRETS}`;
+    if (looksLikeToken(user))
+      return `must not contain an access token; ${NO_SECRETS}`;
     return null;
   }
   // scp-like syntax: [user@]host:path (no scheme, a colon before any slash).
+  const scpUser = /^([^@/:]+)@/.exec(url)?.[1];
+  if (scpUser !== undefined && looksLikeToken(scpUser))
+    return `must not contain an access token; ${NO_SECRETS}`;
   if (
     /^([^@/:]+@)?[^/:]+:[^/]/.test(url) ||
     /^([^@/:]+@)?[^/:]+:\//.test(url)

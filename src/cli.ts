@@ -61,6 +61,34 @@ export function version(): string {
   }
 }
 
+/**
+ * git-flower-garden 0.1 was the npm package `git-garden`, which installing
+ * this package does not remove, so its `git-garden` command lingers. Returns
+ * how to remove it when that package sits beside this one in the global
+ * `node_modules` and is this project's (the unscoped name `git-garden`
+ * otherwise belongs to an unrelated tool).
+ */
+export function legacyInstallNote(
+  here: string = dirname(import.meta.filename),
+): string | null {
+  // <global node_modules>/@defcello/git-flower-garden/dist/cli.js
+  const pkg = resolve(here, "../../..", "git-garden", "package.json");
+  try {
+    const { repository } = JSON.parse(readFileSync(pkg, "utf8")) as {
+      repository?: { url?: string };
+    };
+    if (
+      !/github\.com\/defcello\/git-(flower-)?garden\b/.test(
+        repository?.url ?? "",
+      )
+    )
+      return null;
+  } catch {
+    return null;
+  }
+  return "git-flower-garden 0.1 (named git-garden) is still installed, with its own git-garden command. Remove it with: npm uninstall --global git-garden";
+}
+
 const COMMANDS = [
   "init-config",
   "validate-config",
@@ -264,12 +292,15 @@ export async function main(
     return 2;
   }
   // Only for real commands, so a typo never moves the user's folders.
-  if (COMMANDS.includes(command))
+  if (COMMANDS.includes(command)) {
     for (const note of await migrateLegacyFolders({
       config: parsed.values.config === undefined,
       cache: parsed.values["cache-dir"] === undefined,
     }))
       io.err(note);
+    const legacy = legacyInstallNote();
+    if (legacy) io.err(legacy);
+  }
   const file = resolve(parsed.values.config ?? defaultConfigPath());
   const cacheRoot = resolve(parsed.values["cache-dir"] ?? defaultCacheDir());
   const port = parsePort(parsed.values.port, io);
@@ -278,8 +309,9 @@ export async function main(
   switch (command) {
     case "init-config": {
       try {
-        await mkdir(dirname(file), { recursive: true });
-        await writeFile(file, starterConfig(), { flag: "wx" });
+        // It lists private repository paths and URLs: the user's alone.
+        await mkdir(dirname(file), { recursive: true, mode: 0o700 });
+        await writeFile(file, starterConfig(), { flag: "wx", mode: 0o600 });
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "EEXIST") {
           io.err(`${file} already exists; it was left unchanged.`);

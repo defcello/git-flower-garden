@@ -183,7 +183,7 @@
             "pattern": "\\S"
           },
           "url": {
-            "description": "Remote-only repository: https, http, ssh, git, or file URL, or user@host:path. No inline passwords.",
+            "description": "Remote-only repository: https, http, ssh, git, or file URL, or user@host:path. No inline passwords or access tokens: use a credential helper or SSH agent.",
             "type": "string",
             "minLength": 1
           },

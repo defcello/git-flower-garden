@@ -8,6 +8,8 @@
  */
 import { randomBytes } from "node:crypto";
 import {
+  chmod,
+  mkdir,
   readdir,
   readFile,
   rename,
@@ -27,6 +29,17 @@ export interface RemoteMeta {
 export interface CacheMeta {
   version: 1;
   remotes: Record<string, RemoteMeta>;
+}
+
+/**
+ * Create `<cacheRoot>/repositories` readable by the user alone, and tighten
+ * it if an earlier version created it with default permissions. Everything
+ * fetched lives below it. (Windows profile folders are already private.)
+ */
+export async function ensurePrivateCacheRoot(cacheRoot: string): Promise<void> {
+  const dir = join(cacheRoot, "repositories");
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  if (process.platform !== "win32") await chmod(dir, 0o700);
 }
 
 export function repositoryCacheDir(cacheRoot: string, id: string): string {
