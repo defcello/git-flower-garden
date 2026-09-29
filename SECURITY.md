@@ -5,7 +5,9 @@ reports are welcome.
 
 ## Supported versions
 
-There is no release yet. Security fixes land on the `main` branch.
+Only the latest release (a beta, before 1.0) receives security fixes. Fixes
+land on the `main` branch and ship in the next release; update by installing
+it (see the user guide).
 
 ## Reporting a vulnerability
 

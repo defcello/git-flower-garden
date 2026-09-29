@@ -25,7 +25,12 @@ belongs to an unrelated tool, so there is no `git-garden` command alias.)
 `npm run rehearse:install` then installs it globally into a scratch npm
 prefix and home, runs init, validate, serve, and demo, updates to a newer
 version, cleans the cache, uninstalls, and fails if anything but the
-configuration file is left. CI runs both on Windows, macOS, and Linux.
+configuration file is left. In a second sandbox it installs the last
+published release (`BETA` in `scripts/install-rehearsal.ts`, downloaded and
+checked against its SHA-256), upgrades to the new package, and checks that
+the old command is gone and the configuration moved unchanged; then it
+checks the hint for a leftover 0.1 install. CI runs both on Windows, macOS,
+and Linux.
 
 ## Cutting a release
 
@@ -35,7 +40,10 @@ configuration file is left. CI runs both on Windows, macOS, and Linux.
    `git push origin v<version>`.
 4. The `release` workflow checks the tag against `package.json`, rehearses
    on every OS, and creates a **draft** pre-release with the package and its
-   SHA-256. Review it, then publish it on GitHub.
+   SHA-256. Review it, then publish it on GitHub. Then point `BETA` in
+   `scripts/install-rehearsal.ts` at it (version, file, URL, and the SHA-256
+   from its `SHA256SUMS.txt`), so later releases are rehearsed as upgrades
+   from it.
 5. Releases are GitHub release files only. The staged package is marked
    `private`, so an accidental `npm publish` fails; publishing to npm would
    be a separate decision (remove `private` and add a publish step).

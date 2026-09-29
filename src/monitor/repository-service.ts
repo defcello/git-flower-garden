@@ -16,7 +16,7 @@
  *
  * Changes are published to listeners (the server-sent event hub).
  */
-import { access, mkdir, stat } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import { cpus } from "node:os";
 import {
   githubFromUrl,
@@ -42,7 +42,13 @@ import { redactCredentials } from "../git/run-git.ts";
 import { readSnapshot, type RepositorySnapshot } from "../git/snapshot.ts";
 import type { GitWorktree } from "../git/worktrees.ts";
 import { layoutGraph, type Layout } from "../render/layout.ts";
-import { cachedRemotes, objectsDir, readMeta, writeMeta } from "./cache.ts";
+import {
+  cachedRemotes,
+  ensurePrivateCacheRoot,
+  objectsDir,
+  readMeta,
+  writeMeta,
+} from "./cache.ts";
 import { refFingerprint } from "./probe.ts";
 import { watchRepository, type RepositoryWatch } from "./watch.ts";
 
@@ -925,7 +931,7 @@ export class RepositoryService {
           (await remoteUrl(entry.config.path as string, remote.name));
         const github = githubFromUrl(url);
         if (github) entry.githubNames.add(github.toLowerCase());
-        await mkdir(dir, { recursive: true });
+        await ensurePrivateCacheRoot(this.cacheRoot);
         await ensureCache(dir);
         await this.withCache(entry, () =>
           this.fetches.run(() =>

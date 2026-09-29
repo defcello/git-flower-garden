@@ -4,7 +4,7 @@
  * stays byte-for-byte unchanged. Cache contents are checked against
  * `git ls-remote`, a separate view of the remote's current state.
  */
-import { access } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -12,6 +12,7 @@ import {
   cacheNamespace,
   ensureCache,
   fetchIntoCache,
+  fetchRemoteEnv,
   readCacheRefs,
   remoteUrl,
 } from "../../src/git/remote-cache.ts";
@@ -190,6 +191,39 @@ describe("app-owned remote cache", () => {
     expect(() => cacheNamespace("../escape")).toThrow(/Invalid cache key/);
     expect(() => cacheNamespace("a/b")).toThrow(/Invalid cache key/);
   });
+
+  it("keeps the URL off Git's command line, where other users could read it", async () => {
+    const cache = join(await tempDir(), "garden.git");
+    await ensureCache(cache);
+    const url = pathToFileURL(join(cache, "no-such-remote")).href;
+    const error = await fetchIntoCache(cache, "origin", url).catch(
+      (e: unknown) => e,
+    );
+    expect(error).toBeInstanceOf(GitError);
+    expect((error as GitError).args.join(" ")).not.toContain(url);
+    // Configuration the user passes through the environment is kept.
+    expect(
+      fetchRemoteEnv("https://example.invalid/r.git", {
+        GIT_CONFIG_COUNT: "2",
+      }),
+    ).toEqual({
+      GIT_CONFIG_COUNT: "3",
+      GIT_CONFIG_KEY_2: "remote.garden-fetch.url",
+      GIT_CONFIG_VALUE_2: "https://example.invalid/r.git",
+    });
+    expect(fetchRemoteEnv("u", {}).GIT_CONFIG_KEY_0).toBe(
+      "remote.garden-fetch.url",
+    );
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "creates the cache readable by the user alone",
+    async () => {
+      const cache = join(await tempDir(), "new", "garden.git");
+      await ensureCache(cache);
+      expect((await stat(cache)).mode & 0o777).toBe(0o700);
+    },
+  );
 
   it("resolves the fetch URL the user's own git fetch would use", async () => {
     // A separate clone, so the isolation proof above keeps a pristine user repo.

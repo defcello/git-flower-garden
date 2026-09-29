@@ -58,9 +58,14 @@ installed program files are not meant to be changed.
 
 ## Update
 
-Install a newer release the same way, with its file or URL from the
-[releases page]({{RELEASES}}). Your configuration and cache are kept. Stop a
-running `git-flower-garden` first.
+Stop a running `git-flower-garden` (or `git-garden`), then install the newer
+release the same way, with its file or URL from the
+[releases page]({{RELEASES}}). Your configuration and cache are kept.
+
+From 0.2.0-beta.1, whose command was `git-garden`: the new command
+`git-flower-garden` replaces it, and its first run moves your configuration
+and cache folders to the new name. From 0.1: git-flower-garden reminds you to
+remove the old program with `npm uninstall --global git-garden`.
 
 ## Uninstall
 

@@ -2,7 +2,7 @@
 
 git-flower-garden shows the live commit graphs of your Git repositories in a browser,
 for a dedicated monitor or a spare window. It reads your repositories; it
-never changes them. This guide covers version 0.2 (beta): the technical view
+never changes them. This guide covers version 0.3 (beta): the technical view
 and the garden view.
 
 ## Requirements
@@ -34,10 +34,19 @@ On Windows, if PowerShell says running scripts is disabled, your system's
 policy blocks npm's PowerShell launcher: run `git-flower-garden.cmd` instead (or use
 Command Prompt). There is no need to change the policy.
 
-**Update:** install a newer release the same way (stop a running
-`git-flower-garden` first). Your configuration and cache are kept. Updating
-from a release named `git-garden` moves its configuration and cache folders
-to the new name on first run.
+**Update:** stop a running `git-flower-garden` (or `git-garden`), then
+install the newer release with the same command. Your configuration and
+cache are kept.
+
+Coming from 0.2.0-beta.1, whose command was `git-garden`: the same install
+command replaces it with `git-flower-garden`. On first run, the
+`git-garden` configuration and cache folders move to their new names
+(the output says so); nothing needs editing. If you started it at login,
+change `git-garden serve` to `git-flower-garden serve` there.
+
+Coming from 0.1 (installed from a source checkout as `git-garden`): install
+the release as above. git-flower-garden then reminds you to remove the old
+program with `npm uninstall --global git-garden`.
 
 **Uninstall:** see [Diagnostics and data](#diagnostics-and-data).
 
@@ -172,7 +181,7 @@ Each repository needs a unique `id` (lowercase letters, digits, `.`, `_`, or
   last-fetched tracking branches in the graph. Your clone is not fetched into
   or changed.
 - **`url`**: a repository you have no clone of (`https`, `http`, `ssh`, `git`,
-  `file`, or `user@host:path`). URLs with passwords in them are rejected; use a
+  `file`, or `user@host:path`). URLs with passwords or access tokens in them are rejected; use a
   credential helper or SSH agent instead.
 
 ### The sky
@@ -298,7 +307,7 @@ addressed to itself (checked Host header), refuses cross-origin requests, and
 has no endpoint that changes anything. Repository text is always shown as
 text. See [SECURITY.md](../SECURITY.md) to report a problem.
 
-## Known limitations (0.1)
+## Known limitations
 
 - The garden view is a preview. Its lighting is recomputed every minute or two
   rather than continuously, nothing sways yet, and shadows are simple.

@@ -5,7 +5,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { get } from "node:http";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { main, type Io } from "../../src/cli.ts";
+import { legacyInstallNote, main, type Io } from "../../src/cli.ts";
 import { parseConfig } from "../../src/config/config.ts";
 import { buildFixture } from "../../src/demo/builder.ts";
 import { gardenTour } from "../../src/demo/fixtures.ts";
@@ -214,5 +214,34 @@ describe("diagnostics, status, and cache", () => {
     const io = capture();
     expect(await main(["--version"], io)).toBe(0);
     expect(io.lines[0]).toMatch(/^git-flower-garden \d+\.\d+\.\d+/);
+  });
+});
+
+describe("upgrading from 0.1 (the npm package git-garden)", () => {
+  const install = async (repository: string) => {
+    const root = join(await tempDir(), "node_modules");
+    const here = join(root, "@defcello", "git-flower-garden", "dist");
+    await mkdir(here, { recursive: true });
+    await mkdir(join(root, "git-garden"));
+    await writeFile(
+      join(root, "git-garden", "package.json"),
+      JSON.stringify({ name: "git-garden", repository: { url: repository } }),
+    );
+    return here;
+  };
+
+  it("says how to remove the old package and its git-garden command", async () => {
+    const here = await install(
+      "git+https://github.com/defcello/git-garden.git",
+    );
+    expect(legacyInstallNote(here)).toMatch(
+      /npm uninstall --global git-garden$/,
+    );
+  });
+
+  it("leaves an unrelated package named git-garden alone", async () => {
+    const here = await install("git+https://github.com/someone/git-garden.git");
+    expect(legacyInstallNote(here)).toBeNull();
+    expect(legacyInstallNote(join(await tempDir(), "a", "b", "c"))).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "@defcello/git-flower-garden",
-  "version": "0.2.0-beta.1",
+  "version": "0.3.0-beta.1",
   "private": true,
   "description": "Visualize Git activity as a garden of commits.",
   "license": "MIT",

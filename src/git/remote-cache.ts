@@ -33,6 +33,28 @@ const CACHE_CONFIG = [
   "fetch.recurseSubmodules=false",
 ];
 
+/** A remote defined only in one fetch's environment (see fetchIntoCache). */
+const FETCH_REMOTE = "garden-fetch";
+
+/**
+ * Environment that defines FETCH_REMOTE's URL, after any configuration the
+ * user already passes through GIT_CONFIG_COUNT. Other users on the machine
+ * can read a process's command line, but not its environment, so a URL with
+ * a token in it never appears in a process listing.
+ */
+export function fetchRemoteEnv(
+  url: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): Record<string, string> {
+  const count = Number(env.GIT_CONFIG_COUNT ?? "0");
+  const n = Number.isInteger(count) && count > 0 ? count : 0;
+  return {
+    GIT_CONFIG_COUNT: String(n + 1),
+    [`GIT_CONFIG_KEY_${String(n)}`]: `remote.${FETCH_REMOTE}.url`,
+    [`GIT_CONFIG_VALUE_${String(n)}`]: url,
+  };
+}
+
 /** Namespace for one remote inside a cache: `refs/garden/<key>/{heads,tags}/…`. */
 export function cacheNamespace(key: string): string {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(key) || key.includes("..")) {
@@ -42,7 +64,8 @@ export function cacheNamespace(key: string): string {
 }
 
 export async function ensureCache(cacheDir: string): Promise<void> {
-  await mkdir(cacheDir, { recursive: true });
+  // Private repository data: folders created here are the user's alone.
+  await mkdir(cacheDir, { recursive: true, mode: 0o700 });
   await runGit(["init", "--quiet", "--bare", cacheDir], {
     cwd: cacheDir,
     env: CACHE_ENV,
@@ -75,15 +98,15 @@ export async function fetchIntoCache(
       "--prune",
       "--no-write-fetch-head",
       "--no-recurse-submodules",
-      // `--end-of-options` stops a URL beginning with `-` being read as an option.
       "--end-of-options",
-      url,
+      // The URL itself goes through the environment, never the command line.
+      FETCH_REMOTE,
       `+refs/heads/*:${ns}/heads/*`,
       `+refs/tags/*:${ns}/tags/*`,
     ],
     {
       cwd: cacheDir,
-      env: CACHE_ENV,
+      env: { ...CACHE_ENV, ...fetchRemoteEnv(url) },
       timeoutMs: options.timeoutMs ?? 120_000,
       ...(options.signal ? { signal: options.signal } : {}),
     },

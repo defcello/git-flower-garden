@@ -258,6 +258,28 @@ describe("checkRemoteUrl", () => {
       "https://user:pw@example.invalid/r.git",
       "must not contain a password; use a credential helper or SSH agent",
     ],
+    [
+      "https://ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/o/r.git",
+      "must not contain an access token; use a credential helper or SSH agent",
+    ],
+    [
+      "https://github_pat_11ABC@github.com/o/r.git",
+      "must not contain an access token; use a credential helper or SSH agent",
+    ],
+    [
+      "https://oauth2%3Aglpat-secret@gitlab.example.invalid/o/r.git",
+      "must not contain an access token; use a credential helper or SSH agent",
+    ],
+    [
+      `https://${"a".repeat(40)}@example.invalid/r.git`,
+      "must not contain an access token; use a credential helper or SSH agent",
+    ],
+    [
+      "glpat-abcdef@gitlab.example.invalid:o/r.git",
+      "must not contain an access token; use a credential helper or SSH agent",
+    ],
+    // A plain user name picks the credential helper's account: allowed.
+    ["https://octocat@github.com/o/r.git", null],
     ["--upload-pack=touch /tmp/x", "must not start with '-'"],
     [
       "ftp://example.invalid/r.git",

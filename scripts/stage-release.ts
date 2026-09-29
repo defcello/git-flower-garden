@@ -204,8 +204,14 @@ for (const doc of ["README.md", "docs/user-guide.md"]) {
     problems.push(`${doc}: does not show the uninstall command`);
   if (/{{[A-Z]+}}/.test(text))
     problems.push(`${doc}: has an unfilled placeholder`);
-  // Unscoped names: `git-garden` (the former name) is an unrelated package.
-  if (/npm (un)?install --global git-(flower-)?garden(?!-)/.test(text))
+  // Unscoped names: `git-garden` (the former name) is an unrelated package
+  // on npm. Uninstalling it removes a local 0.1 install and fetches nothing,
+  // so only that is allowed.
+  if (
+    /npm install --global git-(flower-)?garden(?!-)|npm uninstall --global git-flower-garden(?!-)/.test(
+      text,
+    )
+  )
     problems.push(`${doc}: names an unscoped npm package, not ${PACKAGE_NAME}`);
 }
 if (problems.length > 0) {
