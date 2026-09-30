@@ -3,7 +3,7 @@
  * 3), on two channels:
  *
  * - "scene": the whole landscape and the hillside plants, lit by the
- *   current sky;
+ *   current sky; only the plants when the GPU tier draws the landscape;
  * - "inspection": the sprites alone, lit once by `DAYTIME`, for the focus
  *   view's pale inspection card, where a dusk- or moonlit plant would be
  *   dark and hard to read.
@@ -36,6 +36,8 @@ export type Channel = "scene" | "inspection";
 export interface LitArt extends LitBitmaps {
   /** The light it was lit with (view.ts `lightKey`). */
   key: string;
+  /** Only the sprites were lit: ridge and hill are null. */
+  spritesOnly: boolean;
   /**
    * The lighting state it was lit for. Everything else in the scene (sky,
    * Sun, Moon, stars, shadows) is drawn from this, not from the newest
@@ -68,6 +70,7 @@ let nextId = 1;
 interface Request {
   params: LightParams;
   light: LightingState;
+  spritesOnly: boolean;
 }
 const pending = new Map<number, { channel: Channel; key: string } & Request>();
 /**
@@ -131,7 +134,9 @@ function received(message: WorkerResponse) {
     request === undefined ||
     current === null ||
     current.state === "failed" ||
-    (current.state === "ready" && current.art.key === wanted[request.channel])
+    (current.state === "ready" &&
+      artKey(current.art.light, current.art.spritesOnly) ===
+        wanted[request.channel])
   ) {
     closeAll(message.bitmaps);
     return;
@@ -150,6 +155,7 @@ function received(message: WorkerResponse) {
     art: {
       ...message.bitmaps,
       key: request.key,
+      spritesOnly: request.spritesOnly,
       light: request.light,
       palette,
       spritesUrl,
@@ -191,34 +197,43 @@ function start(): Worker | null {
   return worker;
 }
 
-function request(channel: Channel, light: LightingState): void {
+/** The art's key: its light, and whether the ridge and hill were lit too. */
+const artKey = (light: LightingState, spritesOnly: boolean) =>
+  `${lightKey(sceneLight(light))}${spritesOnly ? "|sprites" : ""}`;
+
+function request(
+  channel: Channel,
+  light: LightingState,
+  spritesOnly: boolean,
+): void {
   if (snapshots[channel].state === "failed") return;
   const params = sceneLight(light);
-  const key = lightKey(params);
+  const key = artKey(light, spritesOnly);
   if (key === wanted[channel]) return;
   if (start() === null) return;
   wanted[channel] = key;
-  if (inFlight[channel]) queued[channel] = { params, light };
-  else post(channel, { params, light });
+  const next = { params, light, spritesOnly };
+  if (inFlight[channel]) queued[channel] = next;
+  else post(channel, next);
 }
 
-function post(channel: Channel, { params, light }: Request): void {
+function post(channel: Channel, next: Request): void {
   if (worker === null) return;
   inFlight[channel] = true;
   const id = nextId++;
-  pending.set(id, { channel, key: lightKey(params), params, light });
-  const message: WorkerRequest = {
-    type: "relight",
-    id,
-    params,
-    spritesOnly: channel === "inspection",
-  };
+  const { params, spritesOnly } = next;
+  pending.set(id, { channel, key: lightKey(params), ...next });
+  const message: WorkerRequest = { type: "relight", id, params, spritesOnly };
   worker.postMessage(message);
 }
 
-/** Ask for the scene lit for `light`; a no-op when that light is current or pending. */
-export function requestLight(light: LightingState): void {
-  request("scene", light);
+/**
+ * Ask for the scene lit for `light`; a no-op when that light is current or
+ * pending. With `spritesOnly` (the GPU tier lights the landscape itself),
+ * the worker lights only the plants' sprites, several times faster.
+ */
+export function requestLight(light: LightingState, spritesOnly = false): void {
+  request("scene", light, spritesOnly);
 }
 
 function subscribe(listener: () => void) {
@@ -232,7 +247,7 @@ function subscribe(listener: () => void) {
 export function useSceneArt(channel: Channel = "scene"): SceneArt {
   useEffect(() => {
     // The inspection light never changes: ask for it on first use.
-    if (channel === "inspection") request("inspection", DAYTIME);
+    if (channel === "inspection") request("inspection", DAYTIME, true);
   }, [channel]);
   return useSyncExternalStore(subscribe, () => snapshots[channel]);
 }

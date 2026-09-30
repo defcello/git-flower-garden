@@ -219,8 +219,13 @@ does the garden for the plant you point at or tab to while it is outlined,
 and for a plant showing a last-known state (stale or incomplete). The
 **Drawing** menu (garden view) chooses how the garden is drawn:
 
-- **Auto** (the default): the best drawing this browser supports. Today
-  that is Software; a graphics-accelerated tier is planned.
+- **Auto** (the default): GPU when the browser has graphics hardware for
+  WebGL2, otherwise Software.
+- **GPU**: the sky and landscape are drawn and relit by the graphics
+  processor, so moving the time of day or looping it is smoother. The
+  plants are still drawn as in Software, for now. Chosen by hand, it also
+  runs where WebGL2 exists only in software (slowly). If the graphics
+  processor resets, the garden switches to Software until it recovers.
 - **Software**: drawn on the CPU, animating at most 15 frames a second.
   If the computer cannot keep up, the sway stops for the rest of the visit.
 - **Static**: nothing moves between lighting changes, not even new growth.

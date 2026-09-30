@@ -1,13 +1,26 @@
 /**
- * The garden's scene in the software tier (ADR 0018, step 3): sky, stars,
- * Sun, Moon, and the relit ridge and hill, drawn with Canvas 2D behind the
- * plants. Nothing moves yet, so it draws only when the light, the lit art,
- * or the window changes, and never while the page is hidden. Decorative:
- * hidden from assistive technology and never a pointer target.
+ * The garden's scene: sky, stars, Sun, Moon, and the relit ridge and hill,
+ * behind the plants (ADR 0018). The GPU tier draws it with WebGL2 and
+ * relights the ridge and hill in a shader (scene/gpu.ts); the software
+ * tier draws it with Canvas 2D from layers relit in a worker. Nothing moves
+ * yet, so it draws only when the light, the lit art, or the window
+ * changes, and never while the page is hidden. Decorative: hidden from
+ * assistive technology and never a pointer target.
+ *
+ * Either tier draws the light the plants' art was lit for, never ahead of
+ * it, so a frame never mixes two times of day.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LightingState } from "../environment/lighting.ts";
-import { requestLight, useSceneArt, type LitArt } from "./scene/client.ts";
+import { gpuSupport, useTier } from "./motion.ts";
+import {
+  requestLight,
+  useSceneArt,
+  type LitArt,
+  type SceneArt,
+} from "./scene/client.ts";
+import { LandscapeGpu } from "./scene/gpu.ts";
+import { resolveTier } from "./scene/tier.ts";
 import {
   DESIGN,
   lightKey,
@@ -64,14 +77,9 @@ function draw(
 ): void {
   const g = element.getContext("2d", { alpha: false });
   if (!g) return;
-  const ratio = Math.min(window.devicePixelRatio || 1, 2);
-  // The canvas fills the 16:9 stage (styles.css), so nothing is cropped.
-  const W = Math.max(1, Math.round(element.clientWidth * ratio));
-  const H = Math.max(1, Math.round(element.clientHeight * ratio));
-  if (element.width !== W || element.height !== H) {
-    element.width = W;
-    element.height = H;
-  }
+  fit(element);
+  const W = element.width;
+  const H = element.height;
   const t = transform(W, H);
   const sky = skyBodies(t, state);
 
@@ -125,7 +133,17 @@ function draw(
     for (const layer of [art.ridge, art.hill])
       if (layer) g.drawImage(layer, t.ox, t.oy, w, h);
   }
+  mark(element, state, art, lit);
+}
 
+/** Test and diagnostic attributes shared by both tiers. */
+function mark(
+  element: HTMLCanvasElement,
+  state: LightingState,
+  art: LitArt | null,
+  lit: boolean,
+): void {
+  const sky = skyBodies(transform(element.width, element.height), state);
   element.dataset.sun = String(sky.sun !== null);
   element.dataset.moon = String(sky.moon !== null);
   element.dataset.stars = String(sky.stars.length > 0);
@@ -135,18 +153,64 @@ function draw(
   if (art) element.dataset.artLight = art.key;
 }
 
+/** Size the backing store to the element at the device pixel ratio, capped at 2. */
+function fit(element: HTMLCanvasElement): void {
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  // The canvas fills the 16:9 stage (styles.css), so nothing is cropped.
+  const W = Math.max(1, Math.round(element.clientWidth * ratio));
+  const H = Math.max(1, Math.round(element.clientHeight * ratio));
+  if (element.width !== W || element.height !== H) {
+    element.width = W;
+    element.height = H;
+  }
+}
+
 export function SceneCanvas({ state }: { state: LightingState }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
+  const choice = useTier();
+  /** The GPU context is lost; Software draws until it is restored. */
+  const [lost, setLost] = useState(false);
+  /** The GPU tier could not start (no context, a shader or art failure). */
+  const [failed, setFailed] = useState(false);
+  // Static draws with Canvas 2D, like Software, but never animates.
+  const wantsGpu = !failed && resolveTier(choice, gpuSupport()) === "gpu";
+  const gpu = wantsGpu && !lost;
   const scene = useSceneArt();
   const art = scene.state === "ready" ? scene.art : null;
 
   useEffect(() => {
-    requestLight(state);
-  }, [state]);
+    requestLight(state, gpu);
+  }, [state, gpu]);
 
   // Draw the sky for the light the art was lit for, never ahead of it: the
   // canvas repaints only when a whole frame (sky and relit layers) is ready.
   const shown = art?.light ?? state;
+  return (
+    <>
+      {wantsGpu && (
+        <GpuCanvas
+          shown={shown}
+          art={art}
+          scene={scene}
+          hidden={lost}
+          onLost={setLost}
+          onFail={setFailed}
+        />
+      )}
+      {!gpu && <SoftwareCanvas shown={shown} art={art} scene={scene} />}
+    </>
+  );
+}
+
+function SoftwareCanvas({
+  shown,
+  art,
+  scene,
+}: {
+  shown: LightingState;
+  art: LitArt | null;
+  scene: SceneArt;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
@@ -166,8 +230,114 @@ export function SceneCanvas({ state }: { state: LightingState }) {
     <canvas
       ref={canvas}
       className="landscape-scene"
+      data-tier="software"
       data-art={scene.state}
       data-light-ms={art ? art.lightMs.toFixed(0) : undefined}
+    />
+  );
+}
+
+/**
+ * The GPU tier's landscape. It owns its WebGL2 context: when the context is
+ * lost it reports `onLost(true)` and stays mounted, hidden, to hear it
+ * restored; any failure to start reports `onFail`, and Software takes over.
+ */
+function GpuCanvas({
+  shown,
+  art,
+  scene,
+  hidden,
+  onLost,
+  onFail,
+}: {
+  shown: LightingState;
+  art: LitArt | null;
+  scene: SceneArt;
+  hidden: boolean;
+  /** Both are state setters, so they never change. */
+  onLost: (lost: boolean) => void;
+  onFail: (failed: true) => void;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const renderer = useRef<LandscapeGpu | null>(null);
+  /** Bumped when a renderer is built or its layers arrive: time to redraw. */
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    const element = canvas.current;
+    if (!element) return;
+    let alive = true;
+    const build = () => {
+      try {
+        const next = LandscapeGpu.create(element);
+        if (next === null) {
+          onFail(true);
+          return;
+        }
+        renderer.current = next;
+        element.dataset.renderer = next.renderer;
+        setVersion((v) => v + 1);
+        next.load().then(
+          () => {
+            if (alive && renderer.current === next) setVersion((v) => v + 1);
+          },
+          () => {
+            if (alive) onFail(true);
+          },
+        );
+      } catch {
+        onFail(true);
+      }
+    };
+    const lost = (event: Event) => {
+      // Without this the context is never restored.
+      event.preventDefault();
+      renderer.current = null;
+      onLost(true);
+    };
+    const restored = () => {
+      build();
+      onLost(false);
+    };
+    element.addEventListener("webglcontextlost", lost);
+    element.addEventListener("webglcontextrestored", restored);
+    build();
+    return () => {
+      alive = false;
+      element.removeEventListener("webglcontextlost", lost);
+      element.removeEventListener("webglcontextrestored", restored);
+      // Free the GPU's memory now, not when the element is collected.
+      renderer.current?.dispose();
+      renderer.current = null;
+    };
+  }, [onLost, onFail]);
+
+  useEffect(() => {
+    const element = canvas.current;
+    if (!element || hidden) return;
+    const redraw = () => {
+      const gpu = renderer.current;
+      if (document.hidden || gpu === null) return;
+      fit(element);
+      const lit = gpu.draw(shown);
+      mark(element, shown, art, lit);
+    };
+    redraw();
+    document.addEventListener("visibilitychange", redraw);
+    window.addEventListener("resize", redraw);
+    return () => {
+      document.removeEventListener("visibilitychange", redraw);
+      window.removeEventListener("resize", redraw);
+    };
+  }, [shown, art, hidden, version]);
+
+  return (
+    <canvas
+      ref={canvas}
+      className={hidden ? "landscape-lost" : "landscape-scene"}
+      hidden={hidden}
+      data-tier="gpu"
+      data-art={scene.state}
     />
   );
 }

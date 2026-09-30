@@ -27,6 +27,17 @@ change configuration or behavior, and the notes say how.
   and a plant showing a last-known state, hold still.
   ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
 
+- **The landscape can be drawn by the graphics processor.** The Drawing
+  menu gains **GPU**, and Auto now chooses it when the browser has
+  graphics hardware for WebGL2 (not a software stand-in). The sky, Sun,
+  Moon, stars, mountains, and hill are relit on the graphics processor,
+  matching Software's picture, so dragging or looping the time of day is
+  smoother: about 8 repaints a second on a first-generation Surface Pro,
+  against about 3 in Software. Plants are still drawn as in Software. If
+  the graphics processor resets, the garden falls back to Software until
+  it recovers.
+  ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
+
 ## 0.3.0-beta.1: renamed, real sky (2026-09-28)
 
 Install or update from the

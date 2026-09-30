@@ -661,14 +661,16 @@ function PlantMarker({
 
 const TIER_NAMES: Record<Tier, string> = {
   auto: "Auto",
+  gpu: "GPU",
   software: "Software",
   static: "Static",
 };
 
 /**
- * How the garden is drawn (ADR 0018, "Choosing a tier"): Auto, Software
- * (animated at a capped frame rate), or Static (no motion between lighting
- * changes). The GPU tier joins the list in step 4.
+ * How the garden is drawn (ADR 0018, "Choosing a tier"): Auto (the GPU on
+ * graphics hardware, else Software), GPU (WebGL2, even in software),
+ * Software (Canvas 2D), or Static (Canvas 2D, no motion between lighting
+ * changes).
  */
 function TierControl() {
   const tier = useTier();

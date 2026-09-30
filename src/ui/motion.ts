@@ -2,11 +2,12 @@
  * The garden's drawing tier and its one animation clock (ADR 0018,
  * "Choosing a tier" and "Software tier").
  *
- * Tiers: Auto (the default), Software, and Static; the GPU tier arrives in
- * step 4, until then Auto means Software. Software animates at most
- * SOFTWARE_FPS frames a second: sway, and the growth transitions. Static
- * draws one lit frame per lighting change and nothing between, the
- * low-power mode. The choice is remembered per browser.
+ * Tiers: Auto (the default), GPU, Software, and Static (scene/tier.ts).
+ * Auto takes the GPU tier on graphics hardware and Software otherwise.
+ * Plants animate at most SOFTWARE_FPS frames a second in either: sway, and
+ * the growth transitions. Static draws one lit frame per lighting change
+ * and nothing between, the low-power mode. The choice is remembered per
+ * browser.
  *
  * Every swaying plant listens to one shared clock, so the whole garden
  * moves in step from a single animation-frame loop. It runs only while
@@ -16,12 +17,16 @@
  * sway is the first effect to go.
  */
 import { useSyncExternalStore } from "react";
+import {
+  isSoftwareRenderer,
+  TIERS,
+  type GpuSupport,
+  type Tier,
+} from "./scene/tier.ts";
 import { FRAME_MS, PROBE_FRAMES, tooSlow } from "./sway.ts";
 
 export { FRAME_MS, SOFTWARE_FPS } from "./sway.ts";
-
-export type Tier = "auto" | "software" | "static";
-export const TIERS: readonly Tier[] = ["auto", "software", "static"];
+export { TIERS, type Tier } from "./scene/tier.ts";
 
 const TIER_KEY = "git-flower-garden.tier";
 
@@ -40,6 +45,42 @@ function saveTier(next: Tier): void {
   } catch {
     // Storage may be unavailable (private windows); the choice lasts this visit.
   }
+}
+
+let support: GpuSupport | null = null;
+
+/**
+ * What WebGL2 this browser offers, probed once on a throwaway canvas with
+ * the options the GPU tier uses. `failIfMajorPerformanceCaveat` alone is
+ * not enough: headless Chromium passes SwiftShader off as hardware, so the
+ * renderer's name is checked too.
+ */
+export function gpuSupport(): GpuSupport {
+  if (support !== null) return support;
+  support = "none";
+  try {
+    const context = (options: WebGLContextAttributes) =>
+      document.createElement("canvas").getContext("webgl2", {
+        powerPreference: "low-power",
+        ...options,
+      });
+    const fast = context({ failIfMajorPerformanceCaveat: true });
+    const gl = fast ?? context({});
+    if (gl !== null) {
+      const info = gl.getExtension("WEBGL_debug_renderer_info");
+      const name =
+        info === null
+          ? String(gl.getParameter(gl.RENDERER))
+          : String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
+      support =
+        fast !== null && !isSoftwareRenderer(name) ? "hardware" : "software";
+      document.documentElement.dataset.gpu = `${support}: ${name}`;
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+    }
+  } catch {
+    // No WebGL2 at all.
+  }
+  return support;
 }
 
 /** Whether motion is allowed: the OS preference and the app setting. */

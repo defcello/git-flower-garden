@@ -399,6 +399,45 @@ decision:
   frame for 8 plants and 9 ms for 64. Most of the remaining cost is still
   Chromium's handling of a changed canvas each frame, for the GPU tier to
   remove. Merged to `main` on 2026-09-30 (PR #6).
+- **Step 4, GPU tier: the landscape** (2026-09-30). `src/ui/scene/gpu.ts`
+  draws the sky, Sun, Moon, and stars with WebGL2 and relights the ridge
+  and hill per pixel from their albedo, normal, and translucency maps, in
+  a shader that mirrors `shade` line for line and decodes the maps as
+  `relight.ts` does (alpha snapped at both ends, the hill's X axis
+  flipped). The plants are still drawn by the Canvas 2D scene canvas from
+  sprites relit in the worker, which now lights only the sprites while the
+  GPU draws the landscape (about a seventh of the texels). The landscape
+  is drawn for the light of those sprites, as in Software, so a frame
+  still never mixes two times of day. **Choosing a tier**
+  (`src/ui/scene/tier.ts`, pure and tested): the Drawing choice gains
+  **GPU**; Auto takes it only on graphics hardware. Headless Chromium
+  passes SwiftShader off as having no major performance caveat, so
+  `failIfMajorPerformanceCaveat` is not enough: the renderer's name is
+  checked for software rasterizers too. GPU chosen by hand accepts
+  software WebGL, which is how the browser tests force it. Static draws
+  with Canvas 2D. A lost context hands the landscape to Software at once
+  (the worker relights the ridge and hill again), and the GPU canvas stays
+  mounted to take over again when the context is restored; any failure to
+  start (no context, a shader, or the art) falls back to Software for the
+  visit. **Verified**: in headless Chromium, the GPU and Software tiers
+  agree within 6 of 255 levels in the sky, ridge, hill, and grass at
+  sunrise, civil dusk, full moon, and noon; fewer than 0.1% of pixels
+  differ by more than 8 (plants mid-sway, anti-aliased edges). Auto picks
+  Software there; context loss and restore hand over both ways
+  (`tests/e2e/botanical.spec.ts`). **Measured** (`npm run
+  measure:garden`, now with `LOOP=1` and the tier that drew) on the
+  Surface Pro in a visible Chromium window: Auto chose the GPU on the HD
+  4000 (Mesa, OpenGL ES 3.0). Looping the day with 8 plants, the scene
+  repainted 8.3 times a second with the GPU against 2.7 with Software;
+  both keep the machine's four threads busy (about 250% of one core), now
+  mostly relighting sprites. At rest (noon, swaying), GPU and Software
+  cost the same, 80–81% of one core, since the landscape does not redraw
+  per frame; the cost is the plants' canvas. **Open in step 4**: plants on
+  the GPU (instanced, relit sprites with sway in the vertex shader, stems,
+  shadows, outline, wilting, and badges), which removes both the
+  per-frame canvas cost and the sprite relights, so looping follows the
+  slider exactly; then the frame-time probe that downgrades a GPU tier
+  missing its budget.
 
 ## Verification
 

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 // The service supplies real Git fixtures. Compare semantic output rather than
 // snapshots alone: artwork must never change OIDs, ancestry, or ref inspection.
@@ -230,6 +230,157 @@ test("the scene always shows whole at 16:9, and the time slider and bookmarks ag
   await sky.selectOption("live");
   await expect(landscape).toHaveAttribute("data-sky", "day");
   await expect(note).not.toContainText("Sky preview");
+});
+
+/**
+ * Mean brightness (0..255) of regions of the scene canvas, as fractions of
+ * its size. Read through a 2D canvas, so it works for either tier.
+ */
+async function brightness(
+  page: Page,
+  regions: readonly (readonly [number, number, number, number])[],
+): Promise<number[]> {
+  return page.locator(".landscape-scene").evaluate(
+    (node, boxes: [number, number, number, number][]) => {
+      const scene = node as HTMLCanvasElement;
+      const copy = document.createElement("canvas");
+      copy.width = scene.width;
+      copy.height = scene.height;
+      const g = copy.getContext("2d");
+      if (!g) return [];
+      g.drawImage(scene, 0, 0);
+      return boxes.map(([x, y, w, h]) => {
+        const data = g.getImageData(
+          Math.round(x * copy.width),
+          Math.round(y * copy.height),
+          Math.max(1, Math.round(w * copy.width)),
+          Math.max(1, Math.round(h * copy.height)),
+        ).data;
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4)
+          sum += (data[i] ?? 0) + (data[i + 1] ?? 0) + (data[i + 2] ?? 0);
+        return sum / (data.length / 4) / 3;
+      });
+    },
+    regions.map(([x, y, w, h]): [number, number, number, number] => [
+      x,
+      y,
+      w,
+      h,
+    ]),
+  );
+}
+
+test("the GPU tier draws the landscape like Software, and hands over when its context is lost", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto("/");
+  await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
+  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+  const scene = page.locator(".landscape-scene");
+  const drawing = page.getByLabel("Drawing", { exact: true });
+  // Headless Chromium's WebGL2 is SwiftShader, a software rasterizer: Auto
+  // must not take it (ADR 0018, "Choosing a tier").
+  await expect(drawing).toHaveValue("auto");
+  await expect(scene).toHaveAttribute("data-tier", "software");
+  expect(
+    await page.evaluate(() => document.documentElement.dataset.gpu),
+  ).toMatch(/^software: .*SwiftShader/);
+
+  // Sky, far ridge, near hill, and grass low in the frame.
+  const regions = [
+    [0.4, 0.05, 0.2, 0.1],
+    [0.1, 0.42, 0.1, 0.04],
+    [0.45, 0.72, 0.1, 0.05],
+    [0.47, 0.9, 0.06, 0.03],
+  ] as const;
+  const sky = page.getByLabel("Sky", { exact: true });
+  // The sky's key for each preview, from its first (software) drawing.
+  const keys: Record<string, string> = {};
+  const skyKey = () => scene.evaluate((node) => node.dataset.skyLight ?? "");
+  /** Wait until the scene shows `preview`'s light, lit whole. */
+  const settled = async (preview: string, before: string) => {
+    await expect(scene).toHaveAttribute("data-lit", "true");
+    await expect
+      .poll(async () => {
+        const key = await skyKey();
+        return keys[preview] === undefined
+          ? key !== before
+          : key === keys[preview];
+      })
+      .toBe(true);
+    keys[preview] ??= await skyKey();
+  };
+  // Live is already the noon light here, so noon comes last.
+  const cases = ["sunrise", "civil-dusk", "full-moon", "noon"];
+  const software: Record<string, number[]> = {};
+  for (const preview of cases) {
+    const before = await skyKey();
+    await sky.selectOption(preview);
+    await settled(preview, before);
+    software[preview] = await brightness(page, regions);
+    await page.screenshot({
+      path: testInfo.outputPath(`${preview}-software.png`),
+    });
+  }
+
+  // GPU by hand accepts software WebGL.
+  await drawing.selectOption("gpu");
+  await expect(scene).toHaveAttribute("data-tier", "gpu");
+  await expect(scene).toHaveAttribute("data-renderer", /SwiftShader/);
+  for (const preview of cases) {
+    await sky.selectOption(preview);
+    await settled(preview, "");
+    await page.screenshot({ path: testInfo.outputPath(`${preview}-gpu.png`) });
+    // The same shading, so the same picture, give or take filtering.
+    const gpu = await brightness(page, regions);
+    gpu.forEach((value, i) => {
+      expect(
+        Math.abs(value - (software[preview]?.[i] ?? NaN)),
+        `${preview}, region ${String(i)}: GPU ${value.toFixed(1)}, software ${String(software[preview]?.[i])}`,
+      ).toBeLessThan(6);
+    });
+  }
+  await sky.selectOption("full-moon");
+  await settled("full-moon", "");
+  await expect(scene).toHaveAttribute("data-sun", "false");
+  await expect(scene).toHaveAttribute("data-moon", "true");
+  await expect(scene).toHaveAttribute("data-stars", "true");
+  // The plants still draw from sprites relit in the worker.
+  await expect(
+    page.locator('.garden-canvas[data-ready="true"][data-plants="7"]'),
+  ).toHaveCount(1);
+
+  // A lost context drops to Software at once, and the GPU returns when the
+  // context is restored.
+  await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      '.landscape-scene[data-tier="gpu"]',
+    );
+    const lose = canvas
+      ?.getContext("webgl2")
+      ?.getExtension("WEBGL_lose_context");
+    (window as unknown as { lose: typeof lose }).lose = lose;
+    lose?.loseContext();
+  });
+  await expect(scene).toHaveAttribute("data-tier", "software");
+  await settled("full-moon", "");
+  await page.evaluate(() => {
+    (
+      window as unknown as { lose: WEBGL_lose_context | null }
+    ).lose?.restoreContext();
+  });
+  await expect(scene).toHaveAttribute("data-tier", "gpu");
+  await settled("full-moon", "");
+
+  // The choice is remembered.
+  await page.reload();
+  await expect(drawing).toHaveValue("gpu");
+  await expect(scene).toHaveAttribute("data-tier", "gpu");
+  await drawing.selectOption("auto");
+  await expect(scene).toHaveAttribute("data-tier", "software");
 });
 
 test("loop plays the day round, panels turn dark at night, and the top bar and notes never overlap", async ({
