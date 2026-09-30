@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  GPU_BUDGET_MS,
+  gpuVerdict,
   isSoftwareRenderer,
   resolveTier,
   TIERS,
@@ -21,6 +23,11 @@ describe("resolveTier (ADR 0018, Choosing a tier)", () => {
   it("a lost context draws with Software until it is restored", () => {
     expect(resolveTier("auto", "hardware", true)).toBe("software");
     expect(resolveTier("gpu", "software", true)).toBe("software");
+  });
+
+  it("a slow verdict moves Auto to Software, but not GPU chosen by hand", () => {
+    expect(resolveTier("auto", "hardware", false, true)).toBe("software");
+    expect(resolveTier("gpu", "hardware", false, true)).toBe("gpu");
   });
 
   it("Software and Static never use the GPU", () => {
@@ -54,5 +61,31 @@ describe("isSoftwareRenderer", () => {
       "Apple M1",
     ])
       expect(isSoftwareRenderer(name), name).toBe(false);
+  });
+});
+
+describe("gpuVerdict (the GPU tier's frame-time probe)", () => {
+  it("waits for three plant frames", () => {
+    expect(gpuVerdict({ landscape: [100], plants: [100, 100] })).toBeNull();
+    expect(gpuVerdict({ landscape: [], plants: [1, 1, 1] })).toEqual({
+      slow: false,
+      ms: 1,
+    });
+  });
+
+  it("adds the landscape's median to the plants' and compares with half a frame", () => {
+    expect(GPU_BUDGET_MS).toBeCloseTo(1000 / 15 / 2);
+    const fast = gpuVerdict({ landscape: [12, 14], plants: [9, 10, 11] });
+    expect(fast).toEqual({ slow: false, ms: 24 });
+    const slow = gpuVerdict({ landscape: [25], plants: [9, 10, 11] });
+    expect(slow?.slow).toBe(true);
+    expect(slow?.ms).toBe(35);
+  });
+
+  it("takes medians, so one stalled frame does not decide", () => {
+    expect(gpuVerdict({ landscape: [], plants: [5, 500, 6] })?.slow).toBe(
+      false,
+    );
+    expect(gpuVerdict({ landscape: [], plants: [40, 50, 6] })?.slow).toBe(true);
   });
 });

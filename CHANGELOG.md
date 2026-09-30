@@ -29,9 +29,10 @@ change configuration or behavior, and the notes say how.
 
 - **The garden can be drawn by the graphics processor.** The Drawing
   menu gains **GPU**, and Auto now chooses it when the browser has
-  graphics hardware for WebGL2 (not a software stand-in). The sky, Sun,
-  Moon, stars, mountains, hill, and plants are relit on the graphics
-  processor, matching Software's picture. Dragging or looping the time of
+  graphics hardware for WebGL2 (not a software stand-in) and its first
+  frames are fast enough. The sky, Sun, Moon, stars, mountains, hill, and
+  plants are relit on the graphics processor, matching Software's
+  picture. Dragging or looping the time of
   day is smooth: on a first-generation Surface Pro the whole scene follows
   at the display's rate, against about 3 repaints a second in Software,
   and swaying costs about half a core for eight plants, against four

@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { LightingState } from "../environment/lighting.ts";
-import { gpuSupport, useTier } from "./motion.ts";
+import { probingGpu, reportGpuFrame, useWantsGpu } from "./motion.ts";
 import { fitCanvas } from "./paint.ts";
 import {
   requestLight,
@@ -23,7 +23,6 @@ import {
   type SceneArt,
 } from "./scene/client.ts";
 import { LandscapeGpu } from "./scene/gpu.ts";
-import { resolveTier } from "./scene/tier.ts";
 import { useGpu } from "./scene/useGpu.ts";
 import {
   DESIGN,
@@ -159,13 +158,12 @@ function mark(
 }
 
 export function SceneCanvas({ state }: { state: LightingState }) {
-  const choice = useTier();
   /** The GPU context is lost; Software draws until it is restored. */
   const [lost, setLost] = useState(false);
   /** The GPU tier could not start (no context, a shader or art failure). */
   const [failed, setFailed] = useState(false);
   // Static draws with Canvas 2D, like Software, but never animates.
-  const wantsGpu = !failed && resolveTier(choice, gpuSupport()) === "gpu";
+  const wantsGpu = useWantsGpu() && !failed;
   const gpu = wantsGpu && !lost;
   const plantsOnGpu = usePlantsOnGpu();
   const scene = useSceneArt();
@@ -265,7 +263,13 @@ function GpuCanvas({
       const gpu = renderer.current;
       if (document.hidden || gpu === null) return;
       fitCanvas(element);
+      const timed = probingGpu("landscape");
+      const start = performance.now();
       const lit = gpu.draw(shown);
+      if (timed && lit) {
+        gpu.finish();
+        reportGpuFrame("landscape", performance.now() - start);
+      }
       // With the plants on the GPU too, everything is lit for `shown`.
       mark(
         element,

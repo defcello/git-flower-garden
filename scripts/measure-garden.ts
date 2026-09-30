@@ -151,6 +151,8 @@ try {
     const repaints = Number(await page.evaluate("window.repaints"));
     const drawn =
       (await page.locator(".landscape-scene").getAttribute("data-tier")) ?? "?";
+    const probe =
+      (await page.locator("html").getAttribute("data-gpu-probe")) ?? "none";
     const percent = Object.fromEntries(
       Object.entries(after).map(([type, t]) => [
         type,
@@ -160,7 +162,7 @@ try {
     const total = Object.values(percent).reduce((a, b) => a + b, 0);
     const sway = (await page.locator("html").getAttribute("data-sway")) ?? "on";
     console.log(
-      `${String(plants)} plants, ${tier} (drawn by ${drawn}): ${String(total)}% of one core ${JSON.stringify(percent)}; sway ${sway}` +
+      `${String(plants)} plants, ${tier} (drawn by ${drawn}): ${String(total)}% of one core ${JSON.stringify(percent)}; sway ${sway}; GPU probe ${probe}` +
         (loop
           ? `; ${(repaints / SECONDS).toFixed(1)} scene repaints a second`
           : ""),

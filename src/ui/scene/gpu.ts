@@ -240,6 +240,22 @@ export class LandscapeGpu implements GpuRenderer {
     ];
   }
 
+  /**
+   * Wait until the GPU has finished what was drawn, for the frame-time
+   * probe: reading one pixel back cannot happen sooner.
+   */
+  finish(): void {
+    this.#gl.readPixels(
+      0,
+      0,
+      1,
+      1,
+      this.#gl.RGBA,
+      this.#gl.UNSIGNED_BYTE,
+      new Uint8Array(4),
+    );
+  }
+
   /** Release the context and its textures now (the tier was switched away). */
   dispose(): void {
     this.#gl.getExtension("WEBGL_lose_context")?.loseContext();

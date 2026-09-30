@@ -536,6 +536,64 @@ test("the GPU tier draws the plants like Software, lit at once", async ({
   });
 });
 
+test("Auto leaves a GPU that misses its frame budget for Software; GPU by hand stays", async ({
+  page,
+}) => {
+  // Pass SwiftShader off as graphics hardware, so Auto takes the GPU, and
+  // make every frame the probe waits for take 45 ms on the GPU.
+  await page.addInitScript(() => {
+    const proto = WebGL2RenderingContext.prototype;
+    const original = (name: string) =>
+      Object.getOwnPropertyDescriptor(proto, name)?.value as (
+        ...args: unknown[]
+      ) => unknown;
+    const getParameter = original("getParameter");
+    const readPixels = original("readPixels");
+    Object.defineProperty(proto, "getParameter", {
+      value(this: WebGL2RenderingContext, name: number) {
+        // UNMASKED_RENDERER_WEBGL and RENDERER.
+        if (name === 0x9246 || name === 0x1f01)
+          return "Mesa Intel(R) HD Graphics 4000 (IVB GT2)";
+        return getParameter.call(this, name);
+      },
+    });
+    Object.defineProperty(proto, "readPixels", {
+      value(this: WebGL2RenderingContext, ...args: unknown[]) {
+        const end = performance.now() + 45;
+        while (performance.now() < end);
+        return readPixels.apply(this, args);
+      },
+    });
+  });
+  await page.goto("/");
+  await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
+  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+  const drawing = page.getByLabel("Drawing", { exact: true });
+  const garden = page.locator(".garden-canvas");
+  const scene = page.locator(".landscape-scene");
+  await expect(drawing).toHaveValue("auto");
+  expect(
+    await page.evaluate(() => document.documentElement.dataset.gpu),
+  ).toMatch(/^hardware: /);
+  // The probe times the first frames, finds them slow, and Auto moves to
+  // Software for the visit; the choice itself stays Auto.
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-gpu-probe",
+    /^slow: \d+\.\d ms$/,
+  );
+  await expect(garden).toHaveAttribute("data-tier", "software");
+  await expect(scene).toHaveAttribute("data-tier", "software");
+  await expect(garden).toHaveAttribute("data-ready", "true");
+  await expect(scene).toHaveAttribute("data-lit", "true");
+  await expect(drawing).toHaveValue("auto");
+  // GPU chosen by hand is the viewer's call.
+  await drawing.selectOption("gpu");
+  await expect(garden).toHaveAttribute("data-tier", "gpu");
+  await expect(scene).toHaveAttribute("data-tier", "gpu");
+  await drawing.selectOption("auto");
+  await expect(garden).toHaveAttribute("data-tier", "software");
+});
+
 test("loop plays the day round, panels turn dark at night, and the top bar and notes never overlap", async ({
   page,
 }) => {

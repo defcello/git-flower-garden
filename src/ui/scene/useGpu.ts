@@ -16,6 +16,8 @@ export interface GpuRenderer {
   load(): Promise<void>;
   /** Release the context now (the tier was switched away). */
   dispose(): void;
+  /** Wait until the GPU has finished what was drawn (the frame-time probe). */
+  finish(): void;
 }
 
 /**

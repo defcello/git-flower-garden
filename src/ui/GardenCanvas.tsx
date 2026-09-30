@@ -28,9 +28,10 @@ import type { Scene } from "./botanical.ts";
 import {
   animates,
   FRAME_MS,
-  gpuSupport,
   listenSway,
-  useTier,
+  probingGpu,
+  reportGpuFrame,
+  useWantsGpu,
 } from "./motion.ts";
 import {
   badgeStyle,
@@ -56,7 +57,6 @@ import {
   type SceneDescription,
 } from "./scene/description.ts";
 import { PlantsGpu } from "./scene/plants-gpu.ts";
-import { resolveTier } from "./scene/tier.ts";
 import { useGpu } from "./scene/useGpu.ts";
 import {
   DESIGN,
@@ -119,12 +119,11 @@ export function GardenCanvas({
   plants: readonly PlantInput[];
   light: LightingState;
 }) {
-  const choice = useTier();
   /** The GPU context is lost; Software draws until it is restored. */
   const [lost, setLost] = useState(false);
   /** The GPU tier could not start (no context, a shader or art failure). */
   const [failed, setFailed] = useState(false);
-  const wantsGpu = !failed && resolveTier(choice, gpuSupport()) === "gpu";
+  const wantsGpu = useWantsGpu() && !failed;
   const gpu = wantsGpu && !lost;
   useEffect(() => {
     // The worker then has no sprites to light for the hillside.
@@ -325,7 +324,12 @@ function GpuPlants({
       if (gpu === null) return;
       const started = performance.now();
       fitCanvas(element);
+      const timed = probingGpu("plants");
       if (!gpu.paint(description, light, badges, frameOf, seconds)) return;
+      if (timed) {
+        gpu.finish();
+        reportGpuFrame("plants", performance.now() - started);
+      }
       element.dataset.ready = "true";
       element.dataset.artLight = key;
       // For measurements: script time of the last frame (not the GPU's).

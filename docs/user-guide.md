@@ -220,7 +220,9 @@ and for a plant showing a last-known state (stale or incomplete). The
 **Drawing** menu (garden view) chooses how the garden is drawn:
 
 - **Auto** (the default): GPU when the browser has graphics hardware for
-  WebGL2, otherwise Software.
+  WebGL2, otherwise Software. If the first frames on the graphics
+  processor come out too slow, Auto uses Software for the rest of the
+  visit.
 - **GPU**: the sky, landscape, and plants are drawn and relit by the
   graphics processor, so moving the time of day or looping it is smooth,
   and swaying costs less. Chosen by hand, it also

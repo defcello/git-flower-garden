@@ -468,10 +468,25 @@ decision:
   percent of one core): looping the day, the scene repaints 56.9 times a
   second with the GPU (every display frame) against 2.5 in Software, at
   204% against 248%; at rest with 8 plants swaying, 52% against 83%; with
-  64 plants, 115% against 160%; Static 2–3%. **Open in step 4**: the
-  frame-time probe that downgrades a GPU tier missing its budget (the
-  sway probe still stops sway in either tier), and the frame rate: plants
-  still move at 15 frames a second in both tiers (P2-E).
+  64 plants, 115% against 160%; Static 2–3%.
+- **Step 4, GPU tier: the frame-time probe** (2026-09-30). Each GPU canvas
+  times its first frames from the first draw call until the GPU has
+  finished them (a one-pixel read back), skipping two for warm-up and
+  timing six, then stops, so later frames never wait. The verdict
+  (`gpuVerdict`, pure and tested) adds the landscape's median to the
+  plants' (a frame while the light moves draws both) once three plant
+  frames are in, against half a frame at the 15 fps cap, about 33 ms.
+  Too slow, and Auto draws with Software for the rest of the visit; GPU
+  chosen by hand stays, the viewer's call. The verdict is on the root
+  element (`data-gpu-probe`). The sway probe still stops sway in either
+  tier. **Verified** in the browser tests by passing SwiftShader off as
+  an HD 4000 and slowing each timed frame to 45 ms: Auto takes the GPU,
+  the probe finds it slow, and the whole scene moves to Software; GPU by
+  hand stays. **Measured** on the Surface Pro's HD 4000, Auto keeps the
+  GPU: 13.5 ms with 8 plants, 18.1 ms with 64, 24.4 ms while looping the
+  day. **Step 4 is done**, bar the reviews below. **Open**: the frame
+  rate, still 15 frames a second in both tiers (P2-E); measurements on
+  the dedicated monitor and in a non-16:9 window ("Verification").
 
 ## Verification
 

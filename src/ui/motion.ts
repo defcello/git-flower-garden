@@ -18,8 +18,13 @@
  */
 import { useSyncExternalStore } from "react";
 import {
+  GPU_SAMPLES,
+  GPU_WARMUP,
+  gpuVerdict,
   isSoftwareRenderer,
+  resolveTier,
   TIERS,
+  type GpuPart,
   type GpuSupport,
   type Tier,
 } from "./scene/tier.ts";
@@ -81,6 +86,59 @@ export function gpuSupport(): GpuSupport {
     // No WebGL2 at all.
   }
   return support;
+}
+
+/**
+ * The GPU tier's frame-time probe (ADR 0018, "Choosing a tier"). Each GPU
+ * canvas times its first frames through to the GPU finishing them (the
+ * wait costs a little, so only GPU_WARMUP + GPU_SAMPLES frames each), and
+ * the verdict (tier.ts `gpuVerdict`) moves Auto to Software for the rest
+ * of the visit if they miss the budget. The result is on the root element
+ * for diagnostics: `data-gpu-probe`.
+ */
+const probe: Record<GpuPart, { drawn: number; samples: number[] }> = {
+  landscape: { drawn: 0, samples: [] },
+  plants: { drawn: 0, samples: [] },
+};
+let gpuSlow = false;
+
+/** Whether this part's next frame should be timed. */
+export function probingGpu(part: GpuPart): boolean {
+  return !gpuSlow && probe[part].drawn < GPU_WARMUP + GPU_SAMPLES;
+}
+
+/** Report a frame of `part` drawn on the GPU; `ms` when it was timed. */
+export function reportGpuFrame(part: GpuPart, ms: number): void {
+  const entry = probe[part];
+  entry.drawn++;
+  if (entry.drawn <= GPU_WARMUP) return;
+  entry.samples.push(ms);
+  const verdict = gpuVerdict({
+    landscape: probe.landscape.samples,
+    plants: probe.plants.samples,
+  });
+  if (verdict === null) return;
+  document.documentElement.dataset.gpuProbe = `${verdict.slow ? "slow" : "ok"}: ${verdict.ms.toFixed(1)} ms`;
+  if (verdict.slow && !gpuSlow) {
+    gpuSlow = true;
+    for (const listener of tierListeners) listener();
+  }
+}
+
+/**
+ * Whether the GPU tier should draw, re-rendering when the choice or the
+ * probe's verdict changes. `lost`: the caller's context is lost.
+ */
+export function useWantsGpu(lost = false): boolean {
+  const choice = useTier();
+  const slow = useSyncExternalStore(
+    (onChange) => {
+      tierListeners.add(onChange);
+      return () => tierListeners.delete(onChange);
+    },
+    () => gpuSlow,
+  );
+  return resolveTier(choice, gpuSupport(), lost, slow) === "gpu";
 }
 
 /** Whether motion is allowed: the OS preference and the app setting. */
