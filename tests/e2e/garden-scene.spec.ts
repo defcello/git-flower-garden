@@ -388,6 +388,26 @@ async function artwork(page: Page, selector: string) {
   return canvas.evaluate((element: HTMLCanvasElement) => element.toDataURL());
 }
 
+/**
+ * Hold the light still (a preview, not the live sky), and wait until the
+ * relit art for it is on screen, so only sway can change the artwork.
+ */
+async function holdLight(page: Page) {
+  await page.getByLabel("Sky", { exact: true }).selectOption("noon");
+  const scene = page.locator(".landscape-scene");
+  await expect
+    .poll(() =>
+      scene.evaluate(
+        (element: HTMLElement) =>
+          element.dataset.artLight !== undefined &&
+          element.dataset.artLight === element.dataset.skyLight,
+      ),
+    )
+    .toBe(true);
+  // Let the plants' art catch up with the scene's.
+  await page.waitForTimeout(300);
+}
+
 /** Whether the artwork changes over half a second (a few sway frames). */
 async function moves(page: Page, selector: string) {
   const before = await artwork(page, selector);
@@ -424,11 +444,13 @@ test("leaves sway in the garden only, hit targets stay put, and Static stands st
 
   // Static draws nothing between lighting changes, and is remembered.
   await page.getByLabel("Drawing", { exact: true }).selectOption("static");
+  await page.waitForTimeout(200);
   expect(await moves(page, tour)).toBe(false);
   await page.reload();
   await expect(page.getByLabel("Drawing", { exact: true })).toHaveValue(
     "static",
   );
+  await holdLight(page);
   expect(await moves(page, tour)).toBe(false);
 
   // Reduced motion stills every tier.
