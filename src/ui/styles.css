@@ -903,6 +903,34 @@ code,
   filter: drop-shadow(0 0 1px #00e5ff) drop-shadow(0 0 1px #00e5ff)
     drop-shadow(0 0 5px #00e5ffcc);
 }
+/* With the Canvas compositor, one canvas draws every plant's art, drop
+   shadow, outline, and wilting (GardenCanvas.tsx); the plots above it keep
+   their hit layers, so only their markers take the CSS shadow and outline. */
+.botanical .garden-scene .garden-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.botanical .garden-scene.scene-drawn .plot .plant,
+.botanical .garden-scene.scene-drawn .plot:hover .plant,
+.botanical .garden-scene.scene-drawn .plot:focus-visible .plant,
+.botanical .garden-scene.scene-drawn .plot:has(:focus-visible) .plant {
+  filter: none;
+}
+.botanical .garden-scene.scene-drawn .plant-marker {
+  filter: drop-shadow(
+    var(--shadow-x, 8px) var(--shadow-y, 11px) 7px
+      rgb(21 45 23 / var(--shadow-alpha, 0.22))
+  );
+}
+.botanical .garden-scene.scene-drawn .plot:hover .plant-marker,
+.botanical .garden-scene.scene-drawn .plot:focus-visible .plant-marker,
+.botanical .garden-scene.scene-drawn .plot:has(:focus-visible) .plant-marker {
+  filter: drop-shadow(0 0 1px #00e5ff) drop-shadow(0 0 1px #00e5ff)
+    drop-shadow(0 0 5px #00e5ffcc);
+}
 .botanical .garden-scene .focus-button {
   z-index: 2000;
   left: var(--icon-x);
@@ -1185,6 +1213,14 @@ code,
 /* Last-known state: the plant fades like a wilting one. */
 .botanical .garden-scene .plot.wilting .plot-graph {
   filter: saturate(0.45) brightness(0.92);
+}
+/* The scene canvas draws the badges in depth order (GardenCanvas.tsx). */
+.botanical .garden-scene.scene-drawn .botanical-overlay .badge {
+  visibility: hidden;
+}
+/* The scene canvas wilts the art itself (GardenCanvas.tsx). */
+.botanical .garden-scene.scene-drawn .plot.wilting .plot-graph {
+  filter: none;
 }
 
 /* Short screens (a phone on its side): a compact top bar and notes, and the

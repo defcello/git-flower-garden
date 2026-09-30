@@ -1,4 +1,4 @@
-import type { GraphJson } from "../api/types.ts";
+import type { GraphEdgeJson, GraphJson } from "../api/types.ts";
 import { edgeCurve, edgePath } from "./edge-path.ts";
 import { SPRITE_ATLAS } from "./scene/atlas.ts";
 
@@ -47,11 +47,40 @@ export interface Ground {
   y: number;
   width: number;
 }
+/** The count of hidden commits on a collapsed stem. */
+export interface Badge {
+  key: string;
+  /** Center. */
+  x: number;
+  y: number;
+  width: number;
+  text: string;
+}
 export interface Scene {
   stems: Stem[];
   knots: Knot[];
   sprites: Sprite[];
   grounds: Ground[];
+  badges: Badge[];
+}
+
+export const BADGE_HEIGHT = 14;
+
+/** A collapsed edge's badge, where the technical drawing puts it too. */
+export function collapsedBadge(edge: GraphEdgeJson): Badge {
+  const text =
+    edge.hidden === null
+      ? "…"
+      : edge.hidden > 999
+        ? "999+"
+        : String(edge.hidden);
+  return {
+    key: `${edge.child}>${edge.parent}`,
+    x: edge.from.x,
+    y: edge.from.y + Math.min(18, (edge.to.y - edge.from.y) / 2),
+    width: 8 + text.length * 6,
+    text,
+  };
 }
 
 // The relit sprite atlas (scene/protocol.ts): 2×2 cells, in `kind` order
@@ -294,5 +323,9 @@ export function botanicalScene(graph: GraphJson): Scene {
     grounds.push({ key: node.oid, x: at.x, y: at.y + 6, width: 34 });
   }
 
-  return { stems, knots, sprites, grounds };
+  const badges = graph.edges
+    .filter((edge) => edge.kind === "collapsed")
+    .map(collapsedBadge);
+
+  return { stems, knots, sprites, grounds, badges };
 }

@@ -18,6 +18,14 @@ change configuration or behavior, and the notes say how.
   (about one core of a first-generation Surface Pro); choose Static for an
   always-on display on such a machine.
   ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
+- **The garden is drawn as one scene.** With the Canvas preview, every
+  plant on the hillside is drawn into one canvas instead of one per
+  repository, which is what the planned graphics-accelerated drawing
+  needs. Swaying costs less (about 80% of one core of a first-generation
+  Surface Pro for eight plants, down from 100%), and a full hillside of 64
+  plants now sways instead of stopping. The plant you point at or tab to,
+  and a plant showing a last-known state, hold still.
+  ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
 
 ## 0.3.0-beta.1: renamed, real sky (2026-09-28)
 

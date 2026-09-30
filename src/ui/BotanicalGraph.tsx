@@ -12,8 +12,7 @@ import { useSceneArt, type Channel, type LitArt } from "./scene/client.ts";
 import { animates, FRAME_MS, listenSway } from "./motion.ts";
 import { swaySprites } from "./sway.ts";
 import { blendScenes, TRANSITION_MS, type Frame } from "./transition.ts";
-
-const GROUND_COLOR = "rgba(38, 52, 24, 0.22)";
+import { GROUND_COLOR, PathCache, paintBase, paintSprites } from "./paint.ts";
 
 /**
  * The artwork frame for a scene: when the same repository's scene changes,
@@ -69,6 +68,11 @@ export function BotanicalGraph(
     light?: Channel;
     /** Whether leaves and flowers sway in the wind (the garden, not focus). */
     sway?: boolean;
+    /**
+     * Only the hit and label layer: the garden's scene canvas draws this
+     * plant's art (GardenCanvas.tsx).
+     */
+    artless?: boolean;
   },
 ) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -76,29 +80,20 @@ export function BotanicalGraph(
   const art = sceneArt.state === "ready" ? sceneArt.art : null;
   const scene = useMemo(() => botanicalScene(props.graph), [props.graph]);
   const frame = useSceneFrame(scene, props.graph.id);
-  // Parsed once per path string, not on every pan/zoom/animation frame.
-  const paths = useRef(new Map<string, Path2D>());
+  const paths = useRef(new PathCache());
   const width = props.width ?? graphWidth(props.graph);
   const height = props.height ?? props.graph.size.height;
   const transform = props.transform;
   const top = props.rows?.top ?? -Infinity;
   const bottom = props.rows?.bottom ?? Infinity;
   const sway = props.sway === true;
+  const artless = props.artless === true;
   useEffect(() => {
-    if (props.compositor !== "canvas") return;
+    if (props.compositor !== "canvas" || artless) return;
     const element = canvas.current;
     const ctx = element?.getContext("2d");
     if (!element || !ctx) return;
     if (!art) return;
-    const lit = (color: string) => art.palette[color] ?? color;
-    const path = (d: string) => {
-      let p = paths.current.get(d);
-      if (!p) {
-        p = new Path2D(d);
-        paths.current.set(d, p);
-      }
-      return p;
-    };
     // A hillside plant is shrunk to its place with a CSS transform: draw at
     // the size it is shown, not its layout size, so every frame (and every
     // sway frame) moves no more pixels than the screen shows. Measured when
@@ -122,73 +117,6 @@ export function BotanicalGraph(
         g.scale(values[2] ?? 1, values[2] ?? 1);
       }
     };
-    const paintBase = (g: CanvasRenderingContext2D) => {
-      g.fillStyle = GROUND_COLOR;
-      for (const ground of frame.grounds) {
-        if (!near(ground.y, 10)) continue;
-        g.beginPath();
-        g.ellipse(ground.x, ground.y, ground.width / 2, 5, 0, 0, Math.PI * 2);
-        g.fill();
-      }
-      g.lineCap = "round";
-      for (const stem of frame.stems) {
-        if (stem.bottom < top || stem.top > bottom) continue;
-        g.globalAlpha = stem.alpha;
-        if (stem.dashed) {
-          // Pale under-stroke separates crossings without introducing a junction.
-          g.setLineDash([]);
-          g.strokeStyle = lit(HALO_COLOR);
-          g.lineWidth = stem.width + 2.5;
-          g.stroke(path(stem.halo));
-          g.setLineDash([3, 5]);
-          g.strokeStyle = lit(stem.color);
-          g.lineWidth = stem.width;
-          g.stroke(path(stem.path));
-        } else {
-          g.fillStyle = lit(HALO_COLOR);
-          g.fill(path(stem.halo));
-          g.fillStyle = lit(stem.color);
-          g.fill(path(stem.path));
-        }
-      }
-      g.setLineDash([]);
-      g.fillStyle = lit(KNOT_COLOR);
-      for (const knot of frame.knots) {
-        if (!near(knot.y, knot.r)) continue;
-        g.globalAlpha = knot.alpha;
-        g.beginPath();
-        g.arc(knot.x, knot.y, knot.r, 0, Math.PI * 2);
-        g.fill();
-      }
-      g.globalAlpha = 1;
-    };
-    const paintSprites = (
-      g: CanvasRenderingContext2D,
-      seconds: number | null,
-    ) => {
-      for (const sprite of swaySprites(frame.sprites, seconds)) {
-        if (!near(sprite.y, sprite.size)) continue;
-        const size = sprite.size * sprite.scale;
-        g.globalAlpha = sprite.alpha;
-        g.save();
-        g.translate(sprite.x, sprite.y);
-        g.rotate(sprite.rotate);
-        // A mirrored sprite comes from the mirrored atlas, lit as mirrored.
-        g.drawImage(
-          sprite.flip ? art.spritesMirrored : art.sprites,
-          (sprite.kind % 2) * CELL_SIZE,
-          Math.floor(sprite.kind / 2) * CELL_SIZE,
-          CELL_SIZE,
-          CELL_SIZE,
-          -size / 2,
-          -size / 2,
-          size,
-          size,
-        );
-        g.restore();
-      }
-      g.globalAlpha = 1;
-    };
     const draw = (seconds: number | null) => {
       if (document.hidden) return;
       // Bound backing memory even for tall histories; interaction is vector based.
@@ -208,8 +136,8 @@ export function BotanicalGraph(
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, pixelWidth, pixelHeight);
       place(ctx, ratio);
-      paintBase(ctx);
-      paintSprites(ctx, seconds);
+      paintBase(ctx, frame, art, paths.current, near);
+      paintSprites(ctx, swaySprites(frame.sprites, seconds), art, near);
       ctx.globalAlpha = 1;
       element.dataset.ready = "true";
     };
@@ -245,6 +173,7 @@ export function BotanicalGraph(
     props.compositor,
     art,
     sway,
+    artless,
   ]);
 
   if (sceneArt.state === "failed") return <GraphSvg {...props} />;
@@ -254,7 +183,7 @@ export function BotanicalGraph(
       style={{ width, height }}
       data-compositor={props.compositor}
     >
-      {props.compositor === "canvas" ? (
+      {artless ? null : props.compositor === "canvas" ? (
         <canvas ref={canvas} style={{ width, height }} aria-hidden="true" />
       ) : (
         <svg

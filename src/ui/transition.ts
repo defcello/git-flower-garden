@@ -5,13 +5,15 @@
  * the artwork moves; the interaction layer is always at its final, exact
  * positions. Pure, so every frame is testable.
  */
-import type { Ground, Knot, Scene, Sprite, Stem } from "./botanical.ts";
+import type { Badge, Ground, Knot, Scene, Sprite, Stem } from "./botanical.ts";
 
 export interface Frame {
   stems: (Stem & { alpha: number })[];
   knots: (Knot & { alpha: number })[];
   sprites: (Sprite & { alpha: number; scale: number })[];
   grounds: (Ground & { alpha: number })[];
+  /** Always at their final places, like the hit layer they come from. */
+  badges: Badge[];
 }
 
 export const TRANSITION_MS = 700;
@@ -76,5 +78,5 @@ export function blendScenes(from: Scene | null, to: Scene, t: number): Frame {
       if (!nextSprites.has(sprite.key))
         sprites.unshift({ ...sprite, alpha: 1 - k, scale: 1 });
   }
-  return { stems, knots, sprites, grounds };
+  return { stems, knots, sprites, grounds, badges: to.badges };
 }
