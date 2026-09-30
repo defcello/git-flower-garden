@@ -359,7 +359,7 @@ decision:
   changed canvases on this GPU. Frames arrive on time, so the probe does
   not trip. **Maintainer decision** (2026-09-29): keep 15 fps and accept
   the development machine's limits; scale back in the polish phase (P2-E)
-  if needed. The dedicated monitor's machine is not yet measured.
+  if needed. The dedicated monitor's machine is not yet measured. Merged to `main` on 2026-09-29 (PR #5).
 
 ## Verification
 
