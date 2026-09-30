@@ -9,20 +9,16 @@ import {
 } from "./botanical.ts";
 import { GraphSvg, graphWidth, type GraphSvgProps } from "./GraphSvg.tsx";
 import { useSceneArt, type Channel, type LitArt } from "./scene/client.ts";
+import { animates, FRAME_MS, listenSway } from "./motion.ts";
+import { swaySprites } from "./sway.ts";
 import { blendScenes, TRANSITION_MS, type Frame } from "./transition.ts";
 
 const GROUND_COLOR = "rgba(38, 52, 24, 0.22)";
 
-/** Whether motion is allowed: the OS preference and the app setting. */
-function motionAllowed(): boolean {
-  if (document.documentElement.classList.contains("reduce-motion"))
-    return false;
-  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 /**
  * The artwork frame for a scene: when the same repository's scene changes,
- * a brief transition from the previous one (unless motion is reduced).
+ * a brief transition from the previous one (unless motion is reduced or
+ * the tier is Static), at most at the software tier's frame rate.
  */
 function useSceneFrame(scene: Scene, graphId: string): Frame {
   const shown = useRef<{ scene: Scene; id: string } | null>(null);
@@ -36,14 +32,18 @@ function useSceneFrame(scene: Scene, graphId: string): Frame {
     shown.current = { scene, id: graphId };
     if (!previous || previous.id !== graphId || previous.scene === scene)
       return;
-    // Reduced motion: the new scene shows at once (a stale animation is
-    // ignored because it no longer targets the current scene).
-    if (!motionAllowed()) return;
+    // Reduced motion or Static: the new scene shows at once (a stale
+    // animation is ignored because it no longer targets the current scene).
+    if (!animates()) return;
     const start = performance.now();
     let handle = 0;
+    let drawn = start;
     const step = (now: number) => {
       const t = Math.min(1, (now - start) / TRANSITION_MS);
-      setAnimation(t >= 1 ? null : { from: previous.scene, to: scene, t });
+      if (t >= 1 || now - drawn >= FRAME_MS - 4) {
+        drawn = now;
+        setAnimation(t >= 1 ? null : { from: previous.scene, to: scene, t });
+      }
       if (t < 1) handle = requestAnimationFrame(step);
     };
     handle = requestAnimationFrame(step);
@@ -67,6 +67,8 @@ export function BotanicalGraph(
     compositor: "canvas" | "svg";
     /** Which light the artwork takes: the sky's, or daylight for inspection. */
     light?: Channel;
+    /** Whether leaves and flowers sway in the wind (the garden, not focus). */
+    sway?: boolean;
   },
 ) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -81,6 +83,7 @@ export function BotanicalGraph(
   const transform = props.transform;
   const top = props.rows?.top ?? -Infinity;
   const bottom = props.rows?.bottom ?? Infinity;
+  const sway = props.sway === true;
   useEffect(() => {
     if (props.compositor !== "canvas") return;
     const element = canvas.current;
@@ -96,11 +99,101 @@ export function BotanicalGraph(
       }
       return p;
     };
-    const draw = () => {
+    // A hillside plant is shrunk to its place with a CSS transform: draw at
+    // the size it is shown, not its layout size, so every frame (and every
+    // sway frame) moves no more pixels than the screen shows. Measured when
+    // this effect runs or the window changes, never per sway frame; eighths
+    // keep small changes from reallocating the canvas.
+    const shownScale = () => {
+      const shown = element.getBoundingClientRect().width / width;
+      return shown > 0 ? Math.min(1, Math.ceil(shown * 8) / 8) : 1;
+    };
+    let fit = shownScale();
+    const near = (y: number, reach: number) =>
+      y + reach >= top && y - reach <= bottom;
+    // FocusGraph supplies a controlled translate/scale string, never repository text.
+    const values = transform
+      ?.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi)
+      ?.map(Number);
+    const place = (g: CanvasRenderingContext2D, ratio: number) => {
+      g.setTransform(ratio, 0, 0, ratio, 0, 0);
+      if (values?.length === 3) {
+        g.translate(values[0] ?? 0, values[1] ?? 0);
+        g.scale(values[2] ?? 1, values[2] ?? 1);
+      }
+    };
+    const paintBase = (g: CanvasRenderingContext2D) => {
+      g.fillStyle = GROUND_COLOR;
+      for (const ground of frame.grounds) {
+        if (!near(ground.y, 10)) continue;
+        g.beginPath();
+        g.ellipse(ground.x, ground.y, ground.width / 2, 5, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.lineCap = "round";
+      for (const stem of frame.stems) {
+        if (stem.bottom < top || stem.top > bottom) continue;
+        g.globalAlpha = stem.alpha;
+        if (stem.dashed) {
+          // Pale under-stroke separates crossings without introducing a junction.
+          g.setLineDash([]);
+          g.strokeStyle = lit(HALO_COLOR);
+          g.lineWidth = stem.width + 2.5;
+          g.stroke(path(stem.halo));
+          g.setLineDash([3, 5]);
+          g.strokeStyle = lit(stem.color);
+          g.lineWidth = stem.width;
+          g.stroke(path(stem.path));
+        } else {
+          g.fillStyle = lit(HALO_COLOR);
+          g.fill(path(stem.halo));
+          g.fillStyle = lit(stem.color);
+          g.fill(path(stem.path));
+        }
+      }
+      g.setLineDash([]);
+      g.fillStyle = lit(KNOT_COLOR);
+      for (const knot of frame.knots) {
+        if (!near(knot.y, knot.r)) continue;
+        g.globalAlpha = knot.alpha;
+        g.beginPath();
+        g.arc(knot.x, knot.y, knot.r, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+    };
+    const paintSprites = (
+      g: CanvasRenderingContext2D,
+      seconds: number | null,
+    ) => {
+      for (const sprite of swaySprites(frame.sprites, seconds)) {
+        if (!near(sprite.y, sprite.size)) continue;
+        const size = sprite.size * sprite.scale;
+        g.globalAlpha = sprite.alpha;
+        g.save();
+        g.translate(sprite.x, sprite.y);
+        g.rotate(sprite.rotate);
+        // A mirrored sprite comes from the mirrored atlas, lit as mirrored.
+        g.drawImage(
+          sprite.flip ? art.spritesMirrored : art.sprites,
+          (sprite.kind % 2) * CELL_SIZE,
+          Math.floor(sprite.kind / 2) * CELL_SIZE,
+          CELL_SIZE,
+          CELL_SIZE,
+          -size / 2,
+          -size / 2,
+          size,
+          size,
+        );
+        g.restore();
+      }
+      g.globalAlpha = 1;
+    };
+    const draw = (seconds: number | null) => {
       if (document.hidden) return;
       // Bound backing memory even for tall histories; interaction is vector based.
       const ratio = Math.min(
-        window.devicePixelRatio || 1,
+        (window.devicePixelRatio || 1) * fit,
         2,
         8192 / Math.max(width, height),
         Math.sqrt(4_000_000 / (width * height)),
@@ -114,90 +207,45 @@ export function BotanicalGraph(
       }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, pixelWidth, pixelHeight);
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-      // FocusGraph supplies a controlled translate/scale string, never repository text.
-      const values = transform
-        ?.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi)
-        ?.map(Number);
-      if (values?.length === 3) {
-        ctx.translate(values[0] ?? 0, values[1] ?? 0);
-        ctx.scale(values[2] ?? 1, values[2] ?? 1);
-      }
-      const near = (y: number, reach: number) =>
-        y + reach >= top && y - reach <= bottom;
-      ctx.fillStyle = GROUND_COLOR;
-      for (const ground of frame.grounds) {
-        if (!near(ground.y, 10)) continue;
-        ctx.beginPath();
-        ctx.ellipse(ground.x, ground.y, ground.width / 2, 5, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.lineCap = "round";
-      for (const stem of frame.stems) {
-        if (stem.bottom < top || stem.top > bottom) continue;
-        ctx.globalAlpha = stem.alpha;
-        if (stem.dashed) {
-          // Pale under-stroke separates crossings without introducing a junction.
-          ctx.setLineDash([]);
-          ctx.strokeStyle = lit(HALO_COLOR);
-          ctx.lineWidth = stem.width + 2.5;
-          ctx.stroke(path(stem.halo));
-          ctx.setLineDash([3, 5]);
-          ctx.strokeStyle = lit(stem.color);
-          ctx.lineWidth = stem.width;
-          ctx.stroke(path(stem.path));
-        } else {
-          ctx.fillStyle = lit(HALO_COLOR);
-          ctx.fill(path(stem.halo));
-          ctx.fillStyle = lit(stem.color);
-          ctx.fill(path(stem.path));
-        }
-      }
-      ctx.setLineDash([]);
-      ctx.fillStyle = lit(KNOT_COLOR);
-      for (const knot of frame.knots) {
-        if (!near(knot.y, knot.r)) continue;
-        ctx.globalAlpha = knot.alpha;
-        ctx.beginPath();
-        ctx.arc(knot.x, knot.y, knot.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      for (const sprite of frame.sprites) {
-        if (!near(sprite.y, sprite.size)) continue;
-        const size = sprite.size * sprite.scale;
-        ctx.globalAlpha = sprite.alpha;
-        ctx.save();
-        ctx.translate(sprite.x, sprite.y);
-        ctx.rotate(sprite.rotate);
-        // A mirrored sprite comes from the mirrored atlas, lit as mirrored.
-        ctx.drawImage(
-          sprite.flip ? art.spritesMirrored : art.sprites,
-          (sprite.kind % 2) * CELL_SIZE,
-          Math.floor(sprite.kind / 2) * CELL_SIZE,
-          CELL_SIZE,
-          CELL_SIZE,
-          -size / 2,
-          -size / 2,
-          size,
-          size,
-        );
-        ctx.restore();
-      }
+      place(ctx, ratio);
+      paintBase(ctx);
+      paintSprites(ctx, seconds);
       ctx.globalAlpha = 1;
       element.dataset.ready = "true";
     };
-    // Pan, zoom, animation, and relighting re-run this effect: draw synchronously.
-    draw();
+    // Pan, zoom, animation, and relighting re-run this effect: draw
+    // synchronously. Sway redraws from the shared clock, without React.
+    let seconds: number | null = null;
+    const clock = sway
+      ? listenSway((now) => {
+          seconds = now;
+          draw(now);
+        })
+      : null;
+    seconds = clock?.seconds ?? null;
+    draw(seconds);
     const redraw = () => {
-      draw();
+      fit = shownScale();
+      draw(seconds);
     };
     document.addEventListener("visibilitychange", redraw);
     window.addEventListener("resize", redraw);
     return () => {
+      clock?.stop();
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };
-  }, [frame, top, bottom, width, height, transform, props.compositor, art]);
+  }, [
+    frame,
+    top,
+    bottom,
+    width,
+    height,
+    transform,
+    props.compositor,
+    art,
+    sway,
+  ]);
 
   if (sceneArt.state === "failed") return <GraphSvg {...props} />;
   return (
@@ -222,6 +270,7 @@ export function BotanicalGraph(
                 top={top}
                 bottom={bottom}
                 art={art}
+                sway={sway}
               />
             )}
           </g>
@@ -232,17 +281,31 @@ export function BotanicalGraph(
   );
 }
 
+/** The sway clock as React state, for the SVG compositor's marks. */
+function useSwayClock(enabled: boolean): number | null {
+  const [seconds, setSeconds] = useState<number | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const clock = listenSway(setSeconds);
+    return clock.stop;
+  }, [enabled]);
+  return enabled ? seconds : null;
+}
+
 const BotanicalMarks = memo(function BotanicalMarks({
   frame,
   top,
   bottom,
   art,
+  sway,
 }: {
   frame: Frame;
   top: number;
   bottom: number;
   art: LitArt;
+  sway: boolean;
 }) {
+  const seconds = useSwayClock(sway);
   const near = (y: number, reach: number) =>
     y + reach >= top && y - reach <= bottom;
   const lit = (color: string) => art.palette[color] ?? color;
@@ -299,7 +362,7 @@ const BotanicalMarks = memo(function BotanicalMarks({
           />
         ) : null,
       )}
-      {frame.sprites.map((sprite) => {
+      {swaySprites(frame.sprites, seconds).map((sprite) => {
         if (!near(sprite.y, sprite.size)) return null;
         const size = sprite.size * sprite.scale;
         const degrees = (sprite.rotate * 180) / Math.PI;

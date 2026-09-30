@@ -5,6 +5,20 @@ follows
 [semantic versioning](https://semver.org/); before 1.0, minor versions may
 change configuration or behavior, and the notes say how.
 
+## Unreleased
+
+### Changes
+
+- **The garden sways.** In the garden view, leaves, flowers, and fruit rock
+  gently in a breeze; what you point at, click, or tab to never moves, and
+  the focus view holds still. A new **Drawing** menu chooses Auto,
+  Software (animated at up to 15 frames a second), or Static (nothing
+  moves between lighting changes, the lowest-power choice). Reduced motion
+  stops all motion. Swaying takes noticeable CPU on older computers
+  (about one core of a first-generation Surface Pro); choose Static for an
+  always-on display on such a machine.
+  ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
+
 ## 0.3.0-beta.1: renamed, real sky (2026-09-28)
 
 Install or update from the

@@ -380,3 +380,91 @@ test("more than 64 repositories use the card layout", async ({ page }) => {
     await extra.close();
   }
 });
+
+/** The plant's artwork as an image, for telling whether it moved. */
+async function artwork(page: Page, selector: string) {
+  const canvas = page.locator(`${selector} .botanical-graph canvas`);
+  await expect(canvas).toHaveAttribute("data-ready", "true");
+  return canvas.evaluate((element: HTMLCanvasElement) => element.toDataURL());
+}
+
+/**
+ * Hold the light still (a preview, not the live sky), and wait until the
+ * relit art for it is on screen, so only sway can change the artwork.
+ */
+async function holdLight(page: Page) {
+  await page.getByLabel("Sky", { exact: true }).selectOption("noon");
+  const scene = page.locator(".landscape-scene");
+  await expect
+    .poll(() =>
+      scene.evaluate(
+        (element: HTMLElement) =>
+          element.dataset.artLight !== undefined &&
+          element.dataset.artLight === element.dataset.skyLight,
+      ),
+    )
+    .toBe(true);
+  // Let the plants' art catch up with the scene's.
+  await page.waitForTimeout(300);
+}
+
+/** Whether the artwork changes over half a second (a few sway frames). */
+async function moves(page: Page, selector: string) {
+  const before = await artwork(page, selector);
+  await page.waitForTimeout(500);
+  return (await artwork(page, selector)) !== before;
+}
+
+test("leaves sway in the garden only, hit targets stay put, and Static stands still", async ({
+  page,
+}) => {
+  await openScene(page, small.url, 5);
+  const tour = '[data-plot="tour"]';
+  await expect(page.getByLabel("Drawing", { exact: true })).toHaveValue("auto");
+  const targets = () =>
+    page
+      .locator(`${tour} .node`)
+      .evaluateAll((nodes) =>
+        nodes.map((node) => JSON.stringify(node.getBoundingClientRect())),
+      );
+  const still = await targets();
+  expect(await moves(page, tour)).toBe(true);
+  expect(await targets()).toEqual(still);
+  expect(
+    await page.evaluate(() => document.documentElement.dataset.sway),
+  ).toBeUndefined();
+
+  // The SVG compositor sways the same art.
+  await page.getByLabel("Renderer", { exact: true }).selectOption("svg");
+  const sprites = page.locator(`${tour} .botanical-art g[transform]`);
+  const first = await sprites.first().getAttribute("transform");
+  await page.waitForTimeout(500);
+  expect(await sprites.first().getAttribute("transform")).not.toBe(first);
+  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+
+  // Static draws nothing between lighting changes, and is remembered.
+  await page.getByLabel("Drawing", { exact: true }).selectOption("static");
+  await page.waitForTimeout(200);
+  expect(await moves(page, tour)).toBe(false);
+  await page.reload();
+  await expect(page.getByLabel("Drawing", { exact: true })).toHaveValue(
+    "static",
+  );
+  await holdLight(page);
+  expect(await moves(page, tour)).toBe(false);
+
+  // Reduced motion stills every tier.
+  await page.getByLabel("Drawing", { exact: true }).selectOption("auto");
+  expect(await moves(page, tour)).toBe(true);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.waitForTimeout(200);
+  expect(await moves(page, tour)).toBe(false);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  expect(await moves(page, tour)).toBe(true);
+
+  // The focus view is for reading: its plant holds still.
+  await page.locator(tour).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("main.focus")).toBeVisible();
+  expect(await moves(page, "main.focus")).toBe(false);
+});
