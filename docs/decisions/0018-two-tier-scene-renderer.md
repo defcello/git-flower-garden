@@ -432,12 +432,46 @@ decision:
   both keep the machine's four threads busy (about 250% of one core), now
   mostly relighting sprites. At rest (noon, swaying), GPU and Software
   cost the same, 80–81% of one core, since the landscape does not redraw
-  per frame; the cost is the plants' canvas. **Open in step 4**: plants on
-  the GPU (instanced, relit sprites with sway in the vertex shader, stems,
-  shadows, outline, wilting, and badges), which removes both the
-  per-frame canvas cost and the sprite relights, so looping follows the
-  slider exactly; then the frame-time probe that downgrades a GPU tier
-  missing its budget.
+  per frame; the cost is the plants' canvas.
+- **Step 4, GPU tier: the plants** (2026-09-30). `src/ui/scene/plants-gpu.ts`
+  draws every hillside plant of the `SceneDescription` with WebGL2, back
+  to front, lit each frame by the same shading as the landscape; the
+  shader copy of `shade` now lives once, in `src/ui/scene/gl.ts`, for both.
+  Per plant, in the software tier's order: the drop shadow (a blurred
+  silhouette made once per plant and size; the Sun's offset and fade are
+  uniforms, so light never rebuilds it) or the cyan outline; ground
+  shadows as ellipses; stems and knots, drawn unlit by the shared Canvas
+  painters into a texture that is rebuilt only while the plant grows, and
+  lit in the shader by `stemLight`, which is exactly what `litColor`
+  applies (unit-tested); sprites, instanced from the full-resolution
+  albedo, normal, and translucency maps, a mirrored sprite sampling its
+  cell mirrored with its normals' x negated, as `mirrorCells` does; then
+  the badges, unlit. Wilting is the CSS filter's color matrix in the
+  shader. Sway positions come from `sway.ts` on the CPU, as in Software,
+  rather than a vertex shader, so both tiers move identically; the cost is
+  a small instance upload per frame. Sampling sprites with a LOD bias of
+  −0.75 matches Canvas's high-quality downscale, which trilinear mipmaps
+  alone left visibly softer. With both the landscape and the plants on
+  the GPU the worker lights nothing for the hillside, and the scene shows
+  the requested light at once (`useShownLight`); a lost plant context
+  hands the plants to Software, which asks the worker for sprites again,
+  and takes them back on restore (the context lifecycle is shared,
+  `src/ui/scene/useGpu.ts`). Static and the focus view still use relit
+  sprites. **Verified**: in headless Chromium and on the Surface Pro's HD
+  4000, the two tiers' pictures, compared over 8×8 blocks where plants are
+  drawn and with motion reduced, differ at most by 5.4, 4.2, and 7.8 of
+  255 levels at sunrise, full moon, and noon; knots sit under their hit
+  targets, the hovered plant is outlined in cyan, sway leaves hit targets
+  still, and a lost context hands over both ways, all with the GPU drawing
+  the plants (`tests/e2e/botanical.spec.ts`, `garden-scene.spec.ts`).
+  **Measured** on the Surface Pro (visible Chromium, HD 4000, 1920×1080,
+  percent of one core): looping the day, the scene repaints 56.9 times a
+  second with the GPU (every display frame) against 2.5 in Software, at
+  204% against 248%; at rest with 8 plants swaying, 52% against 83%; with
+  64 plants, 115% against 160%; Static 2–3%. **Open in step 4**: the
+  frame-time probe that downgrades a GPU tier missing its budget (the
+  sway probe still stops sway in either tier), and the frame rate: plants
+  still move at 15 frames a second in both tiers (P2-E).
 
 ## Verification
 

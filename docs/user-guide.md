@@ -221,9 +221,9 @@ and for a plant showing a last-known state (stale or incomplete). The
 
 - **Auto** (the default): GPU when the browser has graphics hardware for
   WebGL2, otherwise Software.
-- **GPU**: the sky and landscape are drawn and relit by the graphics
-  processor, so moving the time of day or looping it is smoother. The
-  plants are still drawn as in Software, for now. Chosen by hand, it also
+- **GPU**: the sky, landscape, and plants are drawn and relit by the
+  graphics processor, so moving the time of day or looping it is smooth,
+  and swaying costs less. Chosen by hand, it also
   runs where WebGL2 exists only in software (slowly). If the graphics
   processor resets, the garden switches to Software until it recovers.
 - **Software**: drawn on the CPU, animating at most 15 frames a second.

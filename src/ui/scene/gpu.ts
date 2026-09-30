@@ -8,13 +8,23 @@
  * Everything is drawn from the same `LightingState` and `view.ts` geometry
  * as the software tier's SceneCanvas.
  */
-import hillAlbedo from "../assets/scene/hill-albedo.png";
-import hillNormal from "../assets/scene/hill-normal.png";
-import hillTranslucency from "../assets/scene/hill-translucency.png";
-import ridgeAlbedo from "../assets/scene/ridge-albedo.png";
-import ridgeNormal from "../assets/scene/ridge-normal.png";
 import type { LightingState } from "../../environment/lighting.ts";
-import { LAYERS, RIM_GAIN, WRAP, type LayerLight } from "./shading.ts";
+import {
+  compile,
+  CONTEXT,
+  LIGHT_UNIFORMS,
+  loadMaps,
+  rendererName,
+  setLight,
+  SHADE_GLSL,
+  TO_CLIP_GLSL,
+  uniforms,
+  uploadMap,
+  type LayerMaps,
+  type Uniforms,
+} from "./gl.ts";
+import { LAYERS, type LayerLight } from "./shading.ts";
+import type { GpuRenderer } from "./useGpu.ts";
 import {
   DESIGN,
   MOON_COLOR,
@@ -108,12 +118,13 @@ const LAYER_VS = `#version 300 es
 uniform vec4 uRect; // x, y, width, height in canvas pixels
 uniform vec2 uResolution;
 out vec2 vUv;
+${TO_CLIP_GLSL}
 void main() {
   vec2 uv = vec2(gl_VertexID == 1 || gl_VertexID == 3 ? 1.0 : 0.0,
                  gl_VertexID >= 2 ? 1.0 : 0.0);
   vUv = uv;
   vec2 p = uRect.xy + uv * uRect.zw;
-  gl_Position = vec4(p / uResolution * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);
+  gl_Position = toClip(p, uResolution);
 }`;
 
 /** `shade` (shading.ts) per pixel, with relight.ts's map decoding. */
@@ -122,132 +133,16 @@ precision highp float;
 uniform sampler2D uAlbedo, uNormal, uTranslucency;
 uniform bool uHasMap;
 uniform bool uFlipX;
-uniform vec3 uSunDir, uSun, uMoonDir, uMoon, uSunFill, uMoonFill, uAmbient, uHorizon;
-uniform float uHaze, uTranslucencyScale, uFill;
-uniform float uLayerHaze, uLayerTranslucency;
+uniform float uLayerHaze, uLayerTranslucency, uLayerFill;
 in vec2 vUv;
 out vec4 color;
-const float WRAP = ${WRAP.toFixed(6)};
-const float RIM_GAIN = ${RIM_GAIN.toFixed(6)};
-float diffuse(vec3 n, vec3 l) { return max(0.0, (dot(n, l) + WRAP) / (1.0 + WRAP)); }
-float through(vec3 n, vec3 l) { return max(0.0, -dot(n, l)); }
+${SHADE_GLSL}
 void main() {
-  vec4 a = texture(uAlbedo, vUv);
-  // cleanAlpha: the image tool's noisy key, snapped at both ends.
-  if (a.a < 8.0 / 255.0) discard;
-  float alpha = a.a >= 240.0 / 255.0 ? 1.0 : a.a;
-  vec3 albedo = pow(a.rgb / a.a, vec3(2.2));
-  vec3 n = texture(uNormal, vUv).rgb * 2.0 - 1.0;
-  if (uFlipX) n.x = -n.x;
-  n = normalize(n);
-  float map = uHasMap
-    ? dot(texture(uTranslucency, vUv).rgb, vec3(0.299, 0.587, 0.114))
-    : uLayerTranslucency;
-  float t = map * uTranslucencyScale;
-  float f = uFill;
-  float sun = diffuse(n, uSunDir) + t * through(n, uSunDir) + f * diffuse(n, uSunFill);
-  float moon = diffuse(n, uMoonDir) + t * through(n, uMoonDir) + f * diffuse(n, uMoonFill);
-  // Sky light from above, a little less on faces turned down.
-  float hemi = 0.75 + 0.25 * n.y;
-  // Backlight catches silhouettes when the light is behind the scene.
-  float edge = 1.0 - max(0.0, n.z);
-  float rim = RIM_GAIN * edge * edge * edge * max(0.0, -uSunDir.z) * max(0.0, uSunDir.y + 0.2);
-  vec3 light = uAmbient * hemi + uSun * (sun + rim) + uMoon * moon;
-  vec3 lit = albedo * light;
-  float h = uLayerHaze * uHaze;
-  lit = lit + (uHorizon * 0.8 - lit) * h;
-  vec3 srgb = pow(clamp(lit, 0.0, 1.0), vec3(1.0 / 2.2));
-  color = vec4(srgb * alpha, alpha);
+  float map = uHasMap ? luminance(texture(uTranslucency, vUv).rgb) : uLayerTranslucency;
+  color = shadeTexel(texture(uAlbedo, vUv), texture(uNormal, vUv).rgb, uFlipX,
+                     map, uLayerFill, uLayerHaze);
+  if (color.a <= 0.0) discard;
 }`;
-
-interface LayerMaps {
-  albedo: ImageBitmap;
-  normal: ImageBitmap;
-  translucency: ImageBitmap | null;
-}
-
-interface Maps {
-  ridge: LayerMaps;
-  hill: LayerMaps;
-}
-
-async function bitmap(url: string, premultiply: boolean): Promise<ImageBitmap> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`${url}: HTTP ${String(response.status)}`);
-  // WebGL ignores its unpack flags for ImageBitmaps: decode as uploaded.
-  // Albedo is premultiplied so filtering never bleeds the transparent key
-  // color; maps are data, never color-managed.
-  return createImageBitmap(await response.blob(), {
-    premultiplyAlpha: premultiply ? "premultiply" : "none",
-    colorSpaceConversion: "none",
-  });
-}
-
-let maps: Promise<Maps> | null = null;
-
-/** The landscape's maps, decoded once per page and kept across lost contexts. */
-function loadMaps(): Promise<Maps> {
-  maps ??= Promise.all([
-    bitmap(ridgeAlbedo, true),
-    bitmap(ridgeNormal, false),
-    bitmap(hillAlbedo, true),
-    bitmap(hillNormal, false),
-    bitmap(hillTranslucency, false),
-  ]).then(([ra, rn, ha, hn, ht]) => ({
-    ridge: { albedo: ra, normal: rn, translucency: null },
-    hill: { albedo: ha, normal: hn, translucency: ht },
-  }));
-  maps.catch(() => {
-    maps = null;
-  });
-  return maps;
-}
-
-function compile(
-  gl: WebGL2RenderingContext,
-  vs: string,
-  fs: string,
-): WebGLProgram {
-  const program = gl.createProgram();
-  for (const [type, source] of [
-    [gl.VERTEX_SHADER, vs],
-    [gl.FRAGMENT_SHADER, fs],
-  ] as const) {
-    const shader = gl.createShader(type);
-    if (shader === null) throw new Error("createShader failed");
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (
-      !(gl.getShaderParameter(shader, gl.COMPILE_STATUS) as boolean) &&
-      !gl.isContextLost()
-    )
-      throw new Error(gl.getShaderInfoLog(shader) ?? "shader compile failed");
-    gl.attachShader(program, shader);
-  }
-  gl.linkProgram(program);
-  if (
-    !(gl.getProgramParameter(program, gl.LINK_STATUS) as boolean) &&
-    !gl.isContextLost()
-  )
-    throw new Error(gl.getProgramInfoLog(program) ?? "link failed");
-  return program;
-}
-
-function upload(gl: WebGL2RenderingContext, image: ImageBitmap): WebGLTexture {
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, image);
-  gl.generateMipmap(gl.TEXTURE_2D);
-  gl.texParameteri(
-    gl.TEXTURE_2D,
-    gl.TEXTURE_MIN_FILTER,
-    gl.LINEAR_MIPMAP_LINEAR,
-  );
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  return texture;
-}
 
 interface LayerTextures {
   albedo: WebGLTexture;
@@ -258,30 +153,7 @@ interface LayerTextures {
   flipX: boolean;
 }
 
-type Uniforms = Record<string, WebGLUniformLocation | null>;
-
-function uniforms(
-  gl: WebGL2RenderingContext,
-  program: WebGLProgram,
-  names: readonly string[],
-): Uniforms {
-  return Object.fromEntries(
-    names.map((name) => [name, gl.getUniformLocation(program, name)]),
-  );
-}
-
-/** Options for the GPU tier's context (ADR 0018, "Choosing a tier"). */
-export const CONTEXT: WebGLContextAttributes = {
-  powerPreference: "low-power",
-  antialias: false,
-  alpha: false,
-  premultipliedAlpha: true,
-  // The landscape is drawn only when the light or size changes, so the
-  // last frame must survive compositing (and can be read back by tests).
-  preserveDrawingBuffer: true,
-};
-
-export class LandscapeGpu {
+export class LandscapeGpu implements GpuRenderer {
   readonly #gl: WebGL2RenderingContext;
   readonly #sky: WebGLProgram;
   readonly #star: WebGLProgram;
@@ -297,10 +169,10 @@ export class LandscapeGpu {
   readonly renderer: string;
 
   /** Null without WebGL2. The caller decided whether software WebGL is acceptable. */
-  static create(canvas: HTMLCanvasElement): LandscapeGpu | null {
-    const gl = canvas.getContext("webgl2", CONTEXT);
+  static readonly create = (canvas: HTMLCanvasElement): LandscapeGpu | null => {
+    const gl = canvas.getContext("webgl2", { ...CONTEXT, alpha: false });
     return gl === null || gl.isContextLost() ? null : new LandscapeGpu(gl);
-  }
+  };
 
   private constructor(gl: WebGL2RenderingContext) {
     this.#gl = gl;
@@ -328,19 +200,10 @@ export class LandscapeGpu {
       "uTranslucency",
       "uHasMap",
       "uFlipX",
-      "uSunDir",
-      "uSun",
-      "uMoonDir",
-      "uMoon",
-      "uSunFill",
-      "uMoonFill",
-      "uAmbient",
-      "uHorizon",
-      "uHaze",
-      "uTranslucencyScale",
-      "uFill",
       "uLayerHaze",
       "uLayerTranslucency",
+      "uLayerFill",
+      ...LIGHT_UNIFORMS,
     ]);
     this.#stars = gl.createBuffer();
     this.#starVao = gl.createVertexArray();
@@ -351,11 +214,7 @@ export class LandscapeGpu {
     gl.vertexAttribPointer(location, 4, gl.FLOAT, false, 0, 0);
     this.#empty = gl.createVertexArray();
     gl.bindVertexArray(null);
-    const info = gl.getExtension("WEBGL_debug_renderer_info");
-    this.renderer =
-      info === null
-        ? String(gl.getParameter(gl.RENDERER))
-        : String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
+    this.renderer = rendererName(gl);
   }
 
   /** Upload the ridge and hill maps; until then, `draw` shows the sky alone. */
@@ -368,9 +227,10 @@ export class LandscapeGpu {
       light: LayerLight,
       flipX: boolean,
     ): LayerTextures => ({
-      albedo: upload(gl, m.albedo),
-      normal: upload(gl, m.normal),
-      translucency: m.translucency === null ? null : upload(gl, m.translucency),
+      albedo: uploadMap(gl, m.albedo),
+      normal: uploadMap(gl, m.normal),
+      translucency:
+        m.translucency === null ? null : uploadMap(gl, m.translucency),
       light,
       flipX,
     });
@@ -462,25 +322,11 @@ export class LandscapeGpu {
       gl.uniform1i(u.uAlbedo ?? null, 0);
       gl.uniform1i(u.uNormal ?? null, 1);
       gl.uniform1i(u.uTranslucency ?? null, 2);
-      gl.uniform3f(u.uSunDir ?? null, p.sunDir.x, p.sunDir.y, p.sunDir.z);
-      gl.uniform3fv(u.uSun ?? null, p.sun);
-      gl.uniform3f(u.uMoonDir ?? null, p.moonDir.x, p.moonDir.y, p.moonDir.z);
-      gl.uniform3fv(u.uMoon ?? null, p.moon);
-      gl.uniform3f(u.uSunFill ?? null, p.sunFill.x, p.sunFill.y, p.sunFill.z);
-      gl.uniform3f(
-        u.uMoonFill ?? null,
-        p.moonFill.x,
-        p.moonFill.y,
-        p.moonFill.z,
-      );
-      gl.uniform3fv(u.uAmbient ?? null, p.ambient);
-      gl.uniform3fv(u.uHorizon ?? null, p.horizon);
-      gl.uniform1f(u.uHaze ?? null, p.haze);
-      gl.uniform1f(u.uTranslucencyScale ?? null, p.translucency);
+      setLight(gl, u, p);
       for (const layer of layers) {
         gl.uniform1f(u.uLayerHaze ?? null, layer.light.haze);
         gl.uniform1f(u.uLayerTranslucency ?? null, layer.light.translucency);
-        gl.uniform1f(u.uFill ?? null, layer.light.fill ? p.fill : 0);
+        gl.uniform1f(u.uLayerFill ?? null, layer.light.fill ? 1 : 0);
         gl.uniform1i(u.uHasMap ?? null, layer.translucency === null ? 0 : 1);
         gl.uniform1i(u.uFlipX ?? null, layer.flipX ? 1 : 0);
         gl.activeTexture(gl.TEXTURE0);

@@ -3,7 +3,8 @@
  * 3), on two channels:
  *
  * - "scene": the whole landscape and the hillside plants, lit by the
- *   current sky; only the plants when the GPU tier draws the landscape;
+ *   current sky; only the plants' sprites when the GPU tier draws the
+ *   landscape, and nothing when it draws the plants too;
  * - "inspection": the sprites alone, lit once by `DAYTIME`, for the focus
  *   view's pale inspection card, where a dusk- or moonlit plant would be
  *   dark and hard to read.
@@ -228,12 +229,32 @@ function post(channel: Channel, next: Request): void {
 }
 
 /**
- * Ask for the scene lit for `light`; a no-op when that light is current or
- * pending. With `spritesOnly` (the GPU tier lights the landscape itself),
- * the worker lights only the plants' sprites, several times faster.
+ * What the worker lights for the scene: everything; only the sprites (the
+ * GPU tier lights the landscape itself, several times faster); or nothing
+ * (the GPU tier lights the plants too).
  */
-export function requestLight(light: LightingState, spritesOnly = false): void {
-  request("scene", light, spritesOnly);
+export type Needs = "all" | "sprites" | "none";
+
+/** The light shown when nothing waits for the worker (`Needs` "none"). */
+let direct: LightingState | null = null;
+
+/**
+ * Ask for the scene lit for `light`; a no-op when that light is current or
+ * pending. With nothing to light in the worker, `light` is shown at once.
+ */
+export function requestLight(light: LightingState, needs: Needs = "all"): void {
+  if (needs === "none") {
+    if (direct !== light) {
+      direct = light;
+      for (const listener of listeners) listener();
+    }
+    return;
+  }
+  if (direct !== null) {
+    direct = null;
+    for (const listener of listeners) listener();
+  }
+  request("scene", light, needs === "sprites");
 }
 
 function subscribe(listener: () => void) {
@@ -255,9 +276,28 @@ export function useSceneArt(channel: Channel = "scene"): SceneArt {
 /**
  * The lighting the scene shows: the state the current art was lit for, so
  * the sky, shadows, and relit art change together, in one frame. Until art
- * is ready (or when it failed), the requested state.
+ * is ready (or when it failed), the requested state; when the GPU tier
+ * lights everything, the requested state at once.
  */
 export function useShownLight(requested: LightingState): LightingState {
   const scene = useSceneArt();
-  return scene.state === "ready" ? scene.art.light : requested;
+  const shown = useSyncExternalStore(subscribe, () => direct);
+  return shown ?? (scene.state === "ready" ? scene.art.light : requested);
+}
+
+/**
+ * Whether the GPU tier is drawing the hillside's plants now: then nothing
+ * else on the hillside needs relit sprites from the worker. Set by the
+ * garden canvas (GardenCanvas.tsx), read by the landscape (SceneCanvas.tsx).
+ */
+let plantsOnGpu = false;
+
+export function setPlantsOnGpu(on: boolean): void {
+  if (plantsOnGpu === on) return;
+  plantsOnGpu = on;
+  for (const listener of listeners) listener();
+}
+
+export function usePlantsOnGpu(): boolean {
+  return useSyncExternalStore(subscribe, () => plantsOnGpu);
 }

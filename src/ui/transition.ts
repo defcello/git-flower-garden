@@ -80,3 +80,15 @@ export function blendScenes(from: Scene | null, to: Scene, t: number): Frame {
   }
   return { stems, knots, sprites, grounds, badges: to.badges };
 }
+
+const settled = new WeakMap<Scene, Frame>();
+
+/** A scene at rest, as a frame: computed once per scene and shared. */
+export function settledFrame(scene: Scene): Frame {
+  let frame = settled.get(scene);
+  if (!frame) {
+    frame = blendScenes(null, scene, 1);
+    settled.set(scene, frame);
+  }
+  return frame;
+}

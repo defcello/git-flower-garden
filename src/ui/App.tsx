@@ -333,7 +333,7 @@ export function App() {
               : undefined
           }
         >
-          {sceneDrawn && <GardenCanvas plants={plants} />}
+          {sceneDrawn && <GardenCanvas plants={plants} light={shownLight} />}
           {repos.map((repo, index) => (
             <Plot
               renderer={renderer}

@@ -383,6 +383,159 @@ test("the GPU tier draws the landscape like Software, and hands over when its co
   await expect(scene).toHaveAttribute("data-tier", "software");
 });
 
+test("the GPU tier draws the plants like Software, lit at once", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  // Nothing sways, so both tiers draw the same pose.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
+  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+  const scene = page.locator(".landscape-scene");
+  const garden = page.locator(".garden-canvas");
+  const drawing = page.getByLabel("Drawing", { exact: true });
+  const sky = page.getByLabel("Sky", { exact: true });
+  // Software by name: on graphics hardware (--headed), Auto is the GPU.
+  await drawing.selectOption("software");
+  await expect(garden).toHaveAttribute("data-tier", "software");
+  /** Wait until the landscape and the plants both show `preview`'s light. */
+  const keys: Record<string, string> = {};
+  const shows = async (preview: string, before: string) => {
+    const shown = () =>
+      page.evaluate(() => {
+        const land = document.querySelector<HTMLElement>(".landscape-scene");
+        const plants = document.querySelector<HTMLElement>(
+          '.garden-canvas[data-ready="true"]',
+        );
+        const key = land?.dataset.skyLight ?? "";
+        return land?.dataset.lit === "true" && plants?.dataset.artLight === key
+          ? key
+          : "";
+      });
+    await expect
+      .poll(async () => {
+        const key = await shown();
+        return keys[preview] === undefined
+          ? key !== "" && key !== before
+          : key === keys[preview];
+      })
+      .toBe(true);
+    keys[preview] ??= (await scene.getAttribute("data-sky-light")) ?? "";
+  };
+  /** The scene with its plants, as a picture, kept in the page by name. */
+  const capture = (name: string) =>
+    page.evaluate((key) => {
+      const land =
+        document.querySelector<HTMLCanvasElement>(".landscape-scene");
+      const plants =
+        document.querySelector<HTMLCanvasElement>(".garden-canvas");
+      if (!land || !plants) throw new Error("no canvases");
+      const copy = document.createElement("canvas");
+      copy.width = plants.width;
+      copy.height = plants.height;
+      const g = copy.getContext("2d");
+      if (!g) throw new Error("no 2d");
+      g.drawImage(plants, 0, 0);
+      const alpha = g.getImageData(0, 0, copy.width, copy.height).data;
+      g.drawImage(land, 0, 0, copy.width, copy.height);
+      g.drawImage(plants, 0, 0);
+      const pictures = window as unknown as Record<
+        string,
+        { rgba: Uint8ClampedArray; alpha: Uint8ClampedArray; width: number }
+      >;
+      pictures[key] = {
+        rgba: g.getImageData(0, 0, copy.width, copy.height).data,
+        alpha,
+        width: copy.width,
+      };
+    }, name);
+  /**
+   * Over 8×8 blocks where either tier drew a plant, the largest difference
+   * of a block's mean color. Blocks, not pixels: sprites a few dozen pixels
+   * across are resampled differently (mipmaps on the GPU, Canvas's
+   * high-quality downscale in Software), which moves single pixels but not
+   * what a viewer sees.
+   */
+  const differs = (a: string, b: string) =>
+    page.evaluate(
+      ([a, b]) => {
+        const pictures = window as unknown as Record<
+          string,
+          { rgba: Uint8ClampedArray; alpha: Uint8ClampedArray; width: number }
+        >;
+        const x = pictures[a];
+        const y = pictures[b];
+        if (!x || !y) throw new Error("missing picture");
+        const width = x.width;
+        const height = x.rgba.length / 4 / width;
+        const B = 8;
+        let blocks = 0;
+        let worst = 0;
+        for (let by = 0; by + B <= height; by += B)
+          for (let bx = 0; bx + B <= width; bx += B) {
+            let plant = false;
+            const sum = [0, 0, 0, 0, 0, 0];
+            for (let j = 0; j < B; j++)
+              for (let i = 0; i < B; i++) {
+                const o = ((by + j) * width + bx + i) * 4;
+                if ((x.alpha[o + 3] ?? 0) > 64 || (y.alpha[o + 3] ?? 0) > 64)
+                  plant = true;
+                for (let c = 0; c < 3; c++) {
+                  sum[c] = (sum[c] ?? 0) + (x.rgba[o + c] ?? 0);
+                  sum[c + 3] = (sum[c + 3] ?? 0) + (y.rgba[o + c] ?? 0);
+                }
+              }
+            if (!plant) continue;
+            blocks++;
+            for (let c = 0; c < 3; c++)
+              worst = Math.max(
+                worst,
+                Math.abs((sum[c] ?? 0) - (sum[c + 3] ?? 0)) / (B * B),
+              );
+          }
+        return { blocks, worst };
+      },
+      [a, b] as const,
+    );
+
+  const cases = ["sunrise", "full-moon", "noon"];
+  let before = (await scene.getAttribute("data-sky-light")) ?? "";
+  for (const preview of cases) {
+    await sky.selectOption(preview);
+    await shows(preview, before);
+    before = keys[preview] ?? "";
+    await capture(`software-${preview}`);
+  }
+  await drawing.selectOption("gpu");
+  await expect(garden).toHaveAttribute("data-tier", "gpu");
+  await expect(scene).toHaveAttribute("data-tier", "gpu");
+  for (const preview of cases) {
+    await sky.selectOption(preview);
+    await shows(preview, "");
+    await capture(`gpu-${preview}`);
+    await page.screenshot({
+      path: testInfo.outputPath(`plants-${preview}-gpu.png`),
+    });
+    const { blocks, worst } = await differs(
+      `software-${preview}`,
+      `gpu-${preview}`,
+    );
+    testInfo.annotations.push({
+      type: "parity",
+      description: `${preview}: ${String(blocks)} plant blocks, worst ${worst.toFixed(1)} levels`,
+    });
+    expect(blocks).toBeGreaterThan(100);
+    expect(worst, preview).toBeLessThan(16);
+  }
+  await drawing.selectOption("software");
+  await sky.selectOption("noon");
+  await page.screenshot({
+    path: testInfo.outputPath("plants-noon-software.png"),
+  });
+});
+
 test("loop plays the day round, panels turn dark at night, and the top bar and notes never overlap", async ({
   page,
 }) => {

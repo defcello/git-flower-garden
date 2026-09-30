@@ -13,14 +13,18 @@
 import { useEffect, useRef, useState } from "react";
 import type { LightingState } from "../environment/lighting.ts";
 import { gpuSupport, useTier } from "./motion.ts";
+import { fitCanvas } from "./paint.ts";
 import {
   requestLight,
+  usePlantsOnGpu,
   useSceneArt,
+  useShownLight,
   type LitArt,
   type SceneArt,
 } from "./scene/client.ts";
 import { LandscapeGpu } from "./scene/gpu.ts";
 import { resolveTier } from "./scene/tier.ts";
+import { useGpu } from "./scene/useGpu.ts";
 import {
   DESIGN,
   lightKey,
@@ -77,7 +81,7 @@ function draw(
 ): void {
   const g = element.getContext("2d", { alpha: false });
   if (!g) return;
-  fit(element);
+  fitCanvas(element);
   const W = element.width;
   const H = element.height;
   const t = transform(W, H);
@@ -133,14 +137,15 @@ function draw(
     for (const layer of [art.ridge, art.hill])
       if (layer) g.drawImage(layer, t.ox, t.oy, w, h);
   }
-  mark(element, state, art, lit);
+  mark(element, state, art?.key, lit);
 }
 
 /** Test and diagnostic attributes shared by both tiers. */
 function mark(
   element: HTMLCanvasElement,
   state: LightingState,
-  art: LitArt | null,
+  /** The light the art on screen was lit for; none before it exists. */
+  artKey: string | undefined,
   lit: boolean,
 ): void {
   const sky = skyBodies(transform(element.width, element.height), state);
@@ -150,19 +155,7 @@ function mark(
   element.dataset.lit = String(lit);
   // For tests: the light the sky was drawn for, and the light of the art.
   element.dataset.skyLight = lightKey(sceneLight(state));
-  if (art) element.dataset.artLight = art.key;
-}
-
-/** Size the backing store to the element at the device pixel ratio, capped at 2. */
-function fit(element: HTMLCanvasElement): void {
-  const ratio = Math.min(window.devicePixelRatio || 1, 2);
-  // The canvas fills the 16:9 stage (styles.css), so nothing is cropped.
-  const W = Math.max(1, Math.round(element.clientWidth * ratio));
-  const H = Math.max(1, Math.round(element.clientHeight * ratio));
-  if (element.width !== W || element.height !== H) {
-    element.width = W;
-    element.height = H;
-  }
+  if (artKey !== undefined) element.dataset.artLight = artKey;
 }
 
 export function SceneCanvas({ state }: { state: LightingState }) {
@@ -174,21 +167,23 @@ export function SceneCanvas({ state }: { state: LightingState }) {
   // Static draws with Canvas 2D, like Software, but never animates.
   const wantsGpu = !failed && resolveTier(choice, gpuSupport()) === "gpu";
   const gpu = wantsGpu && !lost;
+  const plantsOnGpu = usePlantsOnGpu();
   const scene = useSceneArt();
   const art = scene.state === "ready" ? scene.art : null;
 
   useEffect(() => {
-    requestLight(state, gpu);
-  }, [state, gpu]);
+    requestLight(state, gpu ? (plantsOnGpu ? "none" : "sprites") : "all");
+  }, [state, gpu, plantsOnGpu]);
 
   // Draw the sky for the light the art was lit for, never ahead of it: the
   // canvas repaints only when a whole frame (sky and relit layers) is ready.
-  const shown = art?.light ?? state;
+  const shown = useShownLight(state);
   return (
     <>
       {wantsGpu && (
         <GpuCanvas
           shown={shown}
+          selfLit={plantsOnGpu}
           art={art}
           scene={scene}
           hidden={lost}
@@ -237,13 +232,10 @@ function SoftwareCanvas({
   );
 }
 
-/**
- * The GPU tier's landscape. It owns its WebGL2 context: when the context is
- * lost it reports `onLost(true)` and stays mounted, hidden, to hear it
- * restored; any failure to start reports `onFail`, and Software takes over.
- */
+/** The GPU tier's landscape, on its own WebGL2 context (scene/useGpu.ts). */
 function GpuCanvas({
   shown,
+  selfLit,
   art,
   scene,
   hidden,
@@ -251,6 +243,8 @@ function GpuCanvas({
   onFail,
 }: {
   shown: LightingState;
+  /** The plants are on the GPU too: nothing waits for the worker. */
+  selfLit: boolean;
   art: LitArt | null;
   scene: SceneArt;
   hidden: boolean;
@@ -258,59 +252,11 @@ function GpuCanvas({
   onLost: (lost: boolean) => void;
   onFail: (failed: true) => void;
 }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const renderer = useRef<LandscapeGpu | null>(null);
-  /** Bumped when a renderer is built or its layers arrive: time to redraw. */
-  const [version, setVersion] = useState(0);
-
-  useEffect(() => {
-    const element = canvas.current;
-    if (!element) return;
-    let alive = true;
-    const build = () => {
-      try {
-        const next = LandscapeGpu.create(element);
-        if (next === null) {
-          onFail(true);
-          return;
-        }
-        renderer.current = next;
-        element.dataset.renderer = next.renderer;
-        setVersion((v) => v + 1);
-        next.load().then(
-          () => {
-            if (alive && renderer.current === next) setVersion((v) => v + 1);
-          },
-          () => {
-            if (alive) onFail(true);
-          },
-        );
-      } catch {
-        onFail(true);
-      }
-    };
-    const lost = (event: Event) => {
-      // Without this the context is never restored.
-      event.preventDefault();
-      renderer.current = null;
-      onLost(true);
-    };
-    const restored = () => {
-      build();
-      onLost(false);
-    };
-    element.addEventListener("webglcontextlost", lost);
-    element.addEventListener("webglcontextrestored", restored);
-    build();
-    return () => {
-      alive = false;
-      element.removeEventListener("webglcontextlost", lost);
-      element.removeEventListener("webglcontextrestored", restored);
-      // Free the GPU's memory now, not when the element is collected.
-      renderer.current?.dispose();
-      renderer.current = null;
-    };
-  }, [onLost, onFail]);
+  const { canvas, renderer, version } = useGpu(
+    LandscapeGpu.create,
+    onLost,
+    onFail,
+  );
 
   useEffect(() => {
     const element = canvas.current;
@@ -318,9 +264,15 @@ function GpuCanvas({
     const redraw = () => {
       const gpu = renderer.current;
       if (document.hidden || gpu === null) return;
-      fit(element);
+      fitCanvas(element);
       const lit = gpu.draw(shown);
-      mark(element, shown, art, lit);
+      // With the plants on the GPU too, everything is lit for `shown`.
+      mark(
+        element,
+        shown,
+        selfLit ? lightKey(sceneLight(shown)) : art?.key,
+        lit,
+      );
     };
     redraw();
     document.addEventListener("visibilitychange", redraw);
@@ -329,7 +281,7 @@ function GpuCanvas({
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };
-  }, [shown, art, hidden, version]);
+  }, [shown, selfLit, art, hidden, canvas, renderer, version]);
 
   return (
     <canvas
