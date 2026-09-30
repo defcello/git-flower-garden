@@ -210,6 +210,24 @@ full moon, or polar night, which sets the slider, date, and place. Any
 chosen time is labelled **Sky preview** and is never taken for live
 conditions.
 
+### Motion
+
+In the garden view, leaves, flowers, and fruit sway gently in a breeze.
+Only the artwork moves: what you point at, click, or tab to stays exactly
+where it was. The focus view holds its plant still, for reading. The
+**Drawing** menu (garden view) chooses how the garden is drawn:
+
+- **Auto** (the default): the best drawing this browser supports. Today
+  that is Software; a graphics-accelerated tier is planned.
+- **Software**: drawn on the CPU, animating at most 15 frames a second.
+  If the computer cannot keep up, the sway stops for the rest of the visit.
+- **Static**: nothing moves between lighting changes, not even new growth.
+  The lowest-power choice for an always-on display.
+
+The choice is remembered in this browser. Your operating system's reduce
+motion setting, or `display.reducedMotion`, stops all motion whatever the
+choice. Nothing is drawn while the page is hidden.
+
 ## Authentication troubleshooting
 
 git-flower-garden uses your existing Git setup (credential helpers, SSH agent, and

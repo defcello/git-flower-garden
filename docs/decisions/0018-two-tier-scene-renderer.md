@@ -309,9 +309,9 @@ decision:
   2-second bar. The 2017 reference machine (Core m3) was not measured
   separately; the focus
   view's 2,000-commit timings match or beat the previous build on the same
-  machine. **Open in step 3**: sway, the frame-rate cap, the View-menu tier
-  choice (Auto, GPU, Software, Static), and a `SceneDescription` shared with the GPU tier (plants are still drawn
-  per plot).
+  machine. **Open in step 3**: a `SceneDescription` shared with the GPU
+  tier (plants are still drawn per plot). Sway, the frame-rate cap, and the
+  tier choice followed on 2026-09-29 (below).
   **Maintainer review of the two decisions** (2026-09-28): daylight in the
   focus view stays for daylight hours; after civil dusk the panels over the
   scene, the focus view included, turn dark (its plant stays daylit).
@@ -331,6 +331,35 @@ decision:
   left out. An inlined `shade` kernel was no faster than the function (the
   engine inlines it) and was dropped. Smooth looping needs the GPU tier
   (step 4).
+- **Step 3, software tier: sway, frame-rate cap, and tier choice**
+  (2026-09-29). Leaves, flowers, and fruit rock up to about 3.4° about the
+  point where they meet their stem (`src/ui/sway.ts`, pure and tested): a
+  slow breeze crossing the garden plus a seeded rhythm per sprite, so
+  neighbors never move in lockstep. Stems, knots, and every hit target stay
+  put. Sway is for the garden view only; the focus view holds still for
+  reading. One shared clock (`src/ui/motion.ts`) drives every plant at 15
+  fps, the software tier's cap, from a timer that asks for one animation
+  frame per drawn frame; growth transitions follow the same cap. Nothing
+  moves while the page is hidden, under reduced motion, or in Static. The
+  frame-time probe stops sway for the visit when the median of 30 frame
+  gaps runs past 1.5 frames. The View controls gain **Drawing**: Auto,
+  Software, Static, remembered per browser; GPU joins in step 4, and
+  until then Auto means Software. Hillside plant canvases are now drawn at
+  the size they are shown (CSS scales them into place), not their layout
+  size. **Measured** on the Surface Pro in a visible Chromium window using
+  the Intel HD 4000 (Mesa), the Pages demo's eight plants at 1920×1080,
+  over 20 s: Static, about 0% of the main thread and 0–5% of one core for
+  the whole browser; Software at 15 fps, about 18% of the main thread and
+  about 100% of one core, mostly in the GPU process. The cost scales with
+  the frame rate (8 fps: about 80%; 5 fps: about 50%) and hardly with what
+  is drawn: clearing the plant canvases each frame and drawing nothing cost
+  the same, and removing the backdrop blur, plant filters, sky canvas, or
+  top bar, drawing canvases at shown size, caching stems, or forcing CPU
+  canvases saved 20 points at most. It is Chromium's per-frame cost for
+  changed canvases on this GPU. Frames arrive on time, so the probe does
+  not trip. **Maintainer decision** (2026-09-29): keep 15 fps and accept
+  the development machine's limits; scale back in the polish phase (P2-E)
+  if needed. The dedicated monitor's machine is not yet measured.
 
 ## Verification
 

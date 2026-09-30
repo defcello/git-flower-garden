@@ -27,6 +27,7 @@ import {
   STATE_TEXT,
 } from "./format.ts";
 import { GraphSvg, graphWidth } from "./GraphSvg.tsx";
+import { setTier, TIERS, useTier, type Tier } from "./motion.ts";
 import {
   HILLSIDE_SLOTS,
   hillsideSlots,
@@ -198,6 +199,7 @@ export function App() {
               <option value="svg">Garden preview · SVG</option>
             </select>
           </label>
+          {renderer !== "technical" && <TierControl />}
           {renderer !== "technical" && (
             <SkyControls
               setting={skySetting}
@@ -573,6 +575,7 @@ function Plot({
                 selectedOid={selectedOid}
                 onHover={slot ? noHover : onHover}
                 onSelect={slot ? onFocus : onSelect}
+                sway
               />
             </div>
           )}
@@ -624,6 +627,39 @@ function PlantMarker({
         </span>
       )}
     </div>
+  );
+}
+
+const TIER_NAMES: Record<Tier, string> = {
+  auto: "Auto",
+  software: "Software",
+  static: "Static",
+};
+
+/**
+ * How the garden is drawn (ADR 0018, "Choosing a tier"): Auto, Software
+ * (animated at a capped frame rate), or Static (no motion between lighting
+ * changes). The GPU tier joins the list in step 4.
+ */
+function TierControl() {
+  const tier = useTier();
+  return (
+    <label className="preview-control">
+      Drawing
+      <select
+        aria-label="Drawing"
+        value={tier}
+        onChange={(event) => {
+          setTier(event.target.value as Tier);
+        }}
+      >
+        {TIERS.map((value) => (
+          <option key={value} value={value}>
+            {TIER_NAMES[value]}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
