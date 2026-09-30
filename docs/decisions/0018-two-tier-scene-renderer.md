@@ -398,7 +398,7 @@ decision:
   and 2% in Static. Headless, the canvas's script time is about 2 ms a
   frame for 8 plants and 9 ms for 64. Most of the remaining cost is still
   Chromium's handling of a changed canvas each frame, for the GPU tier to
-  remove.
+  remove. Merged to `main` on 2026-09-30 (PR #6).
 
 ## Verification
 
