@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { GraphJson, GraphNodeJson } from "../api/types.ts";
+import { BADGE_HEIGHT, collapsedBadge } from "./botanical.ts";
 import { edgePath } from "./edge-path.ts";
 import { hiddenText, shortOid } from "./format.ts";
 
@@ -112,14 +113,7 @@ const GraphMarks = memo(function GraphMarks(
       {edges
         .filter((e) => e.kind === "collapsed")
         .map((e) => {
-          const y = e.from.y + Math.min(18, (e.to.y - e.from.y) / 2);
-          const count =
-            e.hidden === null
-              ? "…"
-              : e.hidden > 999
-                ? "999+"
-                : String(e.hidden);
-          const w = 8 + count.length * 6;
+          const badge = collapsedBadge(e);
           return (
             <g
               key={`badge-${e.child}-${e.parent}`}
@@ -128,14 +122,14 @@ const GraphMarks = memo(function GraphMarks(
             >
               <title>{hiddenText(e.hidden)}</title>
               <rect
-                x={e.from.x - w / 2}
-                y={y - 7}
-                width={w}
-                height={14}
-                rx={7}
+                x={badge.x - badge.width / 2}
+                y={badge.y - BADGE_HEIGHT / 2}
+                width={badge.width}
+                height={BADGE_HEIGHT}
+                rx={BADGE_HEIGHT / 2}
               />
-              <text x={e.from.x} y={y + 3.5}>
-                {count}
+              <text x={badge.x} y={badge.y + 3.5}>
+                {badge.text}
               </text>
             </g>
           );

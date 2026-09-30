@@ -214,7 +214,9 @@ conditions.
 
 In the garden view, leaves, flowers, and fruit sway gently in a breeze.
 Only the artwork moves: what you point at, click, or tab to stays exactly
-where it was. The focus view holds its plant still, for reading. The
+where it was. The focus view holds its plant still, for reading, and so
+does the garden for the plant you point at or tab to while it is outlined,
+and for a plant showing a last-known state (stale or incomplete). The
 **Drawing** menu (garden view) chooses how the garden is drawn:
 
 - **Auto** (the default): the best drawing this browser supports. Today
@@ -328,8 +330,8 @@ text. See [SECURITY.md](../SECURITY.md) to report a problem.
 ## Known limitations
 
 - The garden view is a preview. Its lighting is recomputed every minute or two
-  rather than continuously, nothing sways yet, and shadows are simple.
-  Weather is not built yet.
+  rather than continuously, and shadows are simple. Weather is not built
+  yet.
 - There is no "retry now" button for a failing remote; it retries on its own
   with backoff (at most 15 minutes).
 - For a local repository with monitored `remotes`, remote *tags* come from the

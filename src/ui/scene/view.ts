@@ -207,23 +207,43 @@ export function litColor(hex: string, p: LightParams): string {
  */
 export const DAYTIME: LightingState = lightingState(previewSnapshot("noon"));
 
+export interface PlantShadow {
+  /** Offset and blur (as CSS drop-shadow), in the plant's own pixels. */
+  x: number;
+  y: number;
+  blur: number;
+  alpha: number;
+}
+
+/** The shadow's color, without its alpha. */
+export const PLANT_SHADOW_RGB = "21 45 23";
+
 /**
- * CSS custom properties for the plants' drop shadow: cast away from the
- * Sun, longer as it sinks, and gone once it is down. Decorative; the
- * realistic cast shadows of roadmap P2-C replace it.
+ * The plants' drop shadow: cast away from the Sun, longer as it sinks, and
+ * gone once it is down. Decorative; the realistic cast shadows of roadmap
+ * P2-C replace it.
  */
-export function plantShadowStyle(state: LightingState): Record<string, string> {
+export function plantShadow(state: LightingState): PlantShadow | null {
   const s = state.shadow;
-  if (s === null)
-    return { "--shadow-x": "0px", "--shadow-y": "0px", "--shadow-alpha": "0" };
+  if (s === null) return null;
   const length = Math.min(s.length, 3);
   // Toward the viewer (z) reads as down the slope, foreshortened.
-  const x = s.x * length * 6;
-  const y = 3 + Math.max(0, s.z) * length * 3;
-  const alpha = 0.22 * Math.min(1, state.sun.intensity * 1.5);
   return {
-    "--shadow-x": `${x.toFixed(1)}px`,
-    "--shadow-y": `${y.toFixed(1)}px`,
-    "--shadow-alpha": alpha.toFixed(3),
+    x: s.x * length * 6,
+    y: 3 + Math.max(0, s.z) * length * 3,
+    blur: 7,
+    alpha: 0.22 * Math.min(1, state.sun.intensity * 1.5),
+  };
+}
+
+/** CSS custom properties for the plants' drop shadow (styles.css .plant). */
+export function plantShadowStyle(state: LightingState): Record<string, string> {
+  const shadow = plantShadow(state);
+  if (shadow === null)
+    return { "--shadow-x": "0px", "--shadow-y": "0px", "--shadow-alpha": "0" };
+  return {
+    "--shadow-x": `${shadow.x.toFixed(1)}px`,
+    "--shadow-y": `${shadow.y.toFixed(1)}px`,
+    "--shadow-alpha": shadow.alpha.toFixed(3),
   };
 }

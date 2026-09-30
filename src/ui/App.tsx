@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -34,6 +35,8 @@ import {
   type HillsideSlot,
 } from "./hillside.ts";
 import { SceneCanvas } from "./SceneCanvas.tsx";
+import { GardenCanvas } from "./GardenCanvas.tsx";
+import type { PlantInput } from "./scene/description.ts";
 import { useShownLight } from "./scene/client.ts";
 import { SkyControls } from "./SkyControls.tsx";
 import { DAYTIME, DESIGN, plantShadowStyle } from "./scene/view.ts";
@@ -60,6 +63,8 @@ interface Hover {
 const PLOT_PADDING = 16;
 export const FOCUS_BUTTON = 44;
 
+const NO_REPOSITORIES: RepositoryStatusJson[] = [];
+
 export function App() {
   const { repositories, graphs, connectionError, fetchedAt } = useGardenData();
   // The technical view stays the default until the garden is accepted; a
@@ -73,7 +78,7 @@ export function App() {
   const [hover, setHover] = useState<Hover | null>(null);
   const gardenReturn = useRef<{ scrollY: number; plotId: string } | null>(null);
 
-  const repos = repositories?.repositories ?? [];
+  const repos = repositories?.repositories ?? NO_REPOSITORIES;
   const timeZone = repositories?.display.timeZone ?? "UTC";
   const focused = repos.find((r) => r.id === focusedId);
   const environment = repositories?.display.environment ?? null;
@@ -86,6 +91,23 @@ export function App() {
   const sceneMode =
     renderer !== "technical" && repos.length <= HILLSIDE_SLOTS.length;
   const sceneSlots = sceneMode ? hillsideSlots(repos.length) : [];
+  const slotOf = (index: number) =>
+    sceneMode ? (HILLSIDE_SLOTS[sceneSlots[index] ?? 0] ?? null) : null;
+  // With the Canvas compositor the hillside's art is one scene, drawn by
+  // one canvas (ADR 0018); each plot keeps only its hit and label layer.
+  const sceneDrawn = sceneMode && renderer === "canvas";
+  const plants = useMemo(() => {
+    const list: PlantInput[] = [];
+    if (!sceneDrawn) return list;
+    const slots = hillsideSlots(repos.length);
+    repos.forEach((repo, index) => {
+      const graph = graphs.get(repo.id);
+      const slot = HILLSIDE_SLOTS[slots[index] ?? 0];
+      if (!graph || !slot || !drawsPlant(repo, graph)) return;
+      list.push({ id: repo.id, graph, slot, wilting: wilting(repo) });
+    });
+    return list;
+  }, [sceneDrawn, repos, graphs]);
   // A focused repository that disappears from the configuration shows the garden.
   const activeFocusId = focused ? focusedId : null;
 
@@ -303,7 +325,7 @@ export function App() {
         />
       ) : (
         <main
-          className={`garden${sceneMode ? " garden-scene" : ""}`}
+          className={`garden${sceneMode ? " garden-scene" : ""}${sceneDrawn ? " scene-drawn" : ""}`}
           aria-label="All repositories"
           style={
             sceneMode
@@ -311,6 +333,7 @@ export function App() {
               : undefined
           }
         >
+          {sceneDrawn && <GardenCanvas plants={plants} />}
           {repos.map((repo, index) => (
             <Plot
               renderer={renderer}
@@ -326,11 +349,7 @@ export function App() {
                 setSelection({ repoId: repo.id, oid });
               }}
               onHover={onHover}
-              slot={
-                sceneMode
-                  ? (HILLSIDE_SLOTS[sceneSlots[index] ?? 0] ?? null)
-                  : null
-              }
+              slot={slotOf(index)}
             />
           ))}
         </main>
@@ -495,6 +514,16 @@ interface PlotProps {
 
 const noHover = () => undefined;
 
+/** Whether a plot draws a plant (PlotBody): a readable graph with commits. */
+function drawsPlant(repo: RepositoryStatusJson, graph: GraphJson | undefined) {
+  return graph !== undefined && repo.counts?.reachableCommits !== 0;
+}
+
+/** Last-known state: the plant fades like a wilting one. */
+function wilting(repo: RepositoryStatusJson): boolean {
+  return repo.status.state === "stale" || repo.status.state === "incomplete";
+}
+
 function Plot({
   renderer,
   repo,
@@ -526,10 +555,9 @@ function Plot({
         "--hit-w": `${String(lanes + 16)}px`,
       } as CSSProperties)
     : undefined;
-  const state = repo.status.state;
   return (
     <section
-      className={`plot${slot && (state === "stale" || state === "incomplete") ? " wilting" : ""}${slot && slot.iconX >= 60 ? " cards-left" : ""}`}
+      className={`plot${slot && wilting(repo) ? " wilting" : ""}${slot && slot.iconX >= 60 ? " cards-left" : ""}`}
       data-plot={repo.id}
       tabIndex={0}
       aria-labelledby={titleId}
@@ -576,6 +604,7 @@ function Plot({
                 onHover={slot ? noHover : onHover}
                 onSelect={slot ? onFocus : onSelect}
                 sway
+                artless={slot !== null && renderer === "canvas"}
               />
             </div>
           )}

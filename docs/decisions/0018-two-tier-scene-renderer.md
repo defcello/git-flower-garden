@@ -310,7 +310,7 @@ decision:
   separately; the focus
   view's 2,000-commit timings match or beat the previous build on the same
   machine. **Open in step 3**: a `SceneDescription` shared with the GPU
-  tier (plants are still drawn per plot). Sway, the frame-rate cap, and the
+  tier (plants are still drawn per plot; done 2026-09-30, below). Sway, the frame-rate cap, and the
   tier choice followed on 2026-09-29 (below).
   **Maintainer review of the two decisions** (2026-09-28): daylight in the
   focus view stays for daylight hours; after civil dusk the panels over the
@@ -360,6 +360,45 @@ decision:
   not trip. **Maintainer decision** (2026-09-29): keep 15 fps and accept
   the development machine's limits; scale back in the polish phase (P2-E)
   if needed. The dedicated monitor's machine is not yet measured. Merged to `main` on 2026-09-29 (PR #5).
+- **Step 3, software tier: one scene** (2026-09-30). `SceneDescription`
+  (`src/ui/scene/description.ts`, pure and tested) is the garden as data:
+  the backdrop layers and every hillside plant, back to front (by slot row,
+  then configuration order; the highlighted plant last), each with its
+  botanical scene in graph coordinates, the affine placement that stands
+  its lanes on its slot in the 1920×1080 design space, the box its art can
+  reach while swaying, and whether it is wilting or highlighted. The same
+  inputs give an equal description, and each graph's scene is computed once
+  and shared. Particles and their caps join with weather (P2-D). With the
+  Canvas compositor, one stage-sized canvas (`GardenCanvas.tsx`) now draws
+  every plant from it; each plot keeps only its SVG hit and label layer,
+  and its markers (bed, stake) keep their CSS shadow and outline. Painting
+  a plant is shared with the per-plot canvases (`paint.ts`). The canvas
+  also draws the hidden-commit badges, which the botanical scene now
+  carries (`collapsedBadge`, shared with the technical drawing): with one
+  canvas under every plot, the plots' own badges would have shown through
+  the plants in front, so those are hidden on the hillside. The drop
+  shadow, the cyan outline, and wilting, which were CSS filters on each
+  plot, are drawn by the canvas with the same filters. Canvas filters and
+  canvas-to-canvas copies proved costly per frame (in headless Chromium, 8
+  plants fell from 69 frames in 4 seconds to 9 when every plant was
+  filtered each frame), so each plant's shadow and its whole look at rest
+  are cached and rebuilt only when the light, the canvas size, the plant's
+  history, or its highlight changes; a sway frame draws the cached shadow
+  and paints the plant over it. **Decision for the maintainer's review**:
+  the highlighted plant and wilting plants hold still in the garden, drawn
+  from their cached look, so the outline fits exactly and no filter runs
+  per frame (the SVG compositor still sways them). **Measured**
+  (`npm run measure:garden`) on the Surface Pro in a visible Chromium
+  window using the HD 4000, 1920×1080, the noon preview, over 20 s, in
+  percent of one core: 8 plants swaying, 79–81% (GPU process 57–59,
+  renderer 20), against 100–102% for the per-plot canvases measured the
+  same way (GPU process 78–79); Static 2%, as before. 64 plants: the
+  per-plot canvases fell behind and the probe stopped sway (about 5%);
+  one scene keeps them swaying at 159% (GPU process 118, renderer 39),
+  and 2% in Static. Headless, the canvas's script time is about 2 ms a
+  frame for 8 plants and 9 ms for 64. Most of the remaining cost is still
+  Chromium's handling of a changed canvas each frame, for the GPU tier to
+  remove. Merged to `main` on 2026-09-30 (PR #6).
 
 ## Verification
 
@@ -370,7 +409,8 @@ decision:
 - Unit tests: astronomy results against published reference cases
   (sunrise and sunset tables, moon phase dates, a high-latitude polar day and
   night), a check that the vendored files match their reviewed SHA-256, and
-  `SceneDescription` stability (same inputs, same scene).
+  `SceneDescription` stability (same inputs, same scene;
+  `tests/ui/description.test.ts`).
 - Browser tests force each tier with the View-menu override. In Chromium
   run with `--disable-gpu`, **Auto** must choose Canvas 2D. Both tiers must
   keep the existing graph-fidelity and hit-target tests passing unchanged.

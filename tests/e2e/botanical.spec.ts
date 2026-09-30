@@ -34,8 +34,12 @@ test("garden compositors retain graph truth, selection, and focus camera", async
     await expect(
       page.locator(`.botanical-graph[data-compositor="${compositor}"]`),
     ).toHaveCount(7);
-    if (compositor === "canvas")
-      await expect(page.locator('canvas[data-ready="true"]')).toHaveCount(7);
+    // On the hillside one canvas draws every plant (ADR 0018).
+    if (compositor === "canvas") {
+      const garden = page.locator('.garden-canvas[data-ready="true"]');
+      await expect(garden).toHaveCount(1);
+      await expect(garden).toHaveAttribute("data-plants", "7");
+    }
     expect(await semantic()).toEqual(truth);
   }
   await fork.focus();
@@ -67,7 +71,9 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
   await page.goto("/");
   await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
   await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
-  await expect(page.locator('canvas[data-ready="true"]')).toHaveCount(7);
+  await expect(
+    page.locator('.garden-canvas[data-ready="true"][data-plants="7"]'),
+  ).toHaveCount(1);
   const landscape = page.locator(".landscape");
   const scene = page.locator(".landscape-scene");
   const note = page.locator(".art-notice");

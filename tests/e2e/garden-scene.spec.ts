@@ -101,24 +101,47 @@ async function openScene(page: Page, url: string, plants: number) {
   await page.mouse.move(2, 2);
 }
 
-/** Which plots are revealed (icon shown) and outlined in cyan. */
+/**
+ * Which plots are revealed (icon shown) and outlined in cyan: by the scene
+ * canvas (Canvas compositor) or by the plot's CSS (SVG compositor).
+ */
 async function lit(page: Page) {
-  return page.locator("[data-plot]").evaluateAll(
-    (plots, cyan) =>
-      plots
-        .filter((plot) => {
-          const plant = plot.querySelector(".plant");
-          const icon = plot.querySelector(".focus-button");
-          return (
-            plant !== null &&
-            icon !== null &&
-            getComputedStyle(plant).filter.includes(cyan) &&
-            getComputedStyle(icon).opacity === "1"
-          );
-        })
-        .map((plot) => plot.getAttribute("data-plot")),
-    CYAN,
-  );
+  return page.locator("[data-plot]").evaluateAll((plots, cyan) => {
+    const garden = document.querySelector<HTMLElement>(".garden-canvas");
+    return plots
+      .filter((plot) => {
+        const plant = plot.querySelector(".plant");
+        const icon = plot.querySelector(".focus-button");
+        const outlined = garden
+          ? garden.dataset.highlight === plot.getAttribute("data-plot")
+          : plant !== null && getComputedStyle(plant).filter.includes(cyan);
+        return (
+          outlined && icon !== null && getComputedStyle(icon).opacity === "1"
+        );
+      })
+      .map((plot) => plot.getAttribute("data-plot"));
+  }, CYAN);
+}
+
+/** Cyan pixels in the scene canvas: the hover outline, drawn. */
+async function cyanPixels(page: Page) {
+  return page.locator(".garden-canvas").evaluate((node: HTMLCanvasElement) => {
+    const data = node
+      .getContext("2d")
+      ?.getImageData(0, 0, node.width, node.height).data;
+    let count = 0;
+    for (let i = 0; i < (data?.length ?? 0); i += 4) {
+      const [r, g, b, a] = [
+        data?.[i],
+        data?.[i + 1],
+        data?.[i + 2],
+        data?.[i + 3],
+      ];
+      if ((a ?? 0) > 60 && (r ?? 255) < 120 && (g ?? 0) > 170 && (b ?? 0) > 190)
+        count++;
+    }
+    return count;
+  });
 }
 
 /** A point on the plant not under any other element (an icon or another plant). */
@@ -206,8 +229,10 @@ test("hovering a plant reveals its icon and name and outlines it in cyan; clicki
   await openScene(page, small.url, 5);
   const point = await exposedPoint(page, "fork");
   if (!point) throw new Error("fork plant is not exposed");
+  const unlit = await cyanPixels(page);
   await page.mouse.move(point.x, point.y);
   await expect.poll(() => lit(page)).toEqual(["fork"]);
+  await expect.poll(() => cyanPixels(page)).toBeGreaterThan(unlit + 100);
   const fork = page.locator('[data-plot="fork"]');
   await expect(fork.locator(".plot-card")).toHaveCSS("opacity", "1");
   await expect(fork.locator("h2")).toHaveText("Fork and merge");
@@ -319,6 +344,35 @@ test("small gardens are spread evenly over the fixed hillside slots", async ({
   }
 });
 
+test("the scene canvas draws each plant under its own hit targets", async ({
+  page,
+}) => {
+  await openScene(page, small.url, 5);
+  const garden = page.locator('.garden-canvas[data-ready="true"]');
+  // Every drawn plot: tour, fork, and three (empty and missing have none).
+  await expect(garden).toHaveAttribute("data-plants", "3");
+  // Each commit's knot is painted where its (invisible) node sits.
+  const misses = await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>(".garden-canvas");
+    const g = canvas?.getContext("2d");
+    if (!canvas || !g) return ["no canvas"];
+    const box = canvas.getBoundingClientRect();
+    const k = canvas.width / box.width;
+    const missed: string[] = [];
+    for (const node of document.querySelectorAll(".garden-scene .node")) {
+      const r = node.getBoundingClientRect();
+      const x = Math.round((r.left + r.width / 2 - box.left) * k);
+      const y = Math.round((r.top + r.height / 2 - box.top) * k);
+      if ((g.getImageData(x, y, 1, 1).data[3] ?? 0) === 0)
+        missed.push(
+          node.closest("[data-oid]")?.getAttribute("data-oid") ?? "?",
+        );
+    }
+    return missed;
+  });
+  expect(misses).toEqual([]);
+});
+
 test("64 plants: each grows from its own slot, and all 64 icons are reachable", async ({
   page,
 }) => {
@@ -381,9 +435,9 @@ test("more than 64 repositories use the card layout", async ({ page }) => {
   }
 });
 
-/** The plant's artwork as an image, for telling whether it moved. */
+/** A canvas's artwork as an image, for telling whether it moved. */
 async function artwork(page: Page, selector: string) {
-  const canvas = page.locator(`${selector} .botanical-graph canvas`);
+  const canvas = page.locator(selector);
   await expect(canvas).toHaveAttribute("data-ready", "true");
   return canvas.evaluate((element: HTMLCanvasElement) => element.toDataURL());
 }
@@ -408,7 +462,7 @@ async function holdLight(page: Page) {
   await page.waitForTimeout(300);
 }
 
-/** Whether the artwork changes over half a second (a few sway frames). */
+/** Whether a canvas's artwork changes over half a second (a few sway frames). */
 async function moves(page: Page, selector: string) {
   const before = await artwork(page, selector);
   await page.waitForTimeout(500);
@@ -420,6 +474,8 @@ test("leaves sway in the garden only, hit targets stay put, and Static stands st
 }) => {
   await openScene(page, small.url, 5);
   const tour = '[data-plot="tour"]';
+  // The hillside's plants are all drawn by the one scene canvas.
+  const garden = ".garden-canvas";
   await expect(page.getByLabel("Drawing", { exact: true })).toHaveValue("auto");
   const targets = () =>
     page
@@ -428,7 +484,7 @@ test("leaves sway in the garden only, hit targets stay put, and Static stands st
         nodes.map((node) => JSON.stringify(node.getBoundingClientRect())),
       );
   const still = await targets();
-  expect(await moves(page, tour)).toBe(true);
+  expect(await moves(page, garden)).toBe(true);
   expect(await targets()).toEqual(still);
   expect(
     await page.evaluate(() => document.documentElement.dataset.sway),
@@ -445,26 +501,26 @@ test("leaves sway in the garden only, hit targets stay put, and Static stands st
   // Static draws nothing between lighting changes, and is remembered.
   await page.getByLabel("Drawing", { exact: true }).selectOption("static");
   await page.waitForTimeout(200);
-  expect(await moves(page, tour)).toBe(false);
+  expect(await moves(page, garden)).toBe(false);
   await page.reload();
   await expect(page.getByLabel("Drawing", { exact: true })).toHaveValue(
     "static",
   );
   await holdLight(page);
-  expect(await moves(page, tour)).toBe(false);
+  expect(await moves(page, garden)).toBe(false);
 
   // Reduced motion stills every tier.
   await page.getByLabel("Drawing", { exact: true }).selectOption("auto");
-  expect(await moves(page, tour)).toBe(true);
+  expect(await moves(page, garden)).toBe(true);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForTimeout(200);
-  expect(await moves(page, tour)).toBe(false);
+  expect(await moves(page, garden)).toBe(false);
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  expect(await moves(page, tour)).toBe(true);
+  expect(await moves(page, garden)).toBe(true);
 
   // The focus view is for reading: its plant holds still.
   await page.locator(tour).focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("main.focus")).toBeVisible();
-  expect(await moves(page, "main.focus")).toBe(false);
+  expect(await moves(page, "main.focus .botanical-graph canvas")).toBe(false);
 });
