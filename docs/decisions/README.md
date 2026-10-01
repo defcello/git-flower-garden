@@ -27,5 +27,6 @@ supersedes the old one and update the roadmap, examples, schema, and tests toget
 | [0017](0017-botanical-graph-rules.md) | Botanical graph rules: taper, depth, seeds, growth | Accepted |
 | [0018](0018-two-tier-scene-renderer.md) | Two-tier scene renderer: optional WebGL2 relighting over a Canvas 2D baseline | Proposed |
 | [0019](0019-astronomy-engine-review.md) | astronomy-engine as a pinned submodule, and its security review | Accepted |
+| [0020](0020-weather-provider.md) | Weather from MET Norway, opt-in, fetched by the local service | Accepted |
 
 Benchmark and probe evidence (roadmap P0-B onward) also belongs in this directory.

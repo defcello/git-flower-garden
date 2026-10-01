@@ -370,6 +370,7 @@ describe("validator agrees with the JSON Schema (Ajv) on structural rules", () =
       ["environment", "longitude"],
       ["environment", "elevationMeters"],
       ["environment", "timeZone"],
+      ["environment", "weather"],
       ["environment", "surprise"],
       ["repositories"],
       ["repositories", 0, "id"],
@@ -452,6 +453,7 @@ describe("environment (real-time sky, ADR 0018)", () => {
       enabled: true,
       place: { latitude: 37.2296, longitude: -80.4139, elevationMeters: 634 },
       timeZone: "America/New_York",
+      weather: { enabled: false },
     });
     expect(
       parse({ enabled: false }).ok && parse({ enabled: false }),
@@ -489,6 +491,7 @@ describe("environment (real-time sky, ADR 0018)", () => {
       enabled: true,
       place: { latitude: 35.6, longitude: -82.55, elevationMeters: 0 },
       timeZone: "America/New_York",
+      weather: { enabled: false },
     });
     const own = parse({
       enabled: true,
@@ -510,10 +513,10 @@ describe("environment (real-time sky, ADR 0018)", () => {
       longitude: "west",
       elevationMeters: 1e6,
       timeZone: "Mars/Olympus",
-      weather: "open-meteo",
+      surprise: true,
     });
     expect(result.ok ? [] : result.errors.map((e) => e.pointer)).toEqual([
-      "/environment/weather",
+      "/environment/surprise",
       "/environment/latitude",
       "/environment/longitude",
       "/environment/elevationMeters",
@@ -524,6 +527,61 @@ describe("environment (real-time sky, ADR 0018)", () => {
   it("keeps a place while disabled, without using it", () => {
     const result = parse({ enabled: false, latitude: 10, longitude: 20 });
     expect(result.ok && result.config.environment).toEqual({ enabled: false });
+  });
+
+  it("keeps weather off unless asked: it sends the place to the provider (ADR 0020)", () => {
+    const off = parse({});
+    expect(off.ok && off.config.environment).toMatchObject({
+      weather: { enabled: false },
+    });
+    const on = parse({
+      latitude: 35.6,
+      longitude: -82.55,
+      weather: { enabled: true, contact: " me@example.com " },
+    });
+    expect(on.ok && on.config.environment).toMatchObject({
+      weather: {
+        enabled: true,
+        provider: "met-norway",
+        contact: "me@example.com",
+      },
+    });
+    expect(
+      schemaValid({
+        ...base,
+        environment: { weather: { enabled: true, provider: "met-norway" } },
+      }),
+    ).toBe(true);
+    // The sky off turns the weather off too.
+    expect(
+      parse({ enabled: false, weather: { enabled: true } }).ok &&
+        parse({ enabled: false, weather: { enabled: true } }),
+    ).toMatchObject({ config: { environment: { enabled: false } } });
+  });
+
+  it("rejects other providers and contacts that cannot be a header", () => {
+    const bad = {
+      weather: {
+        enabled: true,
+        provider: "open-meteo",
+        contact: "me\r\nX-Evil: 1",
+        apiKey: "k",
+      },
+    };
+    const result = parse(bad);
+    expect(result.ok ? [] : result.errors.map((e) => e.pointer)).toEqual([
+      "/environment/weather/apiKey",
+      "/environment/weather/provider",
+      "/environment/weather/contact",
+    ]);
+    expect(schemaValid({ ...base, environment: bad })).toBe(false);
+    expect(
+      schemaValid({
+        ...base,
+        environment: { weather: { contact: "me\r\nX-Evil: 1" } },
+      }),
+    ).toBe(false);
+    expect(parse({ weather: "met-norway" }).ok).toBe(false);
   });
 });
 

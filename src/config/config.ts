@@ -92,6 +92,18 @@ export type EnvironmentConfig =
       place: { latitude: number; longitude: number; elevationMeters: number };
       /** Local time shown with the sky; defaults to history.timeZone. */
       timeZone: string;
+      /** Optional weather (ADR 0020); off unless asked for. */
+      weather: WeatherConfig;
+    };
+
+/** Weather sends the configured place to the provider, so it is opt-in. */
+export type WeatherConfig =
+  | { enabled: false }
+  | {
+      enabled: true;
+      provider: "met-norway";
+      /** Added to the User-Agent so the provider can reach the user. */
+      contact: string | null;
     };
 
 export interface ConfigError {
@@ -133,6 +145,7 @@ export const DEFAULTS = {
       elevationMeters: DEFAULT_PLACE.elevationMeters,
     },
     timeZone: DEFAULT_PLACE.timeZone,
+    weather: { enabled: false },
   },
 } as const;
 
@@ -477,6 +490,7 @@ export function validateConfig(
     "longitude",
     "elevationMeters",
     "timeZone",
+    "weather",
   ]);
   const environmentEnabled = boolean(
     "/environment/enabled",
@@ -540,11 +554,41 @@ export function validateConfig(
       );
     else environmentTimeZone = environment.timeZone;
   }
+  let weather: WeatherConfig = { enabled: false };
+  if (environment.weather !== undefined) {
+    const section = object(at("/environment", "weather"), environment.weather, [
+      "enabled",
+      "provider",
+      "contact",
+    ]);
+    const enabled = boolean(
+      "/environment/weather/enabled",
+      section?.enabled,
+      false,
+    );
+    if (section?.provider !== undefined && section.provider !== "met-norway")
+      err("/environment/weather/provider", 'must be "met-norway"');
+    let contact: string | null = null;
+    if (section?.contact !== undefined) {
+      // It goes into an HTTP header: printable ASCII on one line.
+      if (
+        typeof section.contact !== "string" ||
+        !/^[\x20-\x7e]{3,200}$/.test(section.contact)
+      )
+        err(
+          "/environment/weather/contact",
+          "must be an email address or web address (3 to 200 printable ASCII characters)",
+        );
+      else contact = section.contact.trim();
+    }
+    if (enabled) weather = { enabled: true, provider: "met-norway", contact };
+  }
   const environmentConfig: EnvironmentConfig = environmentEnabled
     ? {
         enabled: true,
         place: { latitude, longitude, elevationMeters },
         timeZone: environmentTimeZone,
+        weather,
       }
     : { enabled: false };
 

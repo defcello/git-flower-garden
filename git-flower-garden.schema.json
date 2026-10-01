@@ -108,7 +108,7 @@
       }
     },
     "environment": {
-      "description": "Real-time sky from the Sun and Moon, computed offline. Nothing is sent anywhere; there is no automatic location lookup. Without a place, the sky is Blacksburg, Virginia's.",
+      "description": "Real-time sky from the Sun and Moon, computed offline; there is no automatic location lookup. Without a place, the sky is Blacksburg, Virginia's. Nothing is sent anywhere unless weather is enabled.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -139,6 +139,28 @@
           "description": "IANA time zone for the local time shown with the sky. Defaults to history.timeZone with your own coordinates, America/New_York for Blacksburg.",
           "type": "string",
           "minLength": 1
+        },
+        "weather": {
+          "description": "Optional weather from MET Norway's free forecast service (CC BY 4.0). Off by default: when enabled, the place above (rounded to about 11 m) is sent to api.met.no about every half hour. The conditions shown are a model forecast for the hour, not a local observation. Has no effect when the sky is off.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false,
+              "description": "Fetch the weather for the configured place."
+            },
+            "provider": {
+              "const": "met-norway",
+              "default": "met-norway",
+              "description": "The weather provider. MET Norway is the only one for now (ADR 0020)."
+            },
+            "contact": {
+              "type": "string",
+              "pattern": "^[\\x20-\\x7e]{3,200}$",
+              "description": "Optional email or web address added to the requests' User-Agent, as MET Norway's terms ask, so they can reach you instead of blocking the app."
+            }
+          }
         }
       },
       "if": {

@@ -24,6 +24,7 @@ import type {
   GraphNodeJson,
   RepositoriesJson,
   RepositoryStatusJson,
+  WeatherJson,
   WebhooksJson,
   WorktreeJson,
 } from "../api/types.ts";
@@ -126,13 +127,16 @@ export interface ConfigHealth {
   restartNeeded: string[];
   notice?: string;
   webhooks?: WebhooksJson;
+  /** Weather status (ADR 0020); null or absent when off. */
+  weather?: WeatherJson | null;
 }
 
 function environmentJson(
   environment: EnvironmentConfig,
+  weather: WeatherJson | null,
 ): EnvironmentJson | null {
   return environment.enabled
-    ? { ...environment.place, timeZone: environment.timeZone }
+    ? { ...environment.place, timeZone: environment.timeZone, weather }
     : null;
 }
 
@@ -148,7 +152,10 @@ export function repositoriesJson(
       reducedMotion: service.config.display.reducedMotion,
       windowStartMs: service.windowStartMs(),
       notice: health.notice ?? null,
-      environment: environmentJson(service.config.environment),
+      environment: environmentJson(
+        service.config.environment,
+        health.weather ?? null,
+      ),
     },
     repositories: service
       .ids()

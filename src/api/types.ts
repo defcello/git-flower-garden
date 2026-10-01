@@ -2,6 +2,12 @@
  * JSON contract between the local service and the browser UI. Plain data
  * only: no Node or DOM types, so both sides import it.
  */
+import type {
+  WeatherConditions,
+  WeatherState,
+} from "../environment/weather.ts";
+
+export type { WeatherConditions, WeatherState };
 
 export type SourceState =
   "initializing" | "ready" | "stale" | "offline" | "error" | "incomplete";
@@ -50,6 +56,18 @@ export interface EnvironmentJson {
   longitude: number;
   elevationMeters: number;
   timeZone: string;
+  /** Weather from the provider (ADR 0020); null or absent when off. */
+  weather?: WeatherJson | null;
+}
+
+export interface WeatherJson {
+  state: WeatherState;
+  /** The forecast for the current hour; null when waiting or unavailable. */
+  conditions: WeatherConditions | null;
+  /** When the forecast was last fetched or confirmed (ms); null before. */
+  fetchedAt: number | null;
+  /** Why the last request failed, or a provider notice. */
+  diagnostic: string | null;
 }
 
 export interface RepositoriesJson {

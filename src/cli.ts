@@ -357,6 +357,7 @@ export async function main(
           configPath: file,
           cacheRoot,
           waitForFirstRead: false,
+          version: version(),
           ...(port === undefined ? {} : { port }),
         });
       } catch (error) {
