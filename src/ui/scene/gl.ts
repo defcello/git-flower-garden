@@ -12,7 +12,16 @@ import ridgeNormal from "../assets/scene/ridge-normal.png";
 import spritesAlbedo from "../assets/scene/sprites-albedo.png";
 import spritesNormal from "../assets/scene/sprites-normal.png";
 import spritesTranslucency from "../assets/scene/sprites-translucency.png";
-import { RIM_GAIN, WRAP, type LightParams } from "./shading.ts";
+import {
+  NIGHT_TINT,
+  RIM_GAIN,
+  ROD,
+  WRAP,
+  type LightParams,
+} from "./shading.ts";
+
+const vec3 = (c: readonly number[]) =>
+  `vec3(${c.map((x) => x.toFixed(6)).join(", ")})`;
 
 /** Options for the GPU tier's contexts (ADR 0018, "Choosing a tier"). */
 export const CONTEXT: WebGLContextAttributes = {
@@ -30,13 +39,17 @@ export const CONTEXT: WebGLContextAttributes = {
  */
 export const SHADE_GLSL = `
 uniform vec3 uSunDir, uSun, uMoonDir, uMoon, uSunFill, uMoonFill, uAmbient, uHorizon;
-uniform float uHaze, uTranslucencyScale, uFillScale;
+uniform float uHaze, uTranslucencyScale, uFillScale, uNight;
+const vec3 ROD = ${vec3(ROD)};
+const vec3 NIGHT_TINT = ${vec3(NIGHT_TINT)};
 const float WRAP = ${WRAP.toFixed(6)};
 const float RIM_GAIN = ${RIM_GAIN.toFixed(6)};
 float diffuse(vec3 n, vec3 l) { return max(0.0, (dot(n, l) + WRAP) / (1.0 + WRAP)); }
 float through(vec3 n, vec3 l) { return max(0.0, -dot(n, l)); }
-// Light for a unit normal n: translucency 0..1, fill 0 or 1, haze 0..1.
-vec3 shadeLinear(vec3 albedo, vec3 n, float translucency, float fill, float layerHaze) {
+// Light for a unit normal n: translucency 0..1, fill 0 or 1, haze 0..1,
+// night vision 0..1.
+vec3 shadeLinear(vec3 albedo, vec3 n, float translucency, float fill, float layerHaze,
+                 float layerNight) {
   float t = translucency * uTranslucencyScale;
   float f = fill * uFillScale;
   float sun = diffuse(n, uSunDir) + t * through(n, uSunDir) + f * diffuse(n, uSunFill);
@@ -47,6 +60,8 @@ vec3 shadeLinear(vec3 albedo, vec3 n, float translucency, float fill, float laye
   float edge = 1.0 - max(0.0, n.z);
   float rim = RIM_GAIN * edge * edge * edge * max(0.0, -uSunDir.z) * max(0.0, uSunDir.y + 0.2);
   vec3 lit = albedo * (uAmbient * hemi + uSun * (sun + rim) + uMoon * moon);
+  // Night vision, before haze: the haze is the sky's own color.
+  lit = mix(lit, dot(lit, ROD) * NIGHT_TINT, uNight * layerNight);
   float h = layerHaze * uHaze;
   return lit + (uHorizon * 0.8 - lit) * h;
 }
@@ -54,14 +69,14 @@ vec3 shadeLinear(vec3 albedo, vec3 n, float translucency, float fill, float laye
 // sRGB out. Alpha is snapped at both ends as cleanAlpha does. Returns
 // alpha 0 for texels to discard.
 vec4 shadeTexel(vec4 a, vec3 encodedNormal, bool flipX, float translucency,
-                float fill, float layerHaze) {
+                float fill, float layerHaze, float layerNight) {
   if (a.a < 8.0 / 255.0) return vec4(0.0);
   float alpha = a.a >= 240.0 / 255.0 ? 1.0 : a.a;
   vec3 albedo = pow(a.rgb / a.a, vec3(2.2));
   vec3 n = encodedNormal * 2.0 - 1.0;
   if (flipX) n.x = -n.x;
   n = normalize(n);
-  vec3 lit = shadeLinear(albedo, n, translucency, fill, layerHaze);
+  vec3 lit = shadeLinear(albedo, n, translucency, fill, layerHaze, layerNight);
   return vec4(pow(clamp(lit, 0.0, 1.0), vec3(1.0 / 2.2)) * alpha, alpha);
 }
 float luminance(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
@@ -79,6 +94,7 @@ export const LIGHT_UNIFORMS = [
   "uHaze",
   "uTranslucencyScale",
   "uFillScale",
+  "uNight",
 ] as const;
 
 export type Uniforms = Record<string, WebGLUniformLocation | null>;
@@ -110,6 +126,7 @@ export function setLight(
   gl.uniform1f(u.uHaze ?? null, p.haze);
   gl.uniform1f(u.uTranslucencyScale ?? null, p.translucency);
   gl.uniform1f(u.uFillScale ?? null, p.fill);
+  gl.uniform1f(u.uNight ?? null, p.night);
 }
 
 export function compile(

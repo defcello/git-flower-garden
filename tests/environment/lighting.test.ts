@@ -66,23 +66,43 @@ describe("panoramic projection", () => {
     },
   );
 
-  it("is continuous all the way around the horizon", () => {
-    let previous = project({ altitude: 10, azimuth: 0 }, 40).u;
-    for (let azimuth = 1; azimuth <= 360; azimuth++) {
-      const u = project({ altitude: 10, azimuth }, 40).u;
-      expect(u).toBeGreaterThanOrEqual(0);
-      expect(u).toBeLessThanOrEqual(1);
-      expect(Math.abs(u - previous)).toBeLessThanOrEqual(1 / 180 + 1e-9);
-      previous = u;
-    }
-  });
+  it.each([
+    ["the Moon, rising north of east", Body.Moon, "2024-12-15T18:00Z"],
+    ["the midsummer Sun", Body.Sun, "2024-06-20T09:00Z"],
+    ["the midwinter Sun", Body.Sun, "2024-12-21T11:00Z"],
+  ])(
+    "moves %s only left to right while it is up, and stays on screen",
+    (_, body, day) => {
+      const start = Date.parse(day);
+      let previous = -1;
+      let seen = 0;
+      for (let minute = 0; minute <= 26 * 60; minute += 5) {
+        const time = new Date(start + minute * 60_000);
+        const state = at(time);
+        const position = body === Body.Sun ? state.sun : state.moon;
+        if (position.altitude <= 0) {
+          if (seen > 0) break; // set: the visible arc is done
+          continue;
+        }
+        if (seen++ === 0 && body === Body.Moon)
+          expect(position.azimuth).toBeLessThan(90);
+        expect(position.u).toBeGreaterThan(previous);
+        expect(position.u).toBeGreaterThan(0);
+        expect(position.u).toBeLessThan(1);
+        previous = position.u;
+      }
+      expect(seen).toBeGreaterThan(50);
+    },
+  );
 
-  it("folds the sky behind the viewer onto the front, east still left", () => {
-    const north = project({ altitude: 10, azimuth: 0 }, 40);
-    expect(north.behind).toBe(true);
-    expect(north.u).toBeCloseTo(0.5);
-    expect(project({ altitude: 10, azimuth: 45 }, 40).u).toBeLessThan(0.5);
-    expect(project({ altitude: 10, azimuth: 315 }, 40).u).toBeGreaterThan(0.5);
+  it("squeezes the edges: east, the meridian, and west at 0.15, 0.5, 0.85", () => {
+    const u = (azimuth: number) => project({ altitude: 0, azimuth }, 40).u;
+    expect(u(90)).toBeCloseTo(0.5 - 0.5 * Math.SQRT1_2, 2);
+    expect(project({ altitude: 30, azimuth: 180 }, 40).u).toBeCloseTo(0.5, 6);
+    expect(u(270)).toBeCloseTo(0.5 + 0.5 * Math.SQRT1_2, 2);
+    // North of east is further left, not folded back toward the middle.
+    expect(u(60)).toBeLessThan(u(90));
+    expect(project({ altitude: 10, azimuth: 0 }, 40).behind).toBe(true);
   });
 
   it("keeps the light direction physical: a south noon Sun backlights the scene", () => {
@@ -127,7 +147,8 @@ describe("lighting state", () => {
     let previous = at(new Date(start));
     for (let minute = 1; minute <= 12 * 60; minute++) {
       const next = at(new Date(start + minute * 60_000));
-      expect(Math.abs(next.sun.u - previous.sun.u)).toBeLessThan(0.01);
+      if (next.sun.aboveHorizon)
+        expect(Math.abs(next.sun.u - previous.sun.u)).toBeLessThan(0.01);
       expect(Math.abs(next.stars - previous.stars)).toBeLessThan(0.05);
       for (let c = 0; c < 3; c++)
         expect(
@@ -271,7 +292,7 @@ describe("developer previews", () => {
     const polarDay = sky("polar-day");
     expect(polarDay.snapshot.localTime).toContain("00:00");
     expect(polarDay.state.sun.aboveHorizon).toBe(true);
-    // The midnight Sun is behind the viewer, folded to the middle.
+    // The midnight Sun is behind the viewer.
     expect(polarDay.state.sun.behind).toBe(true);
 
     const polarNight = sky("polar-night");

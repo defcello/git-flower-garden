@@ -16,6 +16,15 @@ export const AMBIENT_GAIN = 0.55;
 /** Wrap lighting: light reaches a little past the terminator, as in foliage. */
 export const WRAP = 0.35;
 export const RIM_GAIN = 0.3;
+/**
+ * Night vision. Below about 0.01 lux the eye sees with rods alone: no hue,
+ * and a blue-green bias (rod sensitivity peaks near 507 nm), so moonlit
+ * grass reads as the same grey-blue as the hazed ridges. `ROD` weights
+ * linear sRGB by rod sensitivity; `NIGHT_TINT` is the slight blue cast a
+ * moonlit scene is seen with, at about the same brightness.
+ */
+export const ROD: Color = [0.05, 0.53, 0.42];
+export const NIGHT_TINT: Color = [0.8, 1.0, 1.45];
 
 export interface LightParams {
   sunDir: Vector3;
@@ -31,6 +40,8 @@ export interface LightParams {
   haze: number;
   fill: number;
   translucency: number;
+  /** 0 in daylight to 1 by nautical twilight: how far vision is rods only. */
+  night: number;
 }
 
 export const toLinear = (c: number) => Math.pow(c, 2.2);
@@ -74,12 +85,17 @@ export interface LayerLight {
   translucency: number;
   /** Whether the viewer-side fill light reaches it. */
   fill: boolean;
+  /**
+   * 0..1: how far night vision takes its color. The plants keep theirs,
+   * because their colors carry Git meaning.
+   */
+  night: number;
 }
 
 export const LAYERS = {
-  ridge: { haze: 0.5, translucency: 0, fill: false },
-  hill: { haze: 0, translucency: 0.6, fill: true },
-  sprites: { haze: 0, translucency: 0.9, fill: true },
+  ridge: { haze: 0.5, translucency: 0, fill: false, night: 1 },
+  hill: { haze: 0, translucency: 0.6, fill: true, night: 1 },
+  sprites: { haze: 0, translucency: 0.9, fill: true, night: 0 },
 } as const satisfies Record<string, LayerLight>;
 
 const mirrored = (v: Vector3): Vector3 => ({ ...v, z: Math.abs(v.z) });
@@ -100,7 +116,13 @@ export function lightParams(
     haze: state.haze,
     fill: adjust.fill,
     translucency: adjust.translucency,
+    night: 1 - smoothstep(-9, -1, state.sun.altitude),
   };
+}
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }
 
 function diffuse(n: Vector3, l: Vector3): number {
@@ -147,12 +169,20 @@ export function shade(
     Math.max(0, -p.sunDir.z) *
     Math.max(0, p.sunDir.y + 0.2);
   const h = layer.haze * p.haze;
+  const lit: [number, number, number] = [0, 0, 0];
   for (let c = 0; c < 3; c++) {
     const light =
       (p.ambient[c] ?? 0) * hemi +
       (p.sun[c] ?? 0) * (sun + rim) +
       (p.moon[c] ?? 0) * moon;
-    const lit = (albedo[c] ?? 0) * light;
-    out[c] = lit + ((p.horizon[c] ?? 0) * 0.8 - lit) * h;
+    lit[c] = (albedo[c] ?? 0) * light;
+  }
+  // Night vision, before haze: the haze is the sky's own color.
+  const v = p.night * layer.night;
+  const rod = lit[0] * ROD[0] + lit[1] * ROD[1] + lit[2] * ROD[2];
+  for (let c = 0; c < 3; c++) {
+    const seen =
+      (lit[c] ?? 0) + (rod * (NIGHT_TINT[c] ?? 0) - (lit[c] ?? 0)) * v;
+    out[c] = seen + ((p.horizon[c] ?? 0) * 0.8 - seen) * h;
   }
 }
