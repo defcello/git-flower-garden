@@ -173,10 +173,7 @@ describe("rainbow", () => {
     const bow = rainbow(low, showers);
     expect(bow).not.toBeNull();
     // The bow circles the point opposite the Sun.
-    expect(bow?.antisolar).toEqual({
-      u: 1 - low.sun.u,
-      altitude: -low.sun.altitude,
-    });
+    expect(bow?.antisolar).toEqual(low.antisolar);
     expect(rainbow(low, preview("snow"))).toBeNull();
     expect(rainbow(low, preview("sleet"))).toBeNull();
     expect(rainbow(low, preview("clear"))).toBeNull();

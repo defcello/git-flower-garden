@@ -64,6 +64,12 @@ export interface LightingState {
   stars: number;
   /** Ground shadow cast away from the Sun; null when it is down. */
   shadow: { x: number; z: number; length: number } | null;
+  /**
+   * The point of the sky opposite the Sun, which a rainbow circles, placed
+   * on the panorama like the Sun itself: across (`u`) and degrees above the
+   * horizon (below it while the Sun is up).
+   */
+  antisolar: { u: number; altitude: number };
 }
 
 const DEG = Math.PI / 180;
@@ -320,5 +326,12 @@ export function lightingState(snapshot: EnvironmentSnapshot): LightingState {
     haze: sky.haze,
     stars: 1 - smoothstep(-15, -4, sunAltitude),
     shadow,
+    antisolar: {
+      u: project(
+        { altitude: -sun.altitude, azimuth: (sun.azimuth + 180) % 360 },
+        latitude,
+      ).u,
+      altitude: -sun.altitude,
+    },
   };
 }

@@ -520,11 +520,11 @@ decision:
     the brighter sky inside the primary. Each pixel of the scene shows
     the profile at its angle from the antisolar point, which the bow
     circles, so its place and size follow from the Sun: centred opposite
-    it (at `1 - u` on the folded panorama, tested against projecting the
-    opposite direction), its top 42° less the Sun's altitude above the
-    horizon. Two corrections from the maintainer's review: the panorama
-    spreads azimuth about 1.6 times wider than altitude, which drew the
-    bow as a wide oval, so its angles are measured the same way in every
+    it (the opposite direction placed by `project`, like the Sun:
+    `LightingState.antisolar`), its top 42° less the Sun's altitude above
+    the horizon. Two corrections from the maintainer's review: the
+    panorama spreads the sky wider across than up (at first about 1.6
+    times), which drew the bow as a wide oval, so its angles are measured the same way in every
     direction (`rainbowAngle`) and it is round; and at the sky's scale it
     looked small and showed its lower half over the ridges, since the
     landscape is not at its true depth. A bow in rain stands on the

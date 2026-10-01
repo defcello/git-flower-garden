@@ -274,10 +274,8 @@ export function directLight(w: WeatherEffects): number {
 /** What makes a rainbow: where the Sun is, and how much light it sends. */
 export interface Rainbow {
   /**
-   * The point opposite the Sun, which the bow circles, in the panorama's
-   * terms (lighting.ts `SkyBody`): across, and degrees above the horizon
-   * (below it, as the Sun is up). The panorama folds the sky behind the
-   * viewer onto the front, so the opposite point is at 1 − u.
+   * The point opposite the Sun, which the bow circles, placed on the
+   * panorama like the Sun (lighting.ts `LightingState.antisolar`).
    */
   antisolar: { u: number; altitude: number };
   /** Brightness the bow adds at its peak, 0..1 of full white. */
@@ -319,7 +317,7 @@ export function rainbow(
   if (strength < 0.01) return null;
   const linear = (v: number) => Math.pow(v, 2.2);
   return {
-    antisolar: { u: 1 - state.sun.u, altitude: -state.sun.altitude },
+    antisolar: state.antisolar,
     strength,
     tint: [
       linear(state.sun.color[0]),
