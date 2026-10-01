@@ -118,17 +118,9 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
   ).toBe("none");
   // The hill is relit: far darker at night than at noon. Sample the grass
   // once each relight has landed (the light key changes the art).
-  const grass = () =>
-    scene.evaluate((node) => {
-      const canvas = node as HTMLCanvasElement;
-      const data = canvas
-        .getContext("2d")
-        ?.getImageData(canvas.width / 2 - 20, canvas.height * 0.9, 40, 10).data;
-      let sum = 0;
-      for (let i = 0; i < (data?.length ?? 0); i += 4)
-        sum += (data?.[i] ?? 0) + (data?.[i + 1] ?? 0) + (data?.[i + 2] ?? 0);
-      return sum / ((data?.length ?? 4) / 4) / 3;
-    });
+  // Either tier may draw it (Auto takes a GPU where CI has one).
+  const grass = async () =>
+    (await brightness(page, [[0.49, 0.9, 0.02, 0.01]]))[0] ?? 0;
   await sky.selectOption("noon");
   await expect.poll(grass).toBeGreaterThan(60);
   const day = await grass();
@@ -371,7 +363,9 @@ test("the GPU tier draws the landscape like Software, and hands over when its co
   // GPU by hand accepts software WebGL too (headless Chromium's).
   await drawing.selectOption("gpu");
   await expect(scene).toHaveAttribute("data-tier", "gpu");
-  await expect(scene).toHaveAttribute("data-renderer", /SwiftShader/);
+  // Whatever WebGL2 this machine has: headless Chromium's SwiftShader
+  // here, a GPU on some CI runners.
+  await expect(scene).toHaveAttribute("data-renderer", /\S/);
   for (const preview of cases) {
     await sky.selectOption(preview);
     await settled(preview, "");
