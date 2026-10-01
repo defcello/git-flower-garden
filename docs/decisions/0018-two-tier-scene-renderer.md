@@ -399,6 +399,97 @@ decision:
   frame for 8 plants and 9 ms for 64. Most of the remaining cost is still
   Chromium's handling of a changed canvas each frame, for the GPU tier to
   remove. Merged to `main` on 2026-09-30 (PR #6).
+- **Step 4, GPU tier: the landscape** (2026-09-30). `src/ui/scene/gpu.ts`
+  draws the sky, Sun, Moon, and stars with WebGL2 and relights the ridge
+  and hill per pixel from their albedo, normal, and translucency maps, in
+  a shader that mirrors `shade` line for line and decodes the maps as
+  `relight.ts` does (alpha snapped at both ends, the hill's X axis
+  flipped). The plants are still drawn by the Canvas 2D scene canvas from
+  sprites relit in the worker, which now lights only the sprites while the
+  GPU draws the landscape (about a seventh of the texels). The landscape
+  is drawn for the light of those sprites, as in Software, so a frame
+  still never mixes two times of day. **Choosing a tier**
+  (`src/ui/scene/tier.ts`, pure and tested): the Drawing choice gains
+  **GPU**; Auto takes it only on graphics hardware. Headless Chromium
+  passes SwiftShader off as having no major performance caveat, so
+  `failIfMajorPerformanceCaveat` is not enough: the renderer's name is
+  checked for software rasterizers too. GPU chosen by hand accepts
+  software WebGL, which is how the browser tests force it. Static draws
+  with Canvas 2D. A lost context hands the landscape to Software at once
+  (the worker relights the ridge and hill again), and the GPU canvas stays
+  mounted to take over again when the context is restored; any failure to
+  start (no context, a shader, or the art) falls back to Software for the
+  visit. **Verified**: in headless Chromium, the GPU and Software tiers
+  agree within 6 of 255 levels in the sky, ridge, hill, and grass at
+  sunrise, civil dusk, full moon, and noon; fewer than 0.1% of pixels
+  differ by more than 8 (plants mid-sway, anti-aliased edges). Auto picks
+  Software for SwiftShader; context loss and restore hand over both ways
+  (`tests/e2e/botanical.spec.ts`). Browser tests that depend on what Auto
+  sees fake the WebGL renderer's name and the performance caveat, since
+  CI machines differ: GitHub's macOS runner has a GPU in headless Chrome,
+  and Windows' fails the caveat. **Measured** (`npm run
+  measure:garden`, now with `LOOP=1` and the tier that drew) on the
+  Surface Pro in a visible Chromium window: Auto chose the GPU on the HD
+  4000 (Mesa, OpenGL ES 3.0). Looping the day with 8 plants, the scene
+  repainted 8.3 times a second with the GPU against 2.7 with Software;
+  both keep the machine's four threads busy (about 250% of one core), now
+  mostly relighting sprites. At rest (noon, swaying), GPU and Software
+  cost the same, 80–81% of one core, since the landscape does not redraw
+  per frame; the cost is the plants' canvas.
+- **Step 4, GPU tier: the plants** (2026-09-30). `src/ui/scene/plants-gpu.ts`
+  draws every hillside plant of the `SceneDescription` with WebGL2, back
+  to front, lit each frame by the same shading as the landscape; the
+  shader copy of `shade` now lives once, in `src/ui/scene/gl.ts`, for both.
+  Per plant, in the software tier's order: the drop shadow (a blurred
+  silhouette made once per plant and size; the Sun's offset and fade are
+  uniforms, so light never rebuilds it) or the cyan outline; ground
+  shadows as ellipses; stems and knots, drawn unlit by the shared Canvas
+  painters into a texture that is rebuilt only while the plant grows, and
+  lit in the shader by `stemLight`, which is exactly what `litColor`
+  applies (unit-tested); sprites, instanced from the full-resolution
+  albedo, normal, and translucency maps, a mirrored sprite sampling its
+  cell mirrored with its normals' x negated, as `mirrorCells` does; then
+  the badges, unlit. Wilting is the CSS filter's color matrix in the
+  shader. Sway positions come from `sway.ts` on the CPU, as in Software,
+  rather than a vertex shader, so both tiers move identically; the cost is
+  a small instance upload per frame. Sampling sprites with a LOD bias of
+  −0.75 matches Canvas's high-quality downscale, which trilinear mipmaps
+  alone left visibly softer. With both the landscape and the plants on
+  the GPU the worker lights nothing for the hillside, and the scene shows
+  the requested light at once (`useShownLight`); a lost plant context
+  hands the plants to Software, which asks the worker for sprites again,
+  and takes them back on restore (the context lifecycle is shared,
+  `src/ui/scene/useGpu.ts`). Static and the focus view still use relit
+  sprites. **Verified**: in headless Chromium and on the Surface Pro's HD
+  4000, the two tiers' pictures, compared over 8×8 blocks where plants are
+  drawn and with motion reduced, differ at most by 5.4, 4.2, and 7.8 of
+  255 levels at sunrise, full moon, and noon; knots sit under their hit
+  targets, the hovered plant is outlined in cyan, sway leaves hit targets
+  still, and a lost context hands over both ways, all with the GPU drawing
+  the plants (`tests/e2e/botanical.spec.ts`, `garden-scene.spec.ts`).
+  **Measured** on the Surface Pro (visible Chromium, HD 4000, 1920×1080,
+  percent of one core): looping the day, the scene repaints 56.9 times a
+  second with the GPU (every display frame) against 2.5 in Software, at
+  204% against 248%; at rest with 8 plants swaying, 52% against 83%; with
+  64 plants, 115% against 160%; Static 2–3%.
+- **Step 4, GPU tier: the frame-time probe** (2026-09-30). Each GPU canvas
+  times its first frames from the first draw call until the GPU has
+  finished them (a one-pixel read back), skipping two for warm-up and
+  timing six, then stops, so later frames never wait. The verdict
+  (`gpuVerdict`, pure and tested) adds the landscape's median to the
+  plants' (a frame while the light moves draws both) once three plant
+  frames are in, against half a frame at the 15 fps cap, about 33 ms.
+  Too slow, and Auto draws with Software for the rest of the visit; GPU
+  chosen by hand stays, the viewer's call. The verdict is on the root
+  element (`data-gpu-probe`). The sway probe still stops sway in either
+  tier. **Verified** in the browser tests by passing SwiftShader off as
+  an HD 4000 and slowing each timed frame to 45 ms: Auto takes the GPU,
+  the probe finds it slow, and the whole scene moves to Software; GPU by
+  hand stays. **Measured** on the Surface Pro's HD 4000, Auto keeps the
+  GPU: 13.5 ms with 8 plants, 18.1 ms with 64, 24.4 ms while looping the
+  day. **Step 4 is done**, bar the reviews below. **Open**: the frame
+  rate, still 15 frames a second in both tiers (P2-E); measurements on
+  the dedicated monitor and in a non-16:9 window ("Verification").
 
 ## Verification
 

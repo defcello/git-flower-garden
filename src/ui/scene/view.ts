@@ -202,6 +202,17 @@ export function litColor(hex: string, p: LightParams): string {
 }
 
 /**
+ * The light on stems and knots, per linear channel: what `litColor`
+ * multiplies an unlit color by (stems face one way, and have no haze). The
+ * GPU tier lights its unlit stem textures with it.
+ */
+export function stemLight(p: LightParams): [number, number, number] {
+  const out: [number, number, number] = [0, 0, 0];
+  shade([1, 1, 1], STEM_NORMAL, p, STEM_LIGHT, out);
+  return out;
+}
+
+/**
  * The light when no location is configured: the noon preview, so the
  * garden is still lit by a real Sun, just not the viewer's own.
  */
@@ -214,6 +225,9 @@ export interface PlantShadow {
   blur: number;
   alpha: number;
 }
+
+/** The shadow's blur, in the plant's own pixels: the same at any light. */
+export const PLANT_SHADOW_BLUR = 7;
 
 /** The shadow's color, without its alpha. */
 export const PLANT_SHADOW_RGB = "21 45 23";
@@ -231,7 +245,7 @@ export function plantShadow(state: LightingState): PlantShadow | null {
   return {
     x: s.x * length * 6,
     y: 3 + Math.max(0, s.z) * length * 3,
-    blur: 7,
+    blur: PLANT_SHADOW_BLUR,
     alpha: 0.22 * Math.min(1, state.sun.intensity * 1.5),
   };
 }

@@ -3,7 +3,8 @@
  * 3), on two channels:
  *
  * - "scene": the whole landscape and the hillside plants, lit by the
- *   current sky;
+ *   current sky; only the plants' sprites when the GPU tier draws the
+ *   landscape, and nothing when it draws the plants too;
  * - "inspection": the sprites alone, lit once by `DAYTIME`, for the focus
  *   view's pale inspection card, where a dusk- or moonlit plant would be
  *   dark and hard to read.
@@ -36,6 +37,8 @@ export type Channel = "scene" | "inspection";
 export interface LitArt extends LitBitmaps {
   /** The light it was lit with (view.ts `lightKey`). */
   key: string;
+  /** Only the sprites were lit: ridge and hill are null. */
+  spritesOnly: boolean;
   /**
    * The lighting state it was lit for. Everything else in the scene (sky,
    * Sun, Moon, stars, shadows) is drawn from this, not from the newest
@@ -68,6 +71,7 @@ let nextId = 1;
 interface Request {
   params: LightParams;
   light: LightingState;
+  spritesOnly: boolean;
 }
 const pending = new Map<number, { channel: Channel; key: string } & Request>();
 /**
@@ -131,7 +135,9 @@ function received(message: WorkerResponse) {
     request === undefined ||
     current === null ||
     current.state === "failed" ||
-    (current.state === "ready" && current.art.key === wanted[request.channel])
+    (current.state === "ready" &&
+      artKey(current.art.light, current.art.spritesOnly) ===
+        wanted[request.channel])
   ) {
     closeAll(message.bitmaps);
     return;
@@ -150,6 +156,7 @@ function received(message: WorkerResponse) {
     art: {
       ...message.bitmaps,
       key: request.key,
+      spritesOnly: request.spritesOnly,
       light: request.light,
       palette,
       spritesUrl,
@@ -191,34 +198,63 @@ function start(): Worker | null {
   return worker;
 }
 
-function request(channel: Channel, light: LightingState): void {
+/** The art's key: its light, and whether the ridge and hill were lit too. */
+const artKey = (light: LightingState, spritesOnly: boolean) =>
+  `${lightKey(sceneLight(light))}${spritesOnly ? "|sprites" : ""}`;
+
+function request(
+  channel: Channel,
+  light: LightingState,
+  spritesOnly: boolean,
+): void {
   if (snapshots[channel].state === "failed") return;
   const params = sceneLight(light);
-  const key = lightKey(params);
+  const key = artKey(light, spritesOnly);
   if (key === wanted[channel]) return;
   if (start() === null) return;
   wanted[channel] = key;
-  if (inFlight[channel]) queued[channel] = { params, light };
-  else post(channel, { params, light });
+  const next = { params, light, spritesOnly };
+  if (inFlight[channel]) queued[channel] = next;
+  else post(channel, next);
 }
 
-function post(channel: Channel, { params, light }: Request): void {
+function post(channel: Channel, next: Request): void {
   if (worker === null) return;
   inFlight[channel] = true;
   const id = nextId++;
-  pending.set(id, { channel, key: lightKey(params), params, light });
-  const message: WorkerRequest = {
-    type: "relight",
-    id,
-    params,
-    spritesOnly: channel === "inspection",
-  };
+  const { params, spritesOnly } = next;
+  pending.set(id, { channel, key: lightKey(params), ...next });
+  const message: WorkerRequest = { type: "relight", id, params, spritesOnly };
   worker.postMessage(message);
 }
 
-/** Ask for the scene lit for `light`; a no-op when that light is current or pending. */
-export function requestLight(light: LightingState): void {
-  request("scene", light);
+/**
+ * What the worker lights for the scene: everything; only the sprites (the
+ * GPU tier lights the landscape itself, several times faster); or nothing
+ * (the GPU tier lights the plants too).
+ */
+export type Needs = "all" | "sprites" | "none";
+
+/** The light shown when nothing waits for the worker (`Needs` "none"). */
+let direct: LightingState | null = null;
+
+/**
+ * Ask for the scene lit for `light`; a no-op when that light is current or
+ * pending. With nothing to light in the worker, `light` is shown at once.
+ */
+export function requestLight(light: LightingState, needs: Needs = "all"): void {
+  if (needs === "none") {
+    if (direct !== light) {
+      direct = light;
+      for (const listener of listeners) listener();
+    }
+    return;
+  }
+  if (direct !== null) {
+    direct = null;
+    for (const listener of listeners) listener();
+  }
+  request("scene", light, needs === "sprites");
 }
 
 function subscribe(listener: () => void) {
@@ -232,7 +268,7 @@ function subscribe(listener: () => void) {
 export function useSceneArt(channel: Channel = "scene"): SceneArt {
   useEffect(() => {
     // The inspection light never changes: ask for it on first use.
-    if (channel === "inspection") request("inspection", DAYTIME);
+    if (channel === "inspection") request("inspection", DAYTIME, true);
   }, [channel]);
   return useSyncExternalStore(subscribe, () => snapshots[channel]);
 }
@@ -240,9 +276,28 @@ export function useSceneArt(channel: Channel = "scene"): SceneArt {
 /**
  * The lighting the scene shows: the state the current art was lit for, so
  * the sky, shadows, and relit art change together, in one frame. Until art
- * is ready (or when it failed), the requested state.
+ * is ready (or when it failed), the requested state; when the GPU tier
+ * lights everything, the requested state at once.
  */
 export function useShownLight(requested: LightingState): LightingState {
   const scene = useSceneArt();
-  return scene.state === "ready" ? scene.art.light : requested;
+  const shown = useSyncExternalStore(subscribe, () => direct);
+  return shown ?? (scene.state === "ready" ? scene.art.light : requested);
+}
+
+/**
+ * Whether the GPU tier is drawing the hillside's plants now: then nothing
+ * else on the hillside needs relit sprites from the worker. Set by the
+ * garden canvas (GardenCanvas.tsx), read by the landscape (SceneCanvas.tsx).
+ */
+let plantsOnGpu = false;
+
+export function setPlantsOnGpu(on: boolean): void {
+  if (plantsOnGpu === on) return;
+  plantsOnGpu = on;
+  for (const listener of listeners) listener();
+}
+
+export function usePlantsOnGpu(): boolean {
+  return useSyncExternalStore(subscribe, () => plantsOnGpu);
 }

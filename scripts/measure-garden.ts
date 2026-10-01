@@ -3,10 +3,13 @@
  * "Verification"): the demo fixtures planted N times on the hillside, the
  * Canvas compositor, the noon preview, 1920×1080, for each drawing tier.
  * Reads every browser process's CPU time from /proc (Linux only) over 20
- * seconds and prints it by process type, in percent of one core.
+ * seconds and prints it by process type, in percent of one core, with
+ * the tier that actually drew. With LOOP=1 the day loops (a day every 30
+ * seconds) and it also counts how often the scene repainted.
  *
  *   npm run measure:garden               # 8 plants, Software then Static
  *   N=64 TIERS=software npm run measure:garden
+ *   LOOP=1 TIERS=gpu,software npm run measure:garden  # while the day loops
  *   GARDEN_E2E_CHANNEL=chrome npm run measure:garden
  *
  * Needs a display: the point is the real GPU path, which headless skips.
@@ -28,6 +31,7 @@ import { startApp } from "../src/server/app.ts";
 const plants = Number(process.env.N ?? 8);
 const tiers = (process.env.TIERS ?? "software,static").split(",");
 const SECONDS = 20;
+const loop = process.env.LOOP === "1";
 /** Kernel clock ticks per second (USER_HZ), as /proc reports CPU time. */
 const HZ = 100;
 
@@ -118,15 +122,37 @@ try {
   await page.goto(app.url);
   await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
   await page.getByLabel("Sky", { exact: true }).selectOption("noon");
+  if (loop) await page.getByLabel("Loop", { exact: true }).check();
+  console.log(
+    `GPU: ${(await page.locator("html").getAttribute("data-gpu")) ?? "not probed"}`,
+  );
   for (const tier of tiers) {
     await page.getByLabel("Drawing", { exact: true }).selectOption(tier);
     await page.mouse.move(2, 2);
     // Let relighting and caches settle.
     await page.waitForTimeout(6000);
     const pids = await family(server.process().pid ?? 0);
+    // Count repaints of the scene: each changes the light it shows.
+    // (A string: this script is compiled without the DOM's types.)
+    await page.evaluate(`
+      window.repaints = 0;
+      window.repaintObserver?.disconnect();
+      window.repaintObserver = new MutationObserver((changes) => {
+        window.repaints += changes.length;
+      });
+      window.repaintObserver.observe(document.querySelector(".landscape") ?? document.body, {
+        subtree: true,
+        attributeFilter: ["data-sky-light"],
+      });
+    `);
     const before = await ticks(pids);
     await page.waitForTimeout(SECONDS * 1000);
     const after = await ticks(pids);
+    const repaints = Number(await page.evaluate("window.repaints"));
+    const drawn =
+      (await page.locator(".landscape-scene").getAttribute("data-tier")) ?? "?";
+    const probe =
+      (await page.locator("html").getAttribute("data-gpu-probe")) ?? "none";
     const percent = Object.fromEntries(
       Object.entries(after).map(([type, t]) => [
         type,
@@ -136,7 +162,10 @@ try {
     const total = Object.values(percent).reduce((a, b) => a + b, 0);
     const sway = (await page.locator("html").getAttribute("data-sway")) ?? "on";
     console.log(
-      `${String(plants)} plants, ${tier}: ${String(total)}% of one core ${JSON.stringify(percent)}; sway ${sway}`,
+      `${String(plants)} plants, ${tier} (drawn by ${drawn}): ${String(total)}% of one core ${JSON.stringify(percent)}; sway ${sway}; GPU probe ${probe}` +
+        (loop
+          ? `; ${(repaints / SECONDS).toFixed(1)} scene repaints a second`
+          : ""),
     );
   }
   await browser.close();

@@ -126,9 +126,13 @@ async function lit(page: Page) {
 /** Cyan pixels in the scene canvas: the hover outline, drawn. */
 async function cyanPixels(page: Page) {
   return page.locator(".garden-canvas").evaluate((node: HTMLCanvasElement) => {
-    const data = node
-      .getContext("2d")
-      ?.getImageData(0, 0, node.width, node.height).data;
+    // Read through a 2D copy, so either tier's canvas works.
+    const copy = document.createElement("canvas");
+    copy.width = node.width;
+    copy.height = node.height;
+    const g = copy.getContext("2d");
+    g?.drawImage(node, 0, 0);
+    const data = g?.getImageData(0, 0, copy.width, copy.height).data;
     let count = 0;
     for (let i = 0; i < (data?.length ?? 0); i += 4) {
       const [r, g, b, a] = [
@@ -344,18 +348,17 @@ test("small gardens are spread evenly over the fixed hillside slots", async ({
   }
 });
 
-test("the scene canvas draws each plant under its own hit targets", async ({
-  page,
-}) => {
-  await openScene(page, small.url, 5);
-  const garden = page.locator('.garden-canvas[data-ready="true"]');
-  // Every drawn plot: tour, fork, and three (empty and missing have none).
-  await expect(garden).toHaveAttribute("data-plants", "3");
-  // Each commit's knot is painted where its (invisible) node sits.
-  const misses = await page.evaluate(() => {
+/** Commits whose knot is not painted where their (invisible) node sits. */
+function knotMisses(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
     const canvas = document.querySelector<HTMLCanvasElement>(".garden-canvas");
-    const g = canvas?.getContext("2d");
+    // Read through a 2D copy, so either tier's canvas works.
+    const copy = document.createElement("canvas");
+    const g = copy.getContext("2d");
     if (!canvas || !g) return ["no canvas"];
+    copy.width = canvas.width;
+    copy.height = canvas.height;
+    g.drawImage(canvas, 0, 0);
     const box = canvas.getBoundingClientRect();
     const k = canvas.width / box.width;
     const missed: string[] = [];
@@ -370,7 +373,17 @@ test("the scene canvas draws each plant under its own hit targets", async ({
     }
     return missed;
   });
-  expect(misses).toEqual([]);
+}
+
+test("the scene canvas draws each plant under its own hit targets", async ({
+  page,
+}) => {
+  await openScene(page, small.url, 5);
+  const garden = page.locator('.garden-canvas[data-ready="true"]');
+  // Every drawn plot: tour, fork, and three (empty and missing have none).
+  await expect(garden).toHaveAttribute("data-plants", "3");
+  // Each commit's knot is painted where its (invisible) node sits.
+  expect(await knotMisses(page)).toEqual([]);
 });
 
 test("64 plants: each grows from its own slot, and all 64 icons are reachable", async ({
@@ -523,4 +536,61 @@ test("leaves sway in the garden only, hit targets stay put, and Static stands st
   await page.keyboard.press("Enter");
   await expect(page.locator("main.focus")).toBeVisible();
   expect(await moves(page, "main.focus .botanical-graph canvas")).toBe(false);
+});
+
+test("with the GPU tier, plants keep their places, outline, and sway, and a lost context hands them to Software", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("git-flower-garden.tier", "gpu");
+  });
+  await openScene(page, small.url, 5);
+  const garden = page.locator('.garden-canvas[data-ready="true"]');
+  await expect(garden).toHaveAttribute("data-tier", "gpu");
+  await expect(garden).toHaveAttribute("data-plants", "3");
+  expect(await knotMisses(page)).toEqual([]);
+
+  // Hovering outlines the plant in cyan, drawn on the GPU.
+  const point = await exposedPoint(page, "fork");
+  if (!point) throw new Error("fork plant is not exposed");
+  const unlit = await cyanPixels(page);
+  await page.mouse.move(point.x, point.y);
+  await expect.poll(() => lit(page)).toEqual(["fork"]);
+  await expect.poll(() => cyanPixels(page)).toBeGreaterThan(unlit + 100);
+  await page.mouse.move(2, 2);
+  await expect.poll(() => lit(page)).toEqual([]);
+
+  // Leaves sway; hit targets stay put.
+  const targets = () =>
+    page
+      .locator('[data-plot="tour"] .node')
+      .evaluateAll((nodes) =>
+        nodes.map((node) => JSON.stringify(node.getBoundingClientRect())),
+      );
+  const still = await targets();
+  await holdLight(page);
+  expect(await moves(page, ".garden-canvas")).toBe(true);
+  expect(await targets()).toEqual(still);
+
+  // A lost context: Software draws the plants at once, from relit sprites,
+  // and the GPU takes them back when the context returns.
+  await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      '.garden-canvas[data-tier="gpu"]',
+    );
+    const lose = canvas
+      ?.getContext("webgl2")
+      ?.getExtension("WEBGL_lose_context");
+    (window as unknown as { lose: typeof lose }).lose = lose;
+    lose?.loseContext();
+  });
+  await expect(garden).toHaveAttribute("data-tier", "software");
+  expect(await knotMisses(page)).toEqual([]);
+  await page.evaluate(() => {
+    (
+      window as unknown as { lose: WEBGL_lose_context | null }
+    ).lose?.restoreContext();
+  });
+  await expect(garden).toHaveAttribute("data-tier", "gpu");
+  expect(await knotMisses(page)).toEqual([]);
 });

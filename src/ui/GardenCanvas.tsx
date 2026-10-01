@@ -1,7 +1,9 @@
 /**
- * The garden's plants in the software tier (ADR 0018): every hillside plant
- * drawn from the shared SceneDescription into one stage-sized canvas, back
- * to front, instead of one canvas per plot. The drop shadow, the cyan
+ * The garden's plants (ADR 0018): every hillside plant drawn from the
+ * shared SceneDescription into one stage-sized canvas, back to front,
+ * instead of one canvas per plot. The GPU tier draws them with WebGL2
+ * (scene/plants-gpu.ts); what follows describes the software tier, which
+ * the GPU tier matches. The drop shadow, the cyan
  * outline of the hovered or keyboard-focused plant, and wilting, which the
  * plots had from CSS filters, are drawn here too.
  *
@@ -20,18 +22,33 @@
  * accessibility layer; this canvas is decorative and never a pointer
  * target.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import type { LightingState } from "../environment/lighting.ts";
 import type { Scene } from "./botanical.ts";
-import { animates, FRAME_MS, listenSway } from "./motion.ts";
+import {
+  animates,
+  FRAME_MS,
+  listenSway,
+  probingGpu,
+  reportGpuFrame,
+  useWantsGpu,
+} from "./motion.ts";
 import {
   badgeStyle,
+  canvasFilters,
+  castShadows,
+  fitCanvas,
+  MARGIN,
+  OUTLINE,
   PathCache,
   paintBadges,
   paintBase,
   paintSprites,
+  WILTING,
   type BadgeStyle,
+  type Cast,
 } from "./paint.ts";
-import { useSceneArt, type LitArt } from "./scene/client.ts";
+import { setPlantsOnGpu, useSceneArt, type LitArt } from "./scene/client.ts";
 import {
   gardenScene,
   toDesign,
@@ -39,33 +56,23 @@ import {
   type PlantInput,
   type SceneDescription,
 } from "./scene/description.ts";
+import { PlantsGpu } from "./scene/plants-gpu.ts";
+import { useGpu } from "./scene/useGpu.ts";
 import {
   DESIGN,
+  lightKey,
   plantShadow,
   PLANT_SHADOW_RGB,
+  sceneLight,
   type PlantShadow,
 } from "./scene/view.ts";
 import { swaySprites } from "./sway.ts";
-import { blendScenes, TRANSITION_MS, type Frame } from "./transition.ts";
-
-/** The hover outline, as the plots' CSS had it: two tight, one soft. */
-const OUTLINE = [
-  { blur: 1, color: "#00e5ff" },
-  { blur: 1, color: "#00e5ff" },
-  { blur: 5, color: "#00e5ffcc" },
-];
-/** styles.css .plot.wilting, before the scene canvas drew the plants. */
-const WILTING = "saturate(0.45) brightness(0.92)";
-
-const settled = new WeakMap<Scene, Frame>();
-function settledFrame(scene: Scene): Frame {
-  let frame = settled.get(scene);
-  if (!frame) {
-    frame = blendScenes(null, scene, 1);
-    settled.set(scene, frame);
-  }
-  return frame;
-}
+import {
+  blendScenes,
+  settledFrame,
+  TRANSITION_MS,
+  type Frame,
+} from "./transition.ts";
 
 interface Growth {
   scene: Scene;
@@ -100,18 +107,163 @@ function useHighlightedPlot(): string | null {
   return id;
 }
 
-export function GardenCanvas({ plants }: { plants: readonly PlantInput[] }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const sceneArt = useSceneArt();
-  const art = sceneArt.state === "ready" ? sceneArt.art : null;
+/**
+ * The hillside's plants, drawn by the GPU tier (scene/plants-gpu.ts) or by
+ * Canvas 2D (below), with the same growth and sway. `light` is the light
+ * the scene shows (client.ts `useShownLight`).
+ */
+export function GardenCanvas({
+  plants,
+  light,
+}: {
+  plants: readonly PlantInput[];
+  light: LightingState;
+}) {
+  /** The GPU context is lost; Software draws until it is restored. */
+  const [lost, setLost] = useState(false);
+  /** The GPU tier could not start (no context, a shader or art failure). */
+  const [failed, setFailed] = useState(false);
+  const wantsGpu = useWantsGpu() && !failed;
+  const gpu = wantsGpu && !lost;
+  useEffect(() => {
+    // The worker then has no sprites to light for the hillside.
+    setPlantsOnGpu(gpu);
+    return () => {
+      setPlantsOnGpu(false);
+    };
+  }, [gpu]);
   const highlighted = useHighlightedPlot();
   // `plants` keeps its identity while nothing drawn changes (App.tsx).
   const description = useMemo(
     () => gardenScene(plants, highlighted),
     [plants, highlighted],
   );
-  const painter = useRef<Painter | null>(null);
   const growth = useRef(new Map<string, Growth>());
+  const attributes = {
+    "aria-hidden": true,
+    "data-highlight": highlighted ?? "",
+    "data-plants": description.plants.length,
+  } as const;
+  return (
+    <>
+      {wantsGpu && (
+        <GpuPlants
+          description={description}
+          growth={growth}
+          light={light}
+          hidden={lost}
+          onLost={setLost}
+          onFail={setFailed}
+          attributes={attributes}
+        />
+      )}
+      {!gpu && (
+        <SoftwarePlants
+          description={description}
+          growth={growth}
+          attributes={attributes}
+        />
+      )}
+    </>
+  );
+}
+
+type Attributes = Record<string, string | number | boolean>;
+
+/**
+ * Draw the plants now and whenever they move: growth into a changed
+ * history (at most at the tier's frame rate), sway on the shared clock, a
+ * resize, or the page showing again. Returns the cleanup.
+ */
+function runPlants(
+  element: HTMLCanvasElement,
+  description: SceneDescription,
+  growth: RefObject<Map<string, Growth>>,
+  paint: (
+    frameOf: (plant: PlantDescription) => Frame,
+    seconds: number | null,
+  ) => void,
+): () => void {
+  // A plant whose history changed grows into its new scene.
+  const now = performance.now();
+  const next = new Map<string, Growth>();
+  for (const plant of description.plants) {
+    const before = growth.current.get(plant.id);
+    next.set(
+      plant.id,
+      !before || before.scene === plant.scene
+        ? (before ?? { scene: plant.scene, from: null, start: now })
+        : {
+            scene: plant.scene,
+            from: animates() ? before.scene : null,
+            start: now,
+          },
+    );
+  }
+  growth.current = next;
+  const frameOf = (plant: PlantDescription, at: number): Frame => {
+    const g = next.get(plant.id);
+    if (!g?.from) return settledFrame(plant.scene);
+    const t = (at - g.start) / TRANSITION_MS;
+    if (t >= 1) {
+      g.from = null;
+      return settledFrame(plant.scene);
+    }
+    return blendScenes(g.from, g.scene, t);
+  };
+  const growing = () => [...next.values()].some((g) => g.from !== null);
+
+  let seconds: number | null = null;
+  const draw = () => {
+    if (document.hidden) return;
+    paint((plant) => frameOf(plant, performance.now()), seconds);
+  };
+
+  // Growth runs at most at the tier's frame rate.
+  let handle = 0;
+  let drawn = now;
+  const step = (at: number) => {
+    handle = 0;
+    if (at - drawn >= FRAME_MS - 4) {
+      drawn = at;
+      draw();
+    }
+    if (growing()) handle = requestAnimationFrame(step);
+    else draw();
+  };
+  if (growing()) handle = requestAnimationFrame(step);
+
+  const clock = listenSway((at) => {
+    seconds = at;
+    draw();
+  });
+  seconds = clock.seconds;
+  draw();
+  const resize = new ResizeObserver(draw);
+  resize.observe(element);
+  document.addEventListener("visibilitychange", draw);
+  return () => {
+    cancelAnimationFrame(handle);
+    clock.stop();
+    resize.disconnect();
+    document.removeEventListener("visibilitychange", draw);
+  };
+}
+
+/** The plants drawn with Canvas 2D from sprites relit in the worker. */
+function SoftwarePlants({
+  description,
+  growth,
+  attributes,
+}: {
+  description: SceneDescription;
+  growth: RefObject<Map<string, Growth>>;
+  attributes: Attributes;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const sceneArt = useSceneArt();
+  const art = sceneArt.state === "ready" ? sceneArt.art : null;
+  const painter = useRef<Painter | null>(null);
 
   useEffect(() => {
     const element = canvas.current;
@@ -119,90 +271,79 @@ export function GardenCanvas({ plants }: { plants: readonly PlantInput[] }) {
     if (!element || !ctx || !art) return;
     painter.current ??= new Painter();
     const plants = painter.current;
-
-    // A plant whose history changed grows into its new scene.
-    const now = performance.now();
-    const next = new Map<string, Growth>();
-    for (const plant of description.plants) {
-      const before = growth.current.get(plant.id);
-      next.set(
-        plant.id,
-        !before || before.scene === plant.scene
-          ? (before ?? { scene: plant.scene, from: null, start: now })
-          : {
-              scene: plant.scene,
-              from: animates() ? before.scene : null,
-              start: now,
-            },
-      );
-    }
-    growth.current = next;
-    const frameOf = (plant: PlantDescription, at: number): Frame => {
-      const g = next.get(plant.id);
-      if (!g?.from) return settledFrame(plant.scene);
-      const t = (at - g.start) / TRANSITION_MS;
-      if (t >= 1) {
-        g.from = null;
-        return settledFrame(plant.scene);
-      }
-      return blendScenes(g.from, g.scene, t);
-    };
-    const growing = () => [...next.values()].some((g) => g.from !== null);
-
-    let seconds: number | null = null;
     // Badges follow the panels' theme, which changes with the lit art.
     const badges = badgeStyle(element);
-    const draw = () => {
-      if (document.hidden) return;
-      plants.paint(
-        element,
-        ctx,
-        description,
-        art,
-        badges,
-        (plant) => frameOf(plant, performance.now()),
-        seconds,
-      );
-    };
-
-    // Growth runs at most at the software tier's frame rate.
-    let handle = 0;
-    let drawn = now;
-    const step = (at: number) => {
-      handle = 0;
-      if (at - drawn >= FRAME_MS - 4) {
-        drawn = at;
-        draw();
-      }
-      if (growing()) handle = requestAnimationFrame(step);
-      else draw();
-    };
-    if (growing()) handle = requestAnimationFrame(step);
-
-    const clock = listenSway((at) => {
-      seconds = at;
-      draw();
+    return runPlants(element, description, growth, (frameOf, seconds) => {
+      plants.paint(element, ctx, description, art, badges, frameOf, seconds);
     });
-    seconds = clock.seconds;
-    draw();
-    const resize = new ResizeObserver(draw);
-    resize.observe(element);
-    document.addEventListener("visibilitychange", draw);
-    return () => {
-      cancelAnimationFrame(handle);
-      clock.stop();
-      resize.disconnect();
-      document.removeEventListener("visibilitychange", draw);
-    };
-  }, [description, art]);
+  }, [description, art, growth]);
 
   return (
     <canvas
       ref={canvas}
       className="garden-canvas"
-      aria-hidden="true"
-      data-highlight={highlighted ?? ""}
-      data-plants={description.plants.length}
+      data-tier="software"
+      {...attributes}
+    />
+  );
+}
+
+/** The plants drawn and lit by the GPU tier, on their own WebGL2 context. */
+function GpuPlants({
+  description,
+  growth,
+  light,
+  hidden,
+  onLost,
+  onFail,
+  attributes,
+}: {
+  description: SceneDescription;
+  growth: RefObject<Map<string, Growth>>;
+  light: LightingState;
+  hidden: boolean;
+  /** Both are state setters, so they never change. */
+  onLost: (lost: boolean) => void;
+  onFail: (failed: true) => void;
+  attributes: Attributes;
+}) {
+  const { canvas, renderer, version } = useGpu(
+    PlantsGpu.create,
+    onLost,
+    onFail,
+  );
+
+  useEffect(() => {
+    const element = canvas.current;
+    if (!element || hidden) return;
+    // Badges follow the panels' theme, which changes with the light.
+    const badges = badgeStyle(element);
+    const key = lightKey(sceneLight(light));
+    return runPlants(element, description, growth, (frameOf, seconds) => {
+      const gpu = renderer.current;
+      if (gpu === null) return;
+      const started = performance.now();
+      fitCanvas(element);
+      const timed = probingGpu("plants");
+      if (!gpu.paint(description, light, badges, frameOf, seconds)) return;
+      if (timed) {
+        gpu.finish();
+        reportGpuFrame("plants", performance.now() - started);
+      }
+      element.dataset.ready = "true";
+      element.dataset.artLight = key;
+      // For measurements: script time of the last frame (not the GPU's).
+      element.dataset.paintMs = (performance.now() - started).toFixed(1);
+    });
+  }, [description, light, hidden, growth, canvas, renderer, version]);
+
+  return (
+    <canvas
+      ref={canvas}
+      className={hidden ? "garden-canvas-lost" : "garden-canvas"}
+      hidden={hidden}
+      data-tier="gpu"
+      {...attributes}
     />
   );
 }
@@ -230,9 +371,6 @@ interface Cached {
   rest: HTMLCanvasElement | undefined;
 }
 
-/** Room around a plant's bounds for its shadow or outline, in graph pixels. */
-const MARGIN = 34;
-
 class Painter {
   private readonly paths = new PathCache();
   private readonly cache = new Map<string, Cached>();
@@ -248,13 +386,9 @@ class Painter {
     seconds: number | null,
   ): void {
     const started = performance.now();
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    const W = Math.max(1, Math.round(element.clientWidth * ratio));
-    const H = Math.max(1, Math.round(element.clientHeight * ratio));
-    if (element.width !== W || element.height !== H) {
-      element.width = W;
-      element.height = H;
-    }
+    fitCanvas(element);
+    const W = element.width;
+    const H = element.height;
     // The canvas is the 16:9 stage, so design pixels scale uniformly.
     const t = W / DESIGN.width;
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -403,7 +537,8 @@ class Painter {
     const source = this.atRest(plant, at, cached, art, badges);
     const out = canvasOf(cached);
     const g = out.getContext("2d");
-    if (g) castShadows(g, source, cached, [cast(shadow)], at.k);
+    if (g)
+      castShadows(g, source, cached.width, cached.height, [cast(shadow)], at.k);
     return out;
   }
 
@@ -419,14 +554,14 @@ class Painter {
     const out = canvasOf(cached);
     const g = out.getContext("2d");
     if (!g) return out;
-    const casts: Cast[] = plant.highlighted
-      ? OUTLINE.map((o) => ({ x: 0, y: 0, ...o }))
+    const casts: readonly Cast[] = plant.highlighted
+      ? OUTLINE
       : shadow && shadow.alpha > 0
         ? [cast(shadow)]
         : [];
     const { width: w, height: h } = cached;
     // Safari before 18 has no canvas filters: shadows, but no wilting.
-    if (typeof (g as { filter?: unknown }).filter === "string") {
+    if (canvasFilters(g)) {
       // The plots' CSS filters exactly: each drop shadow falls from what is
       // drawn so far, so the outline builds up. Filter lengths are device
       // pixels; the CSS ones scaled with the plant.
@@ -439,7 +574,7 @@ class Painter {
       g.drawImage(source, 0, 0, w, h, 0, 0, w, h);
       return out;
     }
-    castShadows(g, source, cached, casts, at.k);
+    castShadows(g, source, w, h, casts, at.k);
     g.drawImage(source, 0, 0, w, h, 0, 0, w, h);
     return out;
   }
@@ -450,39 +585,6 @@ function canvasOf(cached: Cached): HTMLCanvasElement {
   out.width = cached.width;
   out.height = cached.height;
   return out;
-}
-
-/**
- * Shadows alone: the source is drawn out of view and each shadow thrown
- * back into place. Canvas shadows are in device pixels.
- */
-function castShadows(
-  g: CanvasRenderingContext2D,
-  source: HTMLCanvasElement,
-  cached: Cached,
-  casts: readonly Cast[],
-  k: number,
-): void {
-  const { width: w, height: h } = cached;
-  const away = w + 64;
-  for (const c of casts) {
-    g.shadowColor = c.color;
-    g.shadowBlur = c.blur * k;
-    g.shadowOffsetX = c.x * k + away;
-    g.shadowOffsetY = c.y * k;
-    g.drawImage(source, 0, 0, w, h, -away, 0, w, h);
-  }
-  g.shadowColor = "transparent";
-  g.shadowBlur = 0;
-  g.shadowOffsetX = 0;
-  g.shadowOffsetY = 0;
-}
-
-interface Cast {
-  x: number;
-  y: number;
-  blur: number;
-  color: string;
 }
 
 const px = (v: number) => `${v.toFixed(2)}px`;
