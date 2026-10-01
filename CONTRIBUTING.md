@@ -20,6 +20,44 @@ employer, animation studio, or Git hosting provider.
    ([ADR 0019](docs/decisions/0019-astronomy-engine-review.md)). Moving a pin
    needs a new review.
 
+## Development setup
+
+Requirements: [Node.js](https://nodejs.org/) 24 or newer (see `.nvmrc`) and
+[Git](https://git-scm.com/) 2.36 or newer.
+
+```sh
+git clone --recurse-submodules https://github.com/defcello/git-flower-garden.git
+npm ci           # install exact dependency versions
+npm run check    # format check, lint, typecheck, build, and tests
+```
+
+In an existing clone, `git submodule update --init` fetches the one
+submodule: astronomy-engine, pinned to a reviewed release in
+`vendor/astronomy-engine` ([ADR 0019](docs/decisions/0019-astronomy-engine-review.md)).
+After pulling a change that moves it, run the same command again.
+
+Individual commands:
+
+| Command | Purpose |
+| --- | --- |
+| `npm test` | Run unit and Git fixture tests once (`npm run test:watch` to watch) |
+| `npm run test:e2e` | Browser tests with Playwright, using installed Chrome or Edge (build first); set `GARDEN_E2E_CHANNEL=chromium` after `npx playwright install chromium` when a system browser is unavailable |
+| `npm run dev:ui` | Vite dev server for the UI, proxying `/api` to a running service |
+| `npm run lint` | ESLint with type-aware rules |
+| `npm run typecheck` | TypeScript over sources and tests |
+| `npm run build` | Compile `src/` to `dist/` |
+| `npm run format` | Apply Prettier formatting |
+| `npm run fixture -- <name> [dir]` | Write a demo repository to `tmp/fixtures/<name>` (or `dir`) to look at |
+| `npm run bench:ancestors` | Benchmark the ancestor selector (`-- --quick` for a smoke run) |
+| `npm run render:fixture -- <name> <now> <out.svg>` | Render a demo repository to a static SVG as of a given time |
+| `npm run bench:graph` | Benchmark the full pipeline on a long quiet history (`-- --quick` for a smoke run) |
+| `npm run bench:live` | Measure detection latency, startup, idle CPU, and memory of the live service |
+| `npm run rehearse:install` | Pack, install into an empty project, and exercise the installed CLI (build first) |
+
+Demo fixture names: `forkMerge`, `oldBranchHead`, `threeHeads`, `crissCross`, `gardenTour`. For
+example, `npm run fixture -- crissCross` followed by
+`git -C tmp/fixtures/crissCross log --graph --oneline --all`.
+
 ## Making a change
 
 ```sh
