@@ -38,6 +38,21 @@ import { SceneCanvas } from "./SceneCanvas.tsx";
 import { GardenCanvas } from "./GardenCanvas.tsx";
 import type { PlantInput } from "./scene/description.ts";
 import { useShownLight } from "./scene/client.ts";
+import { WeatherNote } from "./WeatherNote.tsx";
+import { WeatherOverlay } from "./WeatherOverlay.tsx";
+import { setSwayWind } from "./sway.ts";
+import {
+  NO_WEATHER,
+  rainbow,
+  weatherEffects,
+  weatherLighting,
+} from "../environment/weather-effects.ts";
+import {
+  previewConditions,
+  WEATHER_PREVIEWS,
+  WEATHER_PREVIEW_NAMES,
+  type WeatherPreviewName,
+} from "../environment/weather-previews.ts";
 import { SkyControls } from "./SkyControls.tsx";
 import { DAYTIME, DESIGN, plantShadowStyle } from "./scene/view.ts";
 import {
@@ -71,6 +86,9 @@ export function App() {
   // viewer's own choice is remembered in this browser only.
   const [renderer, setRenderer] = useState<Renderer>(loadRenderer);
   const [skySetting, setSkySetting] = useState<SkySetting>(LIVE);
+  const [weatherSetting, setWeatherSetting] = useState<
+    "live" | WeatherPreviewName
+  >("live");
   const [looping, setLooping] = useState(false);
   useSkyLoop(looping && renderer !== "technical", setSkySetting);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -169,7 +187,41 @@ export function App() {
     ? repos.find((r) => r.id === selection.repoId)
     : undefined;
 
-  const light = sky?.state ?? DAYTIME;
+  // Weather: live conditions with the live sky, or a developer preview;
+  // none for a chosen time, which live conditions do not describe.
+  const liveConditions =
+    sky?.snapshot.source === "live"
+      ? (environment?.weather?.conditions ?? null)
+      : null;
+  const skyTime = sky?.snapshot.time.getTime() ?? null;
+  const previewHour =
+    skyTime === null ? 0 : Math.floor(skyTime / 3_600_000) * 3_600_000;
+  // Every server message parses anew; the weather changes far less often.
+  const liveKey = JSON.stringify(liveConditions);
+  const effects = useMemo(
+    () =>
+      renderer === "technical"
+        ? NO_WEATHER
+        : weatherSetting === "live"
+          ? weatherEffects(liveConditions)
+          : weatherEffects(previewConditions(weatherSetting, previewHour)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [renderer, weatherSetting, liveKey, previewHour],
+  );
+  const skyMinutes = Math.floor((skyTime ?? 0) / 60_000);
+  const skyWeather = useMemo(
+    () => (effects === NO_WEATHER ? null : { effects, minutes: skyMinutes }),
+    [effects, skyMinutes],
+  );
+  const baseLight = sky?.state ?? DAYTIME;
+  const light = useMemo(
+    () => weatherLighting(baseLight, effects),
+    [baseLight, effects],
+  );
+  const showsRainbow = rainbow(light, effects) !== null;
+  useEffect(() => {
+    setSwayWind(effects === NO_WEATHER ? null : effects.windSpeed);
+  }, [effects]);
   // Plant shadows change with the relit art, not ahead of it.
   const shownLight = useShownLight(light);
   // The top bar and notes float over the scene; the focus view and the
@@ -191,7 +243,7 @@ export function App() {
           aria-hidden="true"
           data-sky={sky ? (sky.snapshot.preview ?? "live") : "day"}
         >
-          <SceneCanvas state={light} />
+          <SceneCanvas state={light} weather={skyWeather} />
           <div className="landscape-vignette" />
         </div>
       )}
@@ -232,6 +284,29 @@ export function App() {
               onLoopingChange={setLooping}
             />
           )}
+          {renderer !== "technical" && (
+            <label className="preview-control">
+              Weather
+              <select
+                aria-label="Weather"
+                value={weatherSetting}
+                onChange={(event) => {
+                  setWeatherSetting(
+                    event.target.value as "live" | WeatherPreviewName,
+                  );
+                }}
+              >
+                <option value="live">
+                  {environment?.weather ? "Live" : "Live · weather off"}
+                </option>
+                {WEATHER_PREVIEW_NAMES.map((name) => (
+                  <option key={name} value={name}>
+                    Preview · {WEATHER_PREVIEWS[name].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <Legend />
         </header>
         <div className="hud-notes">
@@ -244,6 +319,28 @@ export function App() {
               {sky
                 ? `${sky.snapshot.source === "preview" ? "not live conditions: " : "live sky, "}${describeSky(sky)}.`
                 : "noon sky; the real sky is off (environment.enabled)."}{" "}
+              {weatherSetting !== "live" ? (
+                <>
+                  <strong className="weather-preview-badge">
+                    Weather preview
+                  </strong>{" "}
+                  not live weather: {WEATHER_PREVIEWS[weatherSetting].label}
+                  .{" "}
+                </>
+              ) : sky?.snapshot.source === "live" && environment?.weather ? (
+                <>
+                  <WeatherNote
+                    weather={environment.weather}
+                    timeZone={environment.timeZone}
+                  />{" "}
+                </>
+              ) : null}
+              {showsRainbow && (
+                <>
+                  The rainbow follows the optics of sunlit rain; it is inferred
+                  from the forecast, not observed.{" "}
+                </>
+              )}
               <span className="art-key">
                 Flowers = branch heads · leaves = commits · fruit = tags · gold
                 markers = worktrees. Dashed stems hide history; red boundaries
@@ -334,6 +431,7 @@ export function App() {
           }
         >
           {sceneDrawn && <GardenCanvas plants={plants} light={shownLight} />}
+          {sceneMode && <WeatherOverlay light={shownLight} effects={effects} />}
           {repos.map((repo, index) => (
             <Plot
               renderer={renderer}

@@ -25,6 +25,12 @@ import {
 import { LandscapeGpu } from "./scene/gpu.ts";
 import { useGpu } from "./scene/useGpu.ts";
 import {
+  cloudLayer,
+  rainbowLayer,
+  type Raster,
+  type SkyWeather,
+} from "./scene/weather-sky.ts";
+import {
   DESIGN,
   lightKey,
   moonLight,
@@ -73,10 +79,26 @@ function moonSprite(
   return canvas;
 }
 
+/** The sky's weather rasters for this canvas (scene/weather-sky.ts). */
+function weatherRasters(
+  element: HTMLCanvasElement,
+  state: LightingState,
+  weather: SkyWeather | null,
+): { clouds: Raster | null; rainbow: Raster | null } {
+  const clouds =
+    weather && cloudLayer(element.width, element.height, state, weather);
+  const bow =
+    weather && rainbowLayer(element.width, element.height, state, weather);
+  element.dataset.clouds = String(Boolean(clouds));
+  element.dataset.rainbow = String(Boolean(bow));
+  return { clouds, rainbow: bow };
+}
+
 function draw(
   element: HTMLCanvasElement,
   state: LightingState,
   art: LitArt | null,
+  weather: SkyWeather | null,
 ): void {
   const g = element.getContext("2d", { alpha: false });
   if (!g) return;
@@ -127,14 +149,23 @@ function draw(
     );
     g.globalAlpha = 1;
   }
+  const weatherLayers = weatherRasters(element, state, weather);
+  if (weatherLayers.clouds) g.drawImage(weatherLayers.clouds.canvas, 0, 0);
   const lit = art !== null && art.ridge !== null && art.hill !== null;
   if (lit) {
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = "high";
     const w = DESIGN.width * t.scale;
     const h = DESIGN.height * t.scale;
-    for (const layer of [art.ridge, art.hill])
-      if (layer) g.drawImage(layer, t.ox, t.oy, w, h);
+    if (art.ridge) g.drawImage(art.ridge, t.ox, t.oy, w, h);
+    // The rain a rainbow shines in is nearer than the ridges.
+    if (weatherLayers.rainbow) {
+      // Light the rain sends back adds to what is behind it.
+      g.globalCompositeOperation = "lighter";
+      g.drawImage(weatherLayers.rainbow.canvas, 0, 0, W, H);
+      g.globalCompositeOperation = "source-over";
+    }
+    if (art.hill) g.drawImage(art.hill, t.ox, t.oy, w, h);
   }
   mark(element, state, art?.key, lit);
 }
@@ -157,7 +188,14 @@ function mark(
   if (artKey !== undefined) element.dataset.artLight = artKey;
 }
 
-export function SceneCanvas({ state }: { state: LightingState }) {
+export function SceneCanvas({
+  state,
+  weather,
+}: {
+  state: LightingState;
+  /** The sky's weather; null for a clear sky. */
+  weather: SkyWeather | null;
+}) {
   /** The GPU context is lost; Software draws until it is restored. */
   const [lost, setLost] = useState(false);
   /** The GPU tier could not start (no context, a shader or art failure). */
@@ -181,6 +219,7 @@ export function SceneCanvas({ state }: { state: LightingState }) {
       {wantsGpu && (
         <GpuCanvas
           shown={shown}
+          weather={weather}
           selfLit={plantsOnGpu}
           art={art}
           scene={scene}
@@ -189,17 +228,26 @@ export function SceneCanvas({ state }: { state: LightingState }) {
           onFail={setFailed}
         />
       )}
-      {!gpu && <SoftwareCanvas shown={shown} art={art} scene={scene} />}
+      {!gpu && (
+        <SoftwareCanvas
+          shown={shown}
+          weather={weather}
+          art={art}
+          scene={scene}
+        />
+      )}
     </>
   );
 }
 
 function SoftwareCanvas({
   shown,
+  weather,
   art,
   scene,
 }: {
   shown: LightingState;
+  weather: SkyWeather | null;
   art: LitArt | null;
   scene: SceneArt;
 }) {
@@ -208,7 +256,7 @@ function SoftwareCanvas({
     const element = canvas.current;
     if (!element) return;
     const redraw = () => {
-      if (!document.hidden) draw(element, shown, art);
+      if (!document.hidden) draw(element, shown, art, weather);
     };
     redraw();
     document.addEventListener("visibilitychange", redraw);
@@ -217,7 +265,7 @@ function SoftwareCanvas({
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };
-  }, [shown, art]);
+  }, [shown, art, weather]);
 
   return (
     <canvas
@@ -233,6 +281,7 @@ function SoftwareCanvas({
 /** The GPU tier's landscape, on its own WebGL2 context (scene/useGpu.ts). */
 function GpuCanvas({
   shown,
+  weather,
   selfLit,
   art,
   scene,
@@ -241,6 +290,7 @@ function GpuCanvas({
   onFail,
 }: {
   shown: LightingState;
+  weather: SkyWeather | null;
   /** The plants are on the GPU too: nothing waits for the worker. */
   selfLit: boolean;
   art: LitArt | null;
@@ -265,7 +315,7 @@ function GpuCanvas({
       fitCanvas(element);
       const timed = probingGpu("landscape");
       const start = performance.now();
-      const lit = gpu.draw(shown);
+      const lit = gpu.draw(shown, weatherRasters(element, shown, weather));
       if (timed && lit) {
         gpu.finish();
         reportGpuFrame("landscape", performance.now() - start);
@@ -285,7 +335,7 @@ function GpuCanvas({
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };
-  }, [shown, selfLit, art, hidden, canvas, renderer, version]);
+  }, [shown, weather, selfLit, art, hidden, canvas, renderer, version]);
 
   return (
     <canvas

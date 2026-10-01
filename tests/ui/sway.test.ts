@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { Sprite } from "../../src/ui/botanical.ts";
 import {
   FRAME_MS,
+  MAX_WIND_STRENGTH,
   PROBE_FRAMES,
   PROBE_LIMIT_MS,
   SWAY_ANGLE,
   swayAngle,
+  setSwayWind,
   swaySprites,
   tooSlow,
+  windStrength,
 } from "../../src/ui/sway.ts";
 
 const sprite = (
@@ -72,6 +75,34 @@ describe("sway", () => {
       y: 0,
       rotate: 0,
     });
+  });
+});
+
+describe("wind (ADR 0018 step 5)", () => {
+  it("sways harder in wind, within a restrained limit", () => {
+    expect(windStrength(4)).toBeCloseTo(1, 9);
+    expect(windStrength(0)).toBeLessThan(1);
+    expect(windStrength(16)).toBeGreaterThan(1.5);
+    expect(windStrength(60)).toBe(MAX_WIND_STRENGTH);
+    expect(SWAY_ANGLE * MAX_WIND_STRENGTH).toBeLessThan(0.14); // about 7.5°
+    const leaf = sprite("leaf:1");
+    for (let t = 0; t < 10; t += 0.7)
+      expect(swayAngle(leaf, t, 2)).toBeCloseTo(2 * swayAngle(leaf, t), 12);
+  });
+
+  it("follows the weather's wind, and the calm breeze without weather", () => {
+    const rest = [sprite("leaf:1")];
+    const angle = () => (swaySprites(rest, 1.3)[0]?.rotate ?? 0) - 0.2;
+    try {
+      setSwayWind(null);
+      const breeze = angle();
+      setSwayWind(16);
+      expect(Math.abs(angle())).toBeGreaterThan(Math.abs(breeze) * 1.5);
+      setSwayWind(0);
+      expect(Math.abs(angle())).toBeLessThan(Math.abs(breeze));
+    } finally {
+      setSwayWind(null);
+    }
   });
 });
 

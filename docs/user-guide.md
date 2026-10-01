@@ -162,6 +162,8 @@ checking. Unknown keys are errors.
 | `environment.latitude`, `environment.longitude` | Blacksburg, Virginia | Your location in degrees; north and east are positive. Give both or neither |
 | `environment.elevationMeters` | `0` (Blacksburg: `634`) | Height above sea level |
 | `environment.timeZone` | `history.timeZone` (Blacksburg: `America/New_York`) | Zone for the local time shown with the sky |
+| `environment.weather.enabled` | `false` | Fetch this hour's forecast from MET Norway for the sky's place (sends the place; see [Weather](#weather-optional)) |
+| `environment.weather.contact` | none | Your email or web address, added to the weather requests for MET Norway |
 | `repositories` | (required) | List of sources, below. `[]` shows a welcome page. |
 
 Each repository needs a unique `id` (lowercase letters, digits, `.`, `_`, or
@@ -195,7 +197,7 @@ With `"enabled": false`, the garden is lit by a fixed noon sun. The focus
 view always shows its plant in daylight, so it stays easy to read; after
 dusk its panels, and the controls, turn dark.
 Everything is computed on your computer; no location lookup happens and
-nothing is sent anywhere. Weather is not available yet.
+nothing is sent anywhere unless you turn on weather (below).
 
 ```json
 "environment": { "latitude": 35.6, "longitude": -82.55 }
@@ -209,6 +211,54 @@ The **Sky** menu returns to **Live**, or jumps to a preview such as sunrise,
 full moon, or polar night, which sets the slider, date, and place. Any
 chosen time is labelled **Sky preview** and is never taken for live
 conditions.
+
+### Weather (optional)
+
+With weather on, the garden view shows this hour's forecast for the sky's
+place from [MET Norway](https://api.met.no/)'s free forecast service:
+clouds drift across the sky and dull the sunlight, rain, sleet, or snow
+falls over the hillside, fog hazes the hill, and the plants sway harder
+in the wind. When the Sun shines on rain, a rainbow appears where the
+optics of water drops put it: an arc standing on the ground opposite the
+Sun, its top 42° above the horizon at sunrise and sunset and lower the
+higher the Sun, red at sunset, with a faint secondary bow outside it. It
+is drawn round, as you would see it facing it, although the panorama is
+wider than it is tall, degree for degree. It is inferred from the forecast, not a report of one. The details
+give the forecast in words: cloud, rain, sleet or snow, wind, and
+temperature. Weather follows the live sky only; a chosen time shows none.
+
+```json
+"environment": {
+  "latitude": 35.6,
+  "longitude": -82.55,
+  "weather": { "enabled": true, "contact": "you@example.com" }
+}
+```
+
+Weather is **off by default** because turning it on sends your configured
+place (rounded to about 11 m) to `api.met.no` about every half hour, from
+the git-flower-garden service, never from the browser. Without your own
+coordinates it is Blacksburg's weather. MET Norway asks every application
+to say who to contact; `contact` (optional) adds your email or web address
+to the requests, so they can reach you rather than block the app.
+
+What you see is a model forecast for the hour, not a measurement at your
+location, and is labelled so, with the hour, when it was fetched, and the
+credit MET Norway's license (CC BY 4.0) requires. When requests fail, the
+last forecast stays, marked **Stale weather** with the reason; after 6
+hours without a successful request the details say the weather is
+unavailable and the sky shows none. The sun, moon, and Git monitoring
+carry on regardless. The last forecast is kept in `weather.json` in the
+cache directory (readable only by you), so restarting does not ask again
+early; deleting it is safe. Weather follows the sky: with
+`environment.enabled` false it is off too.
+
+The **Weather** menu (garden view) previews any condition, from clear to
+thunderstorm, snow, and high wind, labelled **Weather preview** and never
+taken for live weather; with a Sky preview it shows, for example, showers
+at sunset. Rain and snow never cover an icon, card, or label, and the
+focus view stays dry. They fall at the garden's animation rate; under
+Static or reduced motion they hold still. There is no lightning.
 
 ### Motion
 
@@ -300,8 +350,11 @@ git-flower-garden keeps fetched remote objects in a per-user cache:
 `%LOCALAPPDATA%\git-flower-garden\Cache` (Windows), `~/Library/Caches/git-flower-garden`
 (macOS), or `$XDG_CACHE_HOME/git-flower-garden` (Linux). This is private repository
 data. Removing a repository from the configuration stops monitoring it but
-keeps its cache; `git-flower-garden cache --clean <id>` deletes it. Nothing else is
-stored, and nothing is sent anywhere except fetches to your own remotes.
+keeps its cache; `git-flower-garden cache --clean <id>` deletes it. With
+weather on, the cache also holds `weather.json`, the last forecast for your
+configured place. Nothing else is stored, and nothing is sent anywhere
+except fetches to your own remotes and, only if you enable it, weather
+requests to MET Norway.
 
 **Uninstall:**
 

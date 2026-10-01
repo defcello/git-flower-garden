@@ -490,6 +490,87 @@ decision:
   day. **Step 4 is done**, bar the reviews below. **Open**: the frame
   rate, still 15 frames a second in both tiers (P2-E); measurements on
   the dedicated monitor and in a non-16:9 window ("Verification").
+- **Step 5, weather** (2026-10-01). Live conditions come from the
+  service ([ADR 0020](0020-weather-provider.md)); the `WeatherState`
+  above is `src/environment/weather-effects.ts`, pure and unit-tested, and
+  eleven developer previews (clear to thunderstorm, sleet, snow, high
+  wind) pass through it like live weather, labelled "Weather preview".
+  Live weather shows only with the live sky; a chosen time has none.
+  - *Light*: cloud and fog leave 12% to 100% of the direct Sun and Moon
+    (20% under a dry overcast; shadows go below 35%), greys the sky toward its own brightness, darker in
+    rain, hides stars, and fog and rain thicken the haze. The result is an
+    ordinary `LightingState`, so both tiers relight the art for it with no
+    other change.
+  - *Clouds*: a seeded field of 14 clouds of 12 to 19 soft elliptical
+    puffs, the first `cover` share shown (so more cover only adds
+    clouds), with a stratus sheet closing over the sky past half cover;
+    they drift downwind by the minute, never per frame. They are a
+    Canvas 2D raster (`src/ui/scene/weather-sky.ts`) that Software draws
+    and the GPU tier uploads as a texture, so the skies match.
+  - *Rainbow*, from optics (maintainer request, 2026-10-01;
+    `src/environment/rainbow.ts`): rays traced through a spherical water
+    drop at 77 wavelengths, with the refractive index of water (Daimon and
+    Masumura, 2007), Snell's law, and Fresnel losses for each polarisation
+    through one internal reflection (primary) or two (secondary), collected
+    by angle from the antisolar point per unit solid angle, blurred by the
+    Sun's disc (0.53°) and by diffraction from millimetre drops, and
+    coloured with the CIE 1931 functions. The profile shows the primary
+    bow (violet 40.6° to red 42.5°), the secondary (red 50.2° to violet
+    53.6°, at 14% of the primary's luminance), Alexander's dark band, and
+    the brighter sky inside the primary. Each pixel of the scene shows
+    the profile at its angle from the antisolar point, which the bow
+    circles, so its place and size follow from the Sun: centred opposite
+    it (at `1 - u` on the folded panorama, tested against projecting the
+    opposite direction), its top 42° less the Sun's altitude above the
+    horizon. Two corrections from the maintainer's review: the panorama
+    spreads azimuth about 1.6 times wider than altitude, which drew the
+    bow as a wide oval, so its angles are measured the same way in every
+    direction (`rainbowAngle`) and it is round; and at the sky's scale it
+    looked small and showed its lower half over the ridges, since the
+    landscape is not at its true depth. A bow in rain stands on the
+    ground, so its lower half is never seen: it stands on a ground line
+    at the lowest point of the hill's crest (`RAINBOW_GROUND`, hidden by
+    the hill from edge to edge), its centre the Sun's altitude below that
+    line, and its scale (`RAINBOW_SCALE`, about 2.1 times the sky's) keeps
+    its top at the true height for every Sun altitude. Nothing is drawn
+    below the ground line. Past 54° of Sun the secondary fades out over
+    ten degrees. It is light the rain sends back, so it is added to the
+    scene (Canvas `lighter`, GPU `ONE, ONE`), tinted by the
+    sunlight's colour: red at sunset. It appears when sunlight falls on
+    rain: liquid drops, the Sun above the horizon (and below 64°, beyond
+    which even the secondary sinks out of view), and gaps in the cloud;
+    its strength follows the direct light and the gaps. In front of the
+    ridge and behind the hill. Described as inferred from the
+    forecast, never observed. The profile takes 0.13 s once; the raster,
+    at most 960 pixels wide and scaled up, 35–50 ms on the Surface Pro,
+    redrawn only when the Sun has moved about 0.1°.
+  - *Precipitation and fog* (`src/ui/WeatherOverlay.tsx`): over the
+    plants, under every icon and card, never a pointer target, and not in
+    the focus view. Particle caps per 1920×1080 at full intensity: GPU
+    900 rain, 700 sleet, 600 snow; Software 220, 180, 160. Each particle's
+    place is `particleAt`, a function of its index and the time; the GPU
+    tier computes it in the vertex shader with the same integer hash
+    (`src/ui/scene/precipitation-gpu.ts`), one instanced draw and no
+    per-particle CPU work. They move on the shared 15 fps clock, so the
+    sway probe, hidden pages, Static, and reduced motion apply; Static
+    and reduced motion show a still frame. Fog is a still band of haze.
+  - *Wind*: the sway's amplitude follows the wind, 0.6 of the calm
+    breeze in still air to at most 2.2 (about 7.5°), and slants rain and
+    snow. Thunder darkens the cloud; there is no lightning, by default or
+    otherwise.
+  **Verified**: `tests/environment/weather-effects.test.ts`,
+  `tests/ui/sway.test.ts`; browser tests in both tiers
+  (`tests/e2e/weather.spec.ts`): live weather from a stand-in provider is
+  drawn and described with its source, previews are labelled, heavy rain
+  takes the colour out of the sky and the Sun off the hill, the tiers
+  agree within 8 of 255 levels in the sky and on the hill, the rainbow
+  appears only for sunlit showers; and every plant and icon stays
+  reachable through a thunderstorm (`garden-scene.spec.ts`). **Measured**
+  on the Surface Pro (visible Chromium, HD 4000, 1920×1080, 8 plants,
+  noon, percent of one core): GPU 54% without weather, 56% in heavy rain
+  (900 particles) or snow; Software 82% without, 89–90% in rain (220) or
+  snow; Static 2% in rain. **Open**: quality presets (step 6), and
+  review of the look on the dedicated monitor.
 
 ## Verification
 

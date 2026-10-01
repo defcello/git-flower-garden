@@ -811,6 +811,41 @@ code,
   background: #6b3fa0;
   color: #fff;
 }
+.weather-preview-badge {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #2f6f8f;
+  color: #fff;
+}
+/* Rain, snow, and fog (WeatherOverlay.tsx): over the plants, under every
+   icon (z 2000) and card (2100), and never a pointer target. */
+.botanical .garden-scene .weather-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1900;
+  pointer-events: none;
+}
+.weather-overlay > * {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.weather-overlay > [hidden] {
+  display: none;
+}
+.weather-stale {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #8a5a00;
+  color: #fff;
+}
+.weather-credit {
+  color: inherit;
+}
 .botanical .topbar,
 .botanical .art-notice {
   opacity: 0;

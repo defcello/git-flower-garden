@@ -9,6 +9,27 @@ change configuration or behavior, and the notes say how.
 
 ### Changes
 
+- **Optional weather.** Set `environment.weather.enabled` to show this
+  hour's forecast (cloud, rain, sleet or snow, wind, temperature) from MET
+  Norway's free service in the garden view's details, labelled as a model
+  forecast with its hour, fetch time, and credit. It is off by default
+  because it sends your configured place (rounded to about 11 m) to
+  `api.met.no`, from the service, about every half hour; an optional
+  `contact` identifies you to MET Norway. Failed requests leave the last
+  forecast marked stale, then no weather after 6 hours; the sky and Git
+  monitoring are unaffected.
+  ([ADR 0020](docs/decisions/0020-weather-provider.md))
+- **The garden shows the weather.** Clouds drift across the sky and dull
+  the sunlight, rain, sleet, or snow falls over the hillside, fog hazes
+  the hill, plants sway harder in the wind, and sunlit showers may bring a
+  rainbow, placed, sized, and coloured by the optics of water drops
+  (inferred from the forecast, and said so). Rain and snow fall in front of the
+  plants but never cover an icon, card, or label, and the focus view stays
+  dry. A new **Weather** menu previews any condition, labelled as a
+  preview. On a first-generation Surface Pro, heavy rain costs about 2% of
+  a core more with the GPU, 8% in Software; Static holds it still.
+  ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
+
 - **The garden sways.** In the garden view, leaves, flowers, and fruit rock
   gently in a breeze; what you point at, click, or tab to never moves, and
   the focus view holds still. A new **Drawing** menu chooses Auto,
