@@ -133,14 +133,14 @@ precision highp float;
 uniform sampler2D uAlbedo, uNormal, uTranslucency;
 uniform bool uHasMap;
 uniform bool uFlipX;
-uniform float uLayerHaze, uLayerTranslucency, uLayerFill;
+uniform float uLayerHaze, uLayerTranslucency, uLayerFill, uLayerNight;
 in vec2 vUv;
 out vec4 color;
 ${SHADE_GLSL}
 void main() {
   float map = uHasMap ? luminance(texture(uTranslucency, vUv).rgb) : uLayerTranslucency;
   color = shadeTexel(texture(uAlbedo, vUv), texture(uNormal, vUv).rgb, uFlipX,
-                     map, uLayerFill, uLayerHaze);
+                     map, uLayerFill, uLayerHaze, uLayerNight);
   if (color.a <= 0.0) discard;
 }`;
 
@@ -203,6 +203,7 @@ export class LandscapeGpu implements GpuRenderer {
       "uLayerHaze",
       "uLayerTranslucency",
       "uLayerFill",
+      "uLayerNight",
       ...LIGHT_UNIFORMS,
     ]);
     this.#stars = gl.createBuffer();
@@ -343,6 +344,7 @@ export class LandscapeGpu implements GpuRenderer {
         gl.uniform1f(u.uLayerHaze ?? null, layer.light.haze);
         gl.uniform1f(u.uLayerTranslucency ?? null, layer.light.translucency);
         gl.uniform1f(u.uLayerFill ?? null, layer.light.fill ? 1 : 0);
+        gl.uniform1f(u.uLayerNight ?? null, layer.light.night);
         gl.uniform1i(u.uHasMap ?? null, layer.translucency === null ? 0 : 1);
         gl.uniform1i(u.uFlipX ?? null, layer.flipX ? 1 : 0);
         gl.activeTexture(gl.TEXTURE0);

@@ -97,13 +97,29 @@ interface Projected {
   direction: Vector3;
 }
 
+/**
+ * Hour angle in degrees, (-180, 180]: 0 on the meridian, negative before it
+ * (rising), positive after (setting). It only ever increases through a day.
+ */
+function hourAngle(position: BodyPosition, latitude: number): number {
+  const v = horizontalVector(position.altitude, position.azimuth);
+  const phi = latitude * DEG;
+  // The equator's upper meridian point, and west: H = atan2(v·west, v·Q).
+  const q = -v.n * Math.sin(phi) + v.u * Math.cos(phi);
+  return Math.atan2(-v.e, q) / DEG;
+}
+
 export function project(position: BodyPosition, latitude: number): Projected {
   const d = fromEast(position.azimuth, latitude);
   const cosAlt = Math.cos(position.altitude * DEG);
+  const h = hourAngle(position, latitude);
   return {
-    // Mirror the half behind the viewer onto the front: continuous at east
-    // and west, so a body never jumps across the screen.
-    u: Math.abs(d) / 180,
+    // Placed by hour angle, so a body never turns back, and squeezed at the
+    // edges like the compressed east and west of the panorama: rising and
+    // setting look steep, the middle of the path a broad arc. Due east or
+    // west of the meridian is at 0.15 or 0.85; only a circumpolar body ever
+    // reaches the edges, at lower culmination.
+    u: 0.5 + 0.5 * Math.sin((h / 2) * DEG),
     behind: d < 0,
     direction: {
       x: -Math.cos(d * DEG) * cosAlt,

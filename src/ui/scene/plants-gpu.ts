@@ -204,7 +204,7 @@ void main() {
   vec4 lit = shadeTexel(texture(uAlbedo, vUv, BIAS),
                         texture(uNormal, vUv, BIAS).rgb, vFlip == 1,
                         luminance(texture(uTranslucency, vUv, BIAS).rgb),
-                        uLayerFill, uLayerHaze);
+                        uLayerFill, uLayerHaze, ${LAYERS.sprites.night.toFixed(1)});
   if (lit.a <= 0.0) discard;
   color = wilt(lit * vAlpha);
 }`;
