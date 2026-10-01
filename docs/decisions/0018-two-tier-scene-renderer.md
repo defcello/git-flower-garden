@@ -423,8 +423,11 @@ decision:
   agree within 6 of 255 levels in the sky, ridge, hill, and grass at
   sunrise, civil dusk, full moon, and noon; fewer than 0.1% of pixels
   differ by more than 8 (plants mid-sway, anti-aliased edges). Auto picks
-  Software there; context loss and restore hand over both ways
-  (`tests/e2e/botanical.spec.ts`). **Measured** (`npm run
+  Software for SwiftShader; context loss and restore hand over both ways
+  (`tests/e2e/botanical.spec.ts`). Browser tests that depend on what Auto
+  sees fake the WebGL renderer's name and the performance caveat, since
+  CI machines differ: GitHub's macOS runner has a GPU in headless Chrome,
+  and Windows' fails the caveat. **Measured** (`npm run
   measure:garden`, now with `LOOP=1` and the tier that drew) on the
   Surface Pro in a visible Chromium window: Auto chose the GPU on the HD
   4000 (Mesa, OpenGL ES 3.0). Looping the day with 8 plants, the scene

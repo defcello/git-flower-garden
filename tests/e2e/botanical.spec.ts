@@ -233,6 +233,53 @@ test("the scene always shows whole at 16:9, and the time slider and bookmarks ag
 });
 
 /**
+ * Make WebGL2 report `renderer` and pass `failIfMajorPerformanceCaveat`,
+ * so a test decides what Auto sees, whatever GPU the machine has (CI's
+ * macOS runner has one; Windows' fails the caveat). With `frameMs`, every
+ * frame the GPU probe waits for takes that long.
+ */
+async function fakeGpu(page: Page, renderer: string, frameMs = 0) {
+  await page.addInitScript(
+    ([renderer, frameMs]) => {
+      const original = (proto: object, name: string) =>
+        Object.getOwnPropertyDescriptor(proto, name)?.value as (
+          ...args: unknown[]
+        ) => unknown;
+      const getContext = original(HTMLCanvasElement.prototype, "getContext");
+      Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+        value(this: HTMLCanvasElement, type: string, options?: object) {
+          return getContext.call(
+            this,
+            type,
+            type === "webgl2"
+              ? { ...options, failIfMajorPerformanceCaveat: false }
+              : options,
+          );
+        },
+      });
+      const proto = WebGL2RenderingContext.prototype;
+      const getParameter = original(proto, "getParameter");
+      const readPixels = original(proto, "readPixels");
+      Object.defineProperty(proto, "getParameter", {
+        value(this: WebGL2RenderingContext, name: number) {
+          // UNMASKED_RENDERER_WEBGL and RENDERER.
+          if (name === 0x9246 || name === 0x1f01) return renderer;
+          return getParameter.call(this, name);
+        },
+      });
+      Object.defineProperty(proto, "readPixels", {
+        value(this: WebGL2RenderingContext, ...args: unknown[]) {
+          const end = performance.now() + frameMs;
+          while (performance.now() < end);
+          return readPixels.apply(this, args);
+        },
+      });
+    },
+    [renderer, frameMs] as const,
+  );
+}
+
+/**
  * Mean brightness (0..255) of regions of the scene canvas, as fractions of
  * its size. Read through a 2D canvas, so it works for either tier.
  */
@@ -281,13 +328,8 @@ test("the GPU tier draws the landscape like Software, and hands over when its co
   await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
   const scene = page.locator(".landscape-scene");
   const drawing = page.getByLabel("Drawing", { exact: true });
-  // Headless Chromium's WebGL2 is SwiftShader, a software rasterizer: Auto
-  // must not take it (ADR 0018, "Choosing a tier").
-  await expect(drawing).toHaveValue("auto");
+  await drawing.selectOption("software");
   await expect(scene).toHaveAttribute("data-tier", "software");
-  expect(
-    await page.evaluate(() => document.documentElement.dataset.gpu),
-  ).toMatch(/^software: .*SwiftShader/);
 
   // Sky, far ridge, near hill, and grass low in the frame.
   const regions = [
@@ -326,7 +368,7 @@ test("the GPU tier draws the landscape like Software, and hands over when its co
     });
   }
 
-  // GPU by hand accepts software WebGL.
+  // GPU by hand accepts software WebGL too (headless Chromium's).
   await drawing.selectOption("gpu");
   await expect(scene).toHaveAttribute("data-tier", "gpu");
   await expect(scene).toHaveAttribute("data-renderer", /SwiftShader/);
@@ -379,8 +421,32 @@ test("the GPU tier draws the landscape like Software, and hands over when its co
   await page.reload();
   await expect(drawing).toHaveValue("gpu");
   await expect(scene).toHaveAttribute("data-tier", "gpu");
-  await drawing.selectOption("auto");
-  await expect(scene).toHaveAttribute("data-tier", "software");
+});
+
+test("Auto refuses software WebGL, even when it passes the performance caveat", async ({
+  page,
+}) => {
+  await fakeGpu(
+    page,
+    "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  );
+  await page.goto("/");
+  await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
+  await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
+  await expect(page.getByLabel("Drawing", { exact: true })).toHaveValue("auto");
+  // SwiftShader passes failIfMajorPerformanceCaveat in headless Chromium:
+  // its name gives it away (ADR 0018, "Choosing a tier").
+  expect(
+    await page.evaluate(() => document.documentElement.dataset.gpu),
+  ).toMatch(/^software: .*SwiftShader/);
+  await expect(page.locator(".landscape-scene")).toHaveAttribute(
+    "data-tier",
+    "software",
+  );
+  await expect(page.locator(".garden-canvas")).toHaveAttribute(
+    "data-tier",
+    "software",
+  );
 });
 
 test("the GPU tier draws the plants like Software, lit at once", async ({
@@ -539,32 +605,9 @@ test("the GPU tier draws the plants like Software, lit at once", async ({
 test("Auto leaves a GPU that misses its frame budget for Software; GPU by hand stays", async ({
   page,
 }) => {
-  // Pass SwiftShader off as graphics hardware, so Auto takes the GPU, and
-  // make every frame the probe waits for take 45 ms on the GPU.
-  await page.addInitScript(() => {
-    const proto = WebGL2RenderingContext.prototype;
-    const original = (name: string) =>
-      Object.getOwnPropertyDescriptor(proto, name)?.value as (
-        ...args: unknown[]
-      ) => unknown;
-    const getParameter = original("getParameter");
-    const readPixels = original("readPixels");
-    Object.defineProperty(proto, "getParameter", {
-      value(this: WebGL2RenderingContext, name: number) {
-        // UNMASKED_RENDERER_WEBGL and RENDERER.
-        if (name === 0x9246 || name === 0x1f01)
-          return "Mesa Intel(R) HD Graphics 4000 (IVB GT2)";
-        return getParameter.call(this, name);
-      },
-    });
-    Object.defineProperty(proto, "readPixels", {
-      value(this: WebGL2RenderingContext, ...args: unknown[]) {
-        const end = performance.now() + 45;
-        while (performance.now() < end);
-        return readPixels.apply(this, args);
-      },
-    });
-  });
+  // Pass the machine's WebGL off as graphics hardware, so Auto takes the
+  // GPU, and make every frame the probe waits for take 45 ms.
+  await fakeGpu(page, "Mesa Intel(R) HD Graphics 4000 (IVB GT2)", 45);
   await page.goto("/");
   await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
   await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
