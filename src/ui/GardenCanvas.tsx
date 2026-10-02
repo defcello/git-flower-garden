@@ -29,10 +29,12 @@ import type { LightingState } from "../environment/lighting.ts";
 import type { Scene } from "./botanical.ts";
 import {
   animates,
-  FRAME_MS,
+  frameMs,
   listenSway,
+  preset,
   probingGpu,
   reportGpuFrame,
+  useQuality,
   useWantsGpu,
 } from "./motion.ts";
 import {
@@ -228,7 +230,7 @@ function runPlants(
   let drawn = now;
   const step = (at: number) => {
     handle = 0;
-    if (at - drawn >= FRAME_MS - 4) {
+    if (at - drawn >= frameMs() - 4) {
       drawn = at;
       draw();
     }
@@ -268,6 +270,8 @@ function SoftwarePlants({
   const sceneArt = useSceneArt();
   const art = sceneArt.state === "ready" ? sceneArt.art : null;
   const painter = useRef<Painter | null>(null);
+  // A new preset may change the canvas's resolution.
+  const quality = useQuality();
 
   useEffect(() => {
     const element = canvas.current;
@@ -280,7 +284,7 @@ function SoftwarePlants({
     return runPlants(element, description, growth, (frameOf, seconds) => {
       plants.paint(element, ctx, description, art, badges, frameOf, seconds);
     });
-  }, [description, art, growth]);
+  }, [description, art, growth, quality]);
 
   return (
     <canvas
@@ -316,6 +320,7 @@ function GpuPlants({
     onLost,
     onFail,
   );
+  const quality = useQuality();
 
   useEffect(() => {
     const element = canvas.current;
@@ -327,7 +332,7 @@ function GpuPlants({
       const gpu = renderer.current;
       if (gpu === null) return;
       const started = performance.now();
-      fitCanvas(element);
+      fitCanvas(element, preset().pixelRatio);
       const timed = probingGpu("plants");
       if (!gpu.paint(description, light, badges, frameOf, seconds)) return;
       if (timed) {
@@ -339,7 +344,7 @@ function GpuPlants({
       // For measurements: script time of the last frame (not the GPU's).
       element.dataset.paintMs = (performance.now() - started).toFixed(1);
     });
-  }, [description, light, hidden, growth, canvas, renderer, version]);
+  }, [description, light, hidden, growth, canvas, renderer, version, quality]);
 
   return (
     <canvas
@@ -397,7 +402,7 @@ class Painter {
     seconds: number | null,
   ): void {
     const started = performance.now();
-    fitCanvas(element);
+    fitCanvas(element, preset().pixelRatio);
     const W = element.width;
     const H = element.height;
     // The canvas is the 16:9 stage, so design pixels scale uniformly.

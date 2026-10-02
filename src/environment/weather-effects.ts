@@ -329,7 +329,10 @@ export function rainbow(
 
 // --- Precipitation -----------------------------------------------------------
 
-/** The most particles each tier draws at full density, per 1920×1080. */
+/**
+ * The most particles each tier draws at full density, per 1920×1080, under
+ * the Balanced quality preset; the others scale them (src/ui/scene/quality.ts).
+ */
 export const PARTICLE_CAPS = {
   gpu: { rain: 900, sleet: 700, snow: 600 },
   software: { rain: 220, sleet: 180, snow: 160 },
@@ -358,10 +361,12 @@ export function particleField(
   state: LightingState,
   w: WeatherEffects,
   tier: keyof typeof PARTICLE_CAPS,
+  /** The quality preset's share of the caps. */
+  scale = 1,
 ): ParticleField | null {
   const p = w.precipitation;
   if (!p) return null;
-  const count = Math.round(PARTICLE_CAPS[tier][p.type] * p.density);
+  const count = Math.round(PARTICLE_CAPS[tier][p.type] * scale * p.density);
   if (count === 0) return null;
   const light = clamp(
     luma(state.ambient) * 0.8 + state.sun.intensity * 0.3 + 0.08,

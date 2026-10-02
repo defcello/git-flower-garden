@@ -12,7 +12,13 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { LightingState } from "../environment/lighting.ts";
-import { probingGpu, reportGpuFrame, useWantsGpu } from "./motion.ts";
+import {
+  preset,
+  probingGpu,
+  reportGpuFrame,
+  useQuality,
+  useWantsGpu,
+} from "./motion.ts";
 import { fitCanvas } from "./paint.ts";
 import {
   requestLight,
@@ -102,7 +108,7 @@ function draw(
 ): void {
   const g = element.getContext("2d", { alpha: false });
   if (!g) return;
-  fitCanvas(element);
+  fitCanvas(element, preset().pixelRatio);
   const W = element.width;
   const H = element.height;
   const t = transform(W, H);
@@ -252,6 +258,8 @@ function SoftwareCanvas({
   scene: SceneArt;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  // A new preset may change the canvas's resolution.
+  const quality = useQuality();
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
@@ -265,7 +273,7 @@ function SoftwareCanvas({
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };
-  }, [shown, art, weather]);
+  }, [shown, art, weather, quality]);
 
   return (
     <canvas
@@ -305,6 +313,7 @@ function GpuCanvas({
     onLost,
     onFail,
   );
+  const quality = useQuality();
 
   useEffect(() => {
     const element = canvas.current;
@@ -312,7 +321,7 @@ function GpuCanvas({
     const redraw = () => {
       const gpu = renderer.current;
       if (document.hidden || gpu === null) return;
-      fitCanvas(element);
+      fitCanvas(element, preset().pixelRatio);
       const timed = probingGpu("landscape");
       const start = performance.now();
       const lit = gpu.draw(shown, weatherRasters(element, shown, weather));
@@ -335,7 +344,17 @@ function GpuCanvas({
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };
-  }, [shown, weather, selfLit, art, hidden, canvas, renderer, version]);
+  }, [
+    shown,
+    weather,
+    selfLit,
+    art,
+    hidden,
+    canvas,
+    renderer,
+    version,
+    quality,
+  ]);
 
   return (
     <canvas

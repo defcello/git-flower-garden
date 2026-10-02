@@ -4,17 +4,20 @@
  *
  * Tiers: Auto (the default), GPU, Software, and Static (scene/tier.ts).
  * Auto takes the GPU tier on graphics hardware and Software otherwise.
- * Plants animate at most SOFTWARE_FPS frames a second in either: sway, and
- * the growth transitions. Static draws one lit frame per lighting change
- * and nothing between, the low-power mode. The choice is remembered per
- * browser.
+ * Static draws one lit frame per lighting change and nothing between, the
+ * low-power mode. The quality preset (scene/quality.ts) sets the frame
+ * rate in the other tiers, for sway, rain and snow, and growth, and
+ * whether plants sway at all. Both choices are remembered per browser.
  *
- * Every swaying plant listens to one shared clock, so the whole garden
- * moves in step from a single animation-frame loop. It runs only while
- * someone listens, the page is visible, motion is allowed, and the tier
- * animates. A frame-time probe turns sway off for the visit if frames
- * arrive well behind the cap (the machine or the garden is too heavy):
- * sway is the first effect to go.
+ * Every swaying plant, and the rain and snow, listen to one shared clock,
+ * so the whole garden moves in step from a single animation-frame loop.
+ * It runs only while someone listens, the page is visible, motion is
+ * allowed, and the tier animates. A frame-time probe watches the gaps
+ * between frames, and the time spent drawing them: if a preset faster
+ * than Balanced runs well behind, or its drawing takes more than half of
+ * each frame, the clock falls back to Balanced's rate for the visit; if
+ * frames still run behind, the clock stops for the visit (the machine or
+ * the garden is too heavy).
  */
 import { useSyncExternalStore } from "react";
 import {
@@ -28,12 +31,20 @@ import {
   type GpuSupport,
   type Tier,
 } from "./scene/tier.ts";
-import { FRAME_MS, PROBE_FRAMES, tooSlow } from "./sway.ts";
+import {
+  DEFAULT_QUALITY,
+  PRESETS,
+  QUALITIES,
+  type Preset,
+  type Quality,
+} from "./scene/quality.ts";
+import { FRAME_MS, PROBE_FRAMES, tooBusy, tooSlow } from "./sway.ts";
 
-export { FRAME_MS, SOFTWARE_FPS } from "./sway.ts";
 export { TIERS, type Tier } from "./scene/tier.ts";
+export { QUALITIES, type Quality } from "./scene/quality.ts";
 
 const TIER_KEY = "git-flower-garden.tier";
+const QUALITY_KEY = "git-flower-garden.quality";
 
 export function loadTier(): Tier {
   try {
@@ -44,9 +55,18 @@ export function loadTier(): Tier {
   }
 }
 
-function saveTier(next: Tier): void {
+function loadQuality(): Quality {
   try {
-    window.localStorage.setItem(TIER_KEY, next);
+    const saved = window.localStorage.getItem(QUALITY_KEY);
+    return QUALITIES.find((quality) => quality === saved) ?? DEFAULT_QUALITY;
+  } catch {
+    return DEFAULT_QUALITY;
+  }
+}
+
+function save(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
   } catch {
     // Storage may be unavailable (private windows); the choice lasts this visit.
   }
@@ -151,49 +171,96 @@ export function motionAllowed(): boolean {
 type Listener = (seconds: number | null) => void;
 
 let tier: Tier = loadTier();
-/** Sway stopped for this visit by the probe. */
+let quality: Quality = loadQuality();
+/** The clock fell back to Balanced's rate for this visit (the probe). */
+let stepped = false;
+/** The clock stopped for this visit by the probe. */
 let slow = false;
-const listeners = new Set<Listener>();
+/** Swaying plants, which hear the clock only while the preset sways. */
+const swayers = new Set<Listener>();
+/** Rain and snow, which hear it whenever it runs. */
+const fallers = new Set<Listener>();
 const tierListeners = new Set<() => void>();
+const qualityListeners = new Set<() => void>();
 let timer = 0;
 let raf = 0;
 let last = 0;
 let gaps: number[] = [];
-/** Whether listeners last saw a moving (not rest) pose. */
-let moving = false;
+/** Script time of recent frames, for stepping down a fast preset. */
+let works: number[] = [];
+/** Whether each set last saw a moving (not rest) pose. */
+let swayMoving = false;
+let fallMoving = false;
+
+/** The active quality preset. */
+export function preset(): Preset {
+  return PRESETS[quality];
+}
+
+/**
+ * Milliseconds between animation frames: the preset's, or Balanced's once
+ * the probe has stepped down.
+ */
+export function frameMs(): number {
+  const ms = 1000 / preset().fps;
+  return stepped ? Math.max(ms, FRAME_MS) : ms;
+}
 
 /** Whether the current tier animates at all (growth transitions too). */
 export function animates(): boolean {
   return tier !== "static" && motionAllowed();
 }
 
-function swaying(): boolean {
-  return animates() && !slow && !document.hidden && listeners.size > 0;
+function sways(): boolean {
+  return preset().sway && swayers.size > 0;
+}
+
+function running(): boolean {
+  return (
+    animates() && !slow && !document.hidden && (sways() || fallers.size > 0)
+  );
 }
 
 function publish(seconds: number | null): void {
-  moving = seconds !== null;
-  for (const listener of listeners) listener(seconds);
+  const sway = sways() ? seconds : null;
+  if (sway !== null || swayMoving) {
+    swayMoving = sway !== null;
+    for (const listener of swayers) listener(sway);
+  }
+  fallMoving = seconds !== null;
+  for (const listener of fallers) listener(seconds);
 }
 
 function frame(now: number): void {
   raf = 0;
-  if (!swaying()) {
+  if (!running()) {
     settle();
     return;
   }
   if (last !== 0) {
     gaps.push(now - last);
     if (gaps.length > PROBE_FRAMES) gaps.shift();
-    if (tooSlow(gaps)) {
-      slow = true;
-      document.documentElement.dataset.sway = "slow";
-      settle();
-      return;
+    const busy = frameMs() < FRAME_MS && tooBusy(works, frameMs());
+    if (busy || tooSlow(gaps, frameMs())) {
+      gaps = [];
+      works = [];
+      if (frameMs() < FRAME_MS) {
+        stepped = true;
+        document.documentElement.dataset.sway = "stepped";
+      } else {
+        slow = true;
+        document.documentElement.dataset.sway = "slow";
+        settle();
+        return;
+      }
     }
   }
   last = now;
   publish(now / 1000);
+  if (frameMs() < FRAME_MS) {
+    works.push(performance.now() - now);
+    if (works.length > PROBE_FRAMES) works.shift();
+  }
   schedule();
 }
 
@@ -204,7 +271,7 @@ function frame(now: number): void {
  */
 function schedule(): void {
   // A little early, so the refresh after the timer lands on the cap.
-  const delay = Math.max(0, last + FRAME_MS - 12 - performance.now());
+  const delay = Math.max(0, last + frameMs() - 12 - performance.now());
   timer = window.setTimeout(() => {
     timer = 0;
     raf = requestAnimationFrame(frame);
@@ -219,12 +286,18 @@ function settle(): void {
   raf = 0;
   last = 0;
   gaps = [];
-  if (moving) publish(null);
+  works = [];
+  if (swayMoving || fallMoving) publish(null);
 }
 
 /** Start or stop the loop to match the conditions. */
 function update(): void {
-  if (swaying()) {
+  if (running()) {
+    // Plants put back at rest when the preset stops their sway.
+    if (swayMoving && !sways()) {
+      swayMoving = false;
+      for (const listener of swayers) listener(null);
+    }
     if (timer === 0 && raf === 0) raf = requestAnimationFrame(frame);
   } else {
     settle();
@@ -244,24 +317,44 @@ if (typeof document !== "undefined") {
   });
 }
 
+function listen(
+  set: Set<Listener>,
+  listener: Listener,
+  moving: () => boolean,
+): { seconds: number | null; stop: () => void } {
+  set.add(listener);
+  update();
+  return {
+    seconds: moving() && last !== 0 ? last / 1000 : null,
+    stop: () => {
+      set.delete(listener);
+      update();
+    },
+  };
+}
+
 /**
  * Listen to the sway clock: called with the time in seconds on every
- * drawn frame, and with `null` when sway stops and sprites should rest.
- * Returns the time to draw now (or `null`) and a function to stop.
+ * drawn frame, and with `null` when sway stops and sprites should rest
+ * (also when the preset does not sway). Returns the time to draw now (or
+ * `null`) and a function to stop.
  */
 export function listenSway(listener: Listener): {
   seconds: number | null;
   stop: () => void;
 } {
-  listeners.add(listener);
-  update();
-  return {
-    seconds: moving && last !== 0 ? last / 1000 : null,
-    stop: () => {
-      listeners.delete(listener);
-      update();
-    },
-  };
+  return listen(swayers, listener, () => swayMoving);
+}
+
+/**
+ * Listen to the same clock for rain and snow, which fall whether or not
+ * the preset sways: `null` when the clock stops.
+ */
+export function listenFall(listener: Listener): {
+  seconds: number | null;
+  stop: () => void;
+} {
+  return listen(fallers, listener, () => fallMoving);
 }
 
 export function getTier(): Tier {
@@ -271,7 +364,7 @@ export function getTier(): Tier {
 export function setTier(next: Tier): void {
   if (next === tier) return;
   tier = next;
-  saveTier(next);
+  save(TIER_KEY, next);
   for (const listener of tierListeners) listener();
   update();
 }
@@ -282,4 +375,30 @@ export function useTier(): Tier {
     tierListeners.add(onChange);
     return () => tierListeners.delete(onChange);
   }, getTier);
+}
+
+export function getQuality(): Quality {
+  return quality;
+}
+
+export function setQuality(next: Quality): void {
+  if (next === quality) return;
+  quality = next;
+  save(QUALITY_KEY, next);
+  // A new preset gets a fresh look from the probe.
+  stepped = false;
+  slow = false;
+  gaps = [];
+  works = [];
+  delete document.documentElement.dataset.sway;
+  for (const listener of qualityListeners) listener();
+  update();
+}
+
+/** The chosen quality preset, re-rendering when it changes. */
+export function useQuality(): Quality {
+  return useSyncExternalStore((onChange) => {
+    qualityListeners.add(onChange);
+    return () => qualityListeners.delete(onChange);
+  }, getQuality);
 }

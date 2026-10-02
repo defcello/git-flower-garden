@@ -9,6 +9,7 @@ import {
   swayAngle,
   setSwayWind,
   swaySprites,
+  tooBusy,
   tooSlow,
   windStrength,
 } from "../../src/ui/sway.ts";
@@ -121,5 +122,25 @@ describe("frame-time probe", () => {
     expect(tooSlow(Array<number>(PROBE_FRAMES).fill(PROBE_LIMIT_MS + 1))).toBe(
       true,
     );
+  });
+
+  it("finds a fast preset too busy when drawing takes over half a frame", () => {
+    const high = 1000 / 30;
+    expect(tooBusy(Array<number>(PROBE_FRAMES - 1).fill(30), high)).toBe(false);
+    expect(tooBusy(Array<number>(PROBE_FRAMES).fill(high / 2 - 1), high)).toBe(
+      false,
+    );
+    expect(tooBusy(Array<number>(PROBE_FRAMES).fill(high / 2 + 1), high)).toBe(
+      true,
+    );
+  });
+
+  it("judges a faster preset's frames against its own rate", () => {
+    const high = 1000 / 30;
+    // On time for Balanced, but twice High's gap: too slow at 30 fps.
+    const gaps = Array<number>(PROBE_FRAMES).fill(FRAME_MS);
+    expect(tooSlow(gaps)).toBe(false);
+    expect(tooSlow(gaps, high)).toBe(true);
+    expect(tooSlow(Array<number>(PROBE_FRAMES).fill(high), high)).toBe(false);
   });
 });

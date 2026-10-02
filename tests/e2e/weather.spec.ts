@@ -183,6 +183,7 @@ test("weather previews are labelled, and both tiers draw the same clouds and lig
   await weather.selectOption("heavy-rain");
   await expect(note).toContainText("not live weather: Heavy rain");
   const fall = page.locator(".weather-fall");
+  // High quality, the default, keeps Software's caps.
   await expect(fall).toHaveAttribute(
     "data-particles",
     String(PARTICLE_CAPS.software.rain),
@@ -195,6 +196,18 @@ test("weather previews are labelled, and both tiers draw the same clouds and lig
   await drawing.selectOption("gpu");
   await expect(scene).toHaveAttribute("data-tier", "gpu");
   await expect(fall).toHaveAttribute("data-tier", "gpu");
+  // High adds half again on the GPU; Low halves the caps.
+  await expect(fall).toHaveAttribute(
+    "data-particles",
+    String(PARTICLE_CAPS.gpu.rain * 1.5),
+  );
+  const quality = page.getByLabel("Quality", { exact: true });
+  await quality.selectOption("low");
+  await expect(fall).toHaveAttribute(
+    "data-particles",
+    String(PARTICLE_CAPS.gpu.rain / 2),
+  );
+  await quality.selectOption("balanced");
   await expect(fall).toHaveAttribute(
     "data-particles",
     String(PARTICLE_CAPS.gpu.rain),

@@ -262,11 +262,12 @@ export function canvasFilters(g: CanvasRenderingContext2D): boolean {
 
 /**
  * Size a stage canvas's backing store to the element at the device pixel
- * ratio, capped at 2 (ADR 0018, "Resolution"). Resizing clears it, so it
- * is left alone when the size holds.
+ * ratio, capped at the quality preset's `pixelRatio`, at most 2 (ADR 0018,
+ * "Resolution"). Resizing clears it, so it is left alone when the size
+ * holds.
  */
-export function fitCanvas(element: HTMLCanvasElement): void {
-  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+export function fitCanvas(element: HTMLCanvasElement, maxRatio: number): void {
+  const ratio = Math.min(window.devicePixelRatio || 1, maxRatio);
   const W = Math.max(1, Math.round(element.clientWidth * ratio));
   const H = Math.max(1, Math.round(element.clientHeight * ratio));
   if (element.width !== W || element.height !== H) {
