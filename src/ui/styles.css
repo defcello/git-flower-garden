@@ -70,8 +70,9 @@ code,
   top: 0;
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 8px 16px;
   padding: 10px 20px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);

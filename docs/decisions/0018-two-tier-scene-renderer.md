@@ -569,8 +569,66 @@ decision:
   on the Surface Pro (visible Chromium, HD 4000, 1920×1080, 8 plants,
   noon, percent of one core): GPU 54% without weather, 56% in heavy rain
   (900 particles) or snow; Software 82% without, 89–90% in rain (220) or
-  snow; Static 2% in rain. **Open**: quality presets (step 6), and
-  review of the look on the dedicated monitor.
+  snow; Static 2% in rain. **Open**: review of the look on the dedicated
+  monitor.
+- **Step 6, quality presets** (2026-10-01). `src/ui/scene/quality.ts`: a
+  Quality menu beside Drawing offers Low, Balanced, and High, remembered
+  per browser like the tier. **High is the default** (maintainer
+  decision, 2026-10-01: most devices keep up). A preset sets:
+
+  | | Low | Balanced | High |
+  | --- | --- | --- | --- |
+  | Frames a second (sway, rain and snow, growth) | 10 | 15 | 30 |
+  | Pixel-ratio cap of the garden's canvases | 1 | 2 | 2 |
+  | Share of the particle caps, GPU / Software | 0.5 / 0.5 | 1 / 1 | 1.5 / 1 |
+  | Sway | off | on | on |
+
+  Balanced is the garden as it was. Low quarters a high-density
+  display's pixels instead of halving the layers' resolution (the
+  "Resolution" section's plan): one setting for every canvas in both
+  tiers. Rain and snow listen to the clock apart from the plants
+  (`listenFall`), so under Low the weather and the light still move and
+  the plants rest. The frame-time probe judges frames against the
+  preset's own rate: late at a rate above Balanced's, or busy (the median
+  script time of a frame past half the frame), the clock falls back to
+  15 fps for the visit (`data-sway="stepped"`); late at 15 fps or below,
+  the clock stops as before. Choosing a preset again clears both. The
+  busy rule came from the browser tests: Software at 4K on the Surface
+  Pro drew 30 frames a second nearly on time (inside the late limit)
+  while leaving the page too little time to show a new sky preview within
+  5 s; with it, every browser test passes there.
+  The GPU tier's probe keeps its budget, half a frame at 15 fps, so the
+  preset does not change which tier Auto takes.
+  **Verified**: `tests/ui/quality.test.ts`, `tests/ui/sway.test.ts` (the
+  probe at a preset's rate), `tests/environment/weather-effects.test.ts`
+  (scaled caps); browser tests: Low stills the plants with hit targets in
+  place and is remembered, Balanced sways again
+  (`garden-scene.spec.ts`), and each preset's particle count on the GPU
+  (`weather.spec.ts`). The top bar now wraps at every width, since the
+  extra menu overflowed it at 1280 px.
+  **Measured** on the Surface Pro (visible Chromium, HD 4000,
+  1920×1080, device pixel ratio 1, 8 plants, noon, `QUALITIES=…
+  npm run measure:garden`, percent of one core; ranges are repeat runs):
+
+  | | Low | Balanced | High |
+  | --- | --- | --- | --- |
+  | GPU, no weather | 1% | 52–55% | 102–113% |
+  | Software, no weather | 3% | 82% | 135% |
+  | GPU, heavy rain | 32% (450) | 53% (900) | 87–101% (1,350) |
+  | Software, heavy rain | 44% (110) | 95% (220) | 153% (220) |
+
+  Static: 1%. High doubles the cost of Balanced here, and the Surface Pro
+  kept 30 fps (the clock did not step down). No animated preset meets
+  the section 12 budget of under 10% of the machine on this 2-core
+  machine; Low without weather and Static do.
+  **Found while measuring**: the GPU tier's frame-time probe is noisy on
+  the HD 4000, on `main` too: the same 8 plants read 6–17 ms on some
+  loads and 36–58 ms on others, and a slow reading moves Auto to
+  Software for the visit, which at High costs more, not less. Measured
+  rows above force the tier. **Open**: a steadier probe (more samples,
+  or timing after the worker's first relight), the P2-E measurements on
+  the dedicated monitor and at one non-16:9 viewport, and the 24-hour
+  soak.
 
 ## Verification
 

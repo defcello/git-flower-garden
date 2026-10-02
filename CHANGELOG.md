@@ -29,6 +29,16 @@ change configuration or behavior, and the notes say how.
   preview. On a first-generation Surface Pro, heavy rain costs about 2% of
   a core more with the GPU, 8% in Software; Static holds it still.
   ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
+- **Quality presets, High by default.** A new **Quality** menu beside
+  Drawing chooses High (30 frames a second, the default), Balanced (15,
+  as the garden animated before), or Low (10, plants hold still while
+  the weather and light move, half the rain and snow, standard
+  resolution). If a computer cannot keep up with High, the garden drops
+  to 15 frames a second for the visit. **Behavior change**: on older
+  computers High costs about twice the CPU of the previous behavior (on a
+  first-generation Surface Pro, about one core with the GPU instead of
+  half); choose Balanced for the previous behavior, or Low or Static to
+  save more. ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
 
 - **The garden sways.** In the garden view, leaves, flowers, and fruit rock
   gently in a breeze; what you point at, click, or tab to never moves, and

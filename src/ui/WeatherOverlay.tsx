@@ -18,7 +18,7 @@ import {
   type ParticleField,
   type WeatherEffects,
 } from "../environment/weather-effects.ts";
-import { listenSway, useWantsGpu } from "./motion.ts";
+import { listenFall, preset, useQuality, useWantsGpu } from "./motion.ts";
 import { fitCanvas } from "./paint.ts";
 import { PrecipitationGpu } from "./scene/precipitation-gpu.ts";
 import { useGpu } from "./scene/useGpu.ts";
@@ -36,6 +36,8 @@ function useFall(
   draw: (seconds: number) => void,
   deps: readonly unknown[],
 ): void {
+  // A new preset may change the canvas's resolution.
+  const quality = useQuality();
   useEffect(() => {
     if (!active) return;
     let seconds = STILL;
@@ -43,21 +45,21 @@ function useFall(
       seconds = next ?? STILL;
       if (!document.hidden) draw(seconds);
     };
-    const sway = listenSway(paint);
-    paint(sway.seconds);
+    const clock = listenFall(paint);
+    paint(clock.seconds);
     const again = () => {
       paint(seconds);
     };
     window.addEventListener("resize", again);
     document.addEventListener("visibilitychange", again);
     return () => {
-      sway.stop();
+      clock.stop();
       window.removeEventListener("resize", again);
       document.removeEventListener("visibilitychange", again);
     };
     // `draw` is rebuilt with its inputs, which are the deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, ...deps]);
+  }, [active, quality, ...deps]);
 }
 
 const rgba = (field: ParticleField) =>
@@ -71,7 +73,7 @@ function SoftwareFall({ field }: { field: ParticleField | null }) {
       const element = canvas.current;
       const g = element?.getContext("2d");
       if (!element || !g) return;
-      fitCanvas(element);
+      fitCanvas(element, preset().pixelRatio);
       g.clearRect(0, 0, element.width, element.height);
       if (field === null) return;
       const t = transform(element.width, element.height);
@@ -138,7 +140,7 @@ function GpuFall({
       const element = canvas.current;
       const gpu = renderer.current;
       if (!element || gpu === null) return;
-      fitCanvas(element);
+      fitCanvas(element, preset().pixelRatio);
       gpu.draw(field, seconds);
     },
     [field, version, canvas, renderer],
@@ -165,10 +167,13 @@ export function WeatherOverlay({
   const [failed, setFailed] = useState(false);
   const wantsGpu = useWantsGpu() && !failed;
   const gpu = wantsGpu && !lost;
-  const field = useMemo(
-    () => particleField(light, effects, gpu ? "gpu" : "software"),
-    [light, effects, gpu],
-  );
+  const quality = useQuality();
+  const field = useMemo(() => {
+    const tier = gpu ? "gpu" : "software";
+    return particleField(light, effects, tier, preset().particles[tier]);
+    // `preset()` follows `quality`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [light, effects, gpu, quality]);
   if (effects.precipitation === null && effects.fog === 0) return null;
   // Fog takes the color of the light it scatters.
   const haze = light.ambient

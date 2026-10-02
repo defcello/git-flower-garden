@@ -9,7 +9,7 @@ import {
 } from "./botanical.ts";
 import { GraphSvg, graphWidth, type GraphSvgProps } from "./GraphSvg.tsx";
 import { useSceneArt, type Channel, type LitArt } from "./scene/client.ts";
-import { animates, FRAME_MS, listenSway } from "./motion.ts";
+import { animates, frameMs, listenSway } from "./motion.ts";
 import { swaySprites } from "./sway.ts";
 import { blendScenes, TRANSITION_MS, type Frame } from "./transition.ts";
 import { GROUND_COLOR, PathCache, paintBase, paintSprites } from "./paint.ts";
@@ -39,7 +39,7 @@ function useSceneFrame(scene: Scene, graphId: string): Frame {
     let drawn = start;
     const step = (now: number) => {
       const t = Math.min(1, (now - start) / TRANSITION_MS);
-      if (t >= 1 || now - drawn >= FRAME_MS - 4) {
+      if (t >= 1 || now - drawn >= frameMs() - 4) {
         drawn = now;
         setAnimation(t >= 1 ? null : { from: previous.scene, to: scene, t });
       }

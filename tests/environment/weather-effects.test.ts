@@ -217,6 +217,16 @@ describe("precipitation particles", () => {
         );
   });
 
+  it("scales the caps by the quality preset's share", () => {
+    const heavy = preview("heavy-rain");
+    expect(particleField(NOON, heavy, "gpu", 1.5)?.count).toBe(
+      PARTICLE_CAPS.gpu.rain * 1.5,
+    );
+    expect(particleField(NOON, heavy, "software", 0.5)?.count).toBe(
+      PARTICLE_CAPS.software.rain / 2,
+    );
+  });
+
   it("falls slowly as snow, fast as rain, and slants with the wind", () => {
     const rain = particleField(NOON, preview("heavy-rain"), "gpu");
     const snow = particleField(NOON, preview("snow"), "gpu");

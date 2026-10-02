@@ -28,7 +28,16 @@ import {
   STATE_TEXT,
 } from "./format.ts";
 import { GraphSvg, graphWidth } from "./GraphSvg.tsx";
-import { setTier, TIERS, useTier, type Tier } from "./motion.ts";
+import {
+  QUALITIES,
+  setQuality,
+  setTier,
+  TIERS,
+  useQuality,
+  useTier,
+  type Quality,
+  type Tier,
+} from "./motion.ts";
 import {
   HILLSIDE_SLOTS,
   hillsideSlots,
@@ -274,6 +283,7 @@ export function App() {
             </select>
           </label>
           {renderer !== "technical" && <TierControl />}
+          {renderer !== "technical" && <QualityControl />}
           {renderer !== "technical" && (
             <SkyControls
               setting={skySetting}
@@ -785,6 +795,39 @@ function TierControl() {
         {TIERS.map((value) => (
           <option key={value} value={value}>
             {TIER_NAMES[value]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+const QUALITY_NAMES: Record<Quality, string> = {
+  low: "Low",
+  balanced: "Balanced",
+  high: "High",
+};
+
+/**
+ * How much the garden animates and how sharply it is drawn (ADR 0018 step
+ * 6, scene/quality.ts): Low (10 fps, no sway, fewer particles, standard
+ * resolution), Balanced (15 fps), or High (30 fps, the default).
+ */
+function QualityControl() {
+  const quality = useQuality();
+  return (
+    <label className="preview-control">
+      Quality
+      <select
+        aria-label="Quality"
+        value={quality}
+        onChange={(event) => {
+          setQuality(event.target.value as Quality);
+        }}
+      >
+        {QUALITIES.map((value) => (
+          <option key={value} value={value}>
+            {QUALITY_NAMES[value]}
           </option>
         ))}
       </select>

@@ -81,7 +81,10 @@ export function swaySprites<T extends Sprite & { scale: number }>(
   });
 }
 
-/** The software tier's animation cap (ADR 0018: initially 15 fps). */
+/**
+ * The Balanced preset's animation rate (ADR 0018: initially 15 fps), and the
+ * rate a faster preset falls back to when frames run late (motion.ts).
+ */
 export const SOFTWARE_FPS = 15;
 export const FRAME_MS = 1000 / SOFTWARE_FPS;
 
@@ -90,11 +93,28 @@ export const PROBE_FRAMES = 30;
 export const PROBE_LIMIT_MS = FRAME_MS * 1.5;
 
 /**
- * The probe's verdict on the gaps between recent frames: too slow when
- * their median runs past the limit. Pure, for tests.
+ * The probe's verdict on the gaps between recent frames, drawn every
+ * `frameMs`: too slow when their median runs past one and a half frames.
+ * Pure, for tests.
  */
-export function tooSlow(gaps: readonly number[]): boolean {
+export function tooSlow(gaps: readonly number[], frameMs = FRAME_MS): boolean {
   if (gaps.length < PROBE_FRAMES) return false;
-  const sorted = [...gaps].sort((a, b) => a - b);
-  return (sorted[Math.floor(sorted.length / 2)] ?? 0) > PROBE_LIMIT_MS;
+  return median(gaps) > frameMs * 1.5;
+}
+
+/**
+ * Whether drawing the frames takes too much of the time between them: the
+ * median script time of recent frames past half of `frameMs`. Frames can
+ * arrive nearly on time while painting leaves the page little time for
+ * anything else (Software at 4K on a 2-core laptop), so a preset faster
+ * than Balanced steps down on this too. Pure, for tests.
+ */
+export function tooBusy(works: readonly number[], frameMs: number): boolean {
+  if (works.length < PROBE_FRAMES) return false;
+  return median(works) > frameMs / 2;
+}
+
+function median(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)] ?? 0;
 }

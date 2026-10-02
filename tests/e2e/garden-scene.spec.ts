@@ -524,7 +524,7 @@ async function moves(page: Page, selector: string) {
   return (await artwork(page, selector)) !== before;
 }
 
-test("leaves sway in the garden only, hit targets stay put, and Static stands still", async ({
+test("leaves sway in the garden only, hit targets stay put, and Static and Low stand still", async ({
   page,
 }) => {
   await openScene(page, small.url, 5);
@@ -532,6 +532,7 @@ test("leaves sway in the garden only, hit targets stay put, and Static stands st
   // The hillside's plants are all drawn by the one scene canvas.
   const garden = ".garden-canvas";
   await expect(page.getByLabel("Drawing", { exact: true })).toHaveValue("auto");
+  await expect(page.getByLabel("Quality", { exact: true })).toHaveValue("high");
   const targets = () =>
     page
       .locator(`${tour} .node`)
@@ -541,9 +542,10 @@ test("leaves sway in the garden only, hit targets stay put, and Static stands st
   const still = await targets();
   expect(await moves(page, garden)).toBe(true);
   expect(await targets()).toEqual(still);
+  // A slow machine may step High down to Balanced's rate, but keeps swaying.
   expect(
     await page.evaluate(() => document.documentElement.dataset.sway),
-  ).toBeUndefined();
+  ).not.toBe("slow");
 
   // The SVG compositor sways the same art.
   await page.getByLabel("Renderer", { exact: true }).selectOption("svg");
@@ -571,6 +573,20 @@ test("leaves sway in the garden only, hit targets stay put, and Static stands st
   await page.waitForTimeout(200);
   expect(await moves(page, garden)).toBe(false);
   await page.emulateMedia({ reducedMotion: "no-preference" });
+  expect(await moves(page, garden)).toBe(true);
+
+  // Low quality keeps the plants still, puts them back at rest, and is
+  // remembered; Balanced sways again.
+  const quality = page.getByLabel("Quality", { exact: true });
+  await quality.selectOption("low");
+  await page.waitForTimeout(200);
+  expect(await moves(page, garden)).toBe(false);
+  expect(await targets()).toEqual(still);
+  await page.reload();
+  await expect(quality).toHaveValue("low");
+  await holdLight(page);
+  expect(await moves(page, garden)).toBe(false);
+  await quality.selectOption("balanced");
   expect(await moves(page, garden)).toBe(true);
 
   // The focus view is for reading: its plant holds still.

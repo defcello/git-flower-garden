@@ -258,7 +258,8 @@ thunderstorm, snow, and high wind, labelled **Weather preview** and never
 taken for live weather; with a Sky preview it shows, for example, showers
 at sunset. Rain and snow never cover an icon, card, or label, and the
 focus view stays dry. They fall at the garden's animation rate; under
-Static or reduced motion they hold still. There is no lightning.
+Static or reduced motion they hold still. The Quality menu sets how many
+fall (see [Motion](#motion)). There is no lightning.
 
 ### Motion
 
@@ -278,12 +279,26 @@ and for a plant showing a last-known state (stale or incomplete). The
   and swaying costs less. Chosen by hand, it also
   runs where WebGL2 exists only in software (slowly). If the graphics
   processor resets, the garden switches to Software until it recovers.
-- **Software**: drawn on the CPU, animating at most 15 frames a second.
-  If the computer cannot keep up, the sway stops for the rest of the visit.
+- **Software**: drawn on the CPU, with fewer raindrops and snowflakes.
 - **Static**: nothing moves between lighting changes, not even new growth.
   The lowest-power choice for an always-on display.
 
-The choice is remembered in this browser. Your operating system's reduce
+The **Quality** menu (garden view) sets how much moving the garden does,
+in GPU and Software:
+
+| Quality | Frames a second | Sway | Rain and snow | Sharpness |
+| --- | --- | --- | --- | --- |
+| **High** (the default) | 30 | yes | half again more with GPU | full, on high-density displays |
+| **Balanced** | 15 | yes | standard | full |
+| **Low** | 10 | no: only weather and light move | half | standard resolution |
+
+If the computer cannot keep up with High, or drawing it takes most of
+the time between frames, the garden drops to Balanced's 15 frames a
+second for the rest of the visit; if it still cannot, motion
+stops for the visit (choosing a quality again retries). On a modest
+laptop, Balanced or Low saves noticeable CPU; Static saves the most.
+
+Both choices are remembered in this browser. Your operating system's reduce
 motion setting, or `display.reducedMotion`, stops all motion whatever the
 choice. Nothing is drawn while the page is hidden.
 

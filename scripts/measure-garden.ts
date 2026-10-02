@@ -1,7 +1,8 @@
 /*
  * CPU use of a visible Chromium window showing the garden (ADR 0018,
  * "Verification"): the demo fixtures planted N times on the hillside, the
- * Canvas compositor, the noon preview, 1920×1080, for each drawing tier.
+ * Canvas compositor, the noon preview, 1920×1080, for each quality preset
+ * and drawing tier.
  * Reads every browser process's CPU time from /proc (Linux only) over 20
  * seconds and prints it by process type, in percent of one core, with
  * the tier that actually drew. With LOOP=1 the day loops (a day every 30
@@ -11,6 +12,7 @@
  *   N=64 TIERS=software npm run measure:garden
  *   LOOP=1 TIERS=gpu,software npm run measure:garden  # while the day loops
  *   WEATHER=heavy-rain TIERS=gpu,software npm run measure:garden
+ *   QUALITIES=low,balanced,high TIERS=gpu,software npm run measure:garden
  *   GARDEN_E2E_CHANNEL=chrome npm run measure:garden
  *
  * Needs a display: the point is the real GPU path, which headless skips.
@@ -31,6 +33,8 @@ import { startApp } from "../src/server/app.ts";
 
 const plants = Number(process.env.N ?? 8);
 const tiers = (process.env.TIERS ?? "software,static").split(",");
+/** Quality presets (src/ui/scene/quality.ts); the default preset, High. */
+const qualities = (process.env.QUALITIES ?? "high").split(",");
 const SECONDS = 20;
 const loop = process.env.LOOP === "1";
 /** A weather preview to draw (weather-previews.ts), or none. */
@@ -131,7 +135,10 @@ try {
   console.log(
     `GPU: ${(await page.locator("html").getAttribute("data-gpu")) ?? "not probed"}`,
   );
-  for (const tier of tiers) {
+  for (const [quality, tier] of qualities.flatMap((q) =>
+    tiers.map((t) => [q, t] as const),
+  )) {
+    await page.getByLabel("Quality", { exact: true }).selectOption(quality);
     await page.getByLabel("Drawing", { exact: true }).selectOption(tier);
     await page.mouse.move(2, 2);
     // Let relighting and caches settle.
@@ -174,7 +181,7 @@ try {
         })
         .catch(() => null)) ?? "0";
     console.log(
-      `${String(plants)} plants, ${weather ?? "no weather"} (${particles} particles), ${tier} (drawn by ${drawn}): ${String(total)}% of one core ${JSON.stringify(percent)}; sway ${sway}; GPU probe ${probe}` +
+      `${String(plants)} plants, ${weather ?? "no weather"} (${particles} particles), ${quality}, ${tier} (drawn by ${drawn}): ${String(total)}% of one core ${JSON.stringify(percent)}; sway ${sway}; GPU probe ${probe}` +
         (loop
           ? `; ${(repaints / SECONDS).toFixed(1)} scene repaints a second`
           : ""),
