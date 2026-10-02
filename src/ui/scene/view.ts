@@ -11,7 +11,6 @@ import {
 import { previewSnapshot } from "../../environment/overrides.ts";
 import {
   lightParams,
-  LAYERS,
   LOCKED,
   shade,
   type LayerLight,
@@ -244,12 +243,17 @@ export function lightKey(p: LightParams): string {
     .join(",");
 }
 
-/** Stems are thin, opaque-ish, and face the viewer, tilted a little up. */
+/**
+ * Stems are thin, opaque-ish, and face the viewer, tilted a little up. They
+ * keep their color at night: stems, knots, and missing-history boundaries
+ * are Git marks, and the GPU tier lights them per channel, which a shift
+ * toward night vision cannot be.
+ */
 const STEM_LIGHT: LayerLight = {
   haze: 0,
   translucency: 0.3,
   fill: true,
-  night: LAYERS.sprites.night,
+  night: 0,
 };
 const STEM_NORMAL = { x: 0, y: 0.35, z: Math.sqrt(1 - 0.35 * 0.35) };
 
