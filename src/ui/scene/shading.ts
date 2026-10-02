@@ -24,7 +24,7 @@ export const RIM_GAIN = 0.3;
  * moonlit scene is seen with, at about the same brightness.
  */
 export const ROD: Color = [0.05, 0.53, 0.42];
-export const NIGHT_TINT: Color = [0.8, 1.0, 1.45];
+export const NIGHT_TINT: Color = [0.68, 0.85, 1.23];
 
 export interface LightParams {
   sunDir: Vector3;
@@ -86,7 +86,7 @@ export interface LayerLight {
   /** Whether the viewer-side fill light reaches it. */
   fill: boolean;
   /**
-   * 0..1: how far night vision takes its color. The plants keep theirs,
+   * 0..1: how far night vision takes its color. The plants go only halfway,
    * because their colors carry Git meaning.
    */
   night: number;
@@ -95,7 +95,7 @@ export interface LayerLight {
 export const LAYERS = {
   ridge: { haze: 0.5, translucency: 0, fill: false, night: 1 },
   hill: { haze: 0, translucency: 0.6, fill: true, night: 1 },
-  sprites: { haze: 0, translucency: 0.9, fill: true, night: 0 },
+  sprites: { haze: 0, translucency: 0.9, fill: true, night: 0.5 },
 } as const satisfies Record<string, LayerLight>;
 
 const mirrored = (v: Vector3): Vector3 => ({ ...v, z: Math.abs(v.z) });
