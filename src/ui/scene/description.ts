@@ -122,6 +122,20 @@ export function toDesign(
 }
 
 /**
+ * Where a plant meets the ground, as a design-pixel height: its lowest
+ * ground shadow (botanical.ts), or its anchor if it has none. Its cast
+ * shadow starts here.
+ */
+export function groundLine(plant: PlantDescription): number {
+  const grounds = plant.scene.grounds;
+  const gy =
+    grounds.length > 0
+      ? Math.max(...grounds.map((ground) => ground.y))
+      : plant.anchorY;
+  return toDesign(plant, 0, gy).y;
+}
+
+/**
  * The garden scene for these plants. `highlighted` is the id of the plant
  * under the pointer or keyboard focus, if any.
  */

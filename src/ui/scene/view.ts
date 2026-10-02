@@ -287,45 +287,89 @@ export function stemLight(p: LightParams): [number, number, number] {
 export const DAYTIME: LightingState = lightingState(previewSnapshot("noon"));
 
 export interface PlantShadow {
-  /** Offset and blur (as CSS drop-shadow), in the plant's own pixels. */
-  x: number;
-  y: number;
+  /**
+   * The shadow on the ground, per pixel of height above the plant's base:
+   * how far it runs sideways (`shear`, + right) and down the screen
+   * (`squash`, + toward the viewer, − up the slope, foreshortened).
+   */
+  shear: number;
+  squash: number;
+  /** The silhouette's blur, in the plant's own pixels, before it is cast. */
   blur: number;
   alpha: number;
 }
 
 /** The shadow's blur, in the plant's own pixels: the same at any light. */
-export const PLANT_SHADOW_BLUR = 7;
+export const PLANT_SHADOW_BLUR = 2.5;
 
 /** The shadow's color, without its alpha. */
 export const PLANT_SHADOW_RGB = "21 45 23";
 
+/** How much shorter the hillside's depth looks than its width. */
+const GROUND_FORESHORTENING = 0.3;
+
+/** The longest shadow, in plant heights, so a low Sun's stays on the hill. */
+const LONGEST_SHADOW = 3;
+
+/** A shadow at least this deep, so one cast straight sideways still shows. */
+const THINNEST_SHADOW = 0.04;
+
 /**
- * The plants' drop shadow: cast away from the Sun, longer as it sinks, and
- * gone once it is down. Decorative; the realistic cast shadows of roadmap
- * P2-C replace it.
+ * The plants' shadows: each plant's silhouette laid on the ground from its
+ * base, away from the Sun, longer as it sinks, and gone once it is down.
+ * A shadow never stands up beside the plant: it lies on the hill.
  */
 export function plantShadow(state: LightingState): PlantShadow | null {
   const s = state.shadow;
   if (s === null) return null;
-  const length = Math.min(s.length, 3);
-  // Toward the viewer (z) reads as down the slope, foreshortened.
+  const length = Math.min(s.length, LONGEST_SHADOW);
+  const depth = s.z * length * GROUND_FORESHORTENING;
   return {
-    x: s.x * length * 6,
-    y: 3 + Math.max(0, s.z) * length * 3,
+    shear: s.x * length,
+    squash:
+      Math.abs(depth) < THINNEST_SHADOW
+        ? depth < 0
+          ? -THINNEST_SHADOW
+          : THINNEST_SHADOW
+        : depth,
     blur: PLANT_SHADOW_BLUR,
     alpha: 0.22 * Math.min(1, state.sun.intensity * 1.5),
   };
 }
 
-/** CSS custom properties for the plants' drop shadow (styles.css .plant). */
+/**
+ * The 2D transform (as `setTransform(a, b, c, d, e, f)`) that lays a
+ * plant's upright silhouette on the ground from its base at canvas height
+ * `baseY`: a point h pixels above the base lands `shear` h to the side and
+ * `squash` h below the base.
+ */
+export function castOnGround(
+  shadow: PlantShadow,
+  baseY: number,
+): [number, number, number, number, number, number] {
+  const { shear, squash } = shadow;
+  return [1, 0, -shear, -squash, shear * baseY, (1 + squash) * baseY];
+}
+
+/** The plant markers' CSS drop shadow: a short offset toward the shadow. */
+const MARKER_OFFSET = 4;
+
+/**
+ * CSS custom properties for the drop shadow of what CSS draws (styles.css
+ * .plant, .plant-marker): a short offset toward the plants' shadow, which
+ * reads as contact with the ground, not as a second plant in the air.
+ */
 export function plantShadowStyle(state: LightingState): Record<string, string> {
   const shadow = plantShadow(state);
   if (shadow === null)
     return { "--shadow-x": "0px", "--shadow-y": "0px", "--shadow-alpha": "0" };
+  const reach = Math.hypot(shadow.shear, shadow.squash);
+  const x = reach > 0 ? (shadow.shear / reach) * MARKER_OFFSET : 0;
+  const y = reach > 0 ? (shadow.squash / reach) * MARKER_OFFSET : 0;
   return {
-    "--shadow-x": `${shadow.x.toFixed(1)}px`,
-    "--shadow-y": `${shadow.y.toFixed(1)}px`,
+    "--shadow-x": `${x.toFixed(1)}px`,
+    // Always a little below: the ground is under the plant.
+    "--shadow-y": `${Math.max(2, y).toFixed(1)}px`,
     "--shadow-alpha": shadow.alpha.toFixed(3),
   };
 }
