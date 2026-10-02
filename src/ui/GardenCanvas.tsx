@@ -3,15 +3,17 @@
  * shared SceneDescription into one stage-sized canvas, back to front,
  * instead of one canvas per plot. The GPU tier draws them with WebGL2
  * (scene/plants-gpu.ts); what follows describes the software tier, which
- * the GPU tier matches. The drop shadow, the cyan
- * outline of the hovered or keyboard-focused plant, and wilting, which the
- * plots had from CSS filters, are drawn here too.
+ * the GPU tier matches. Each plant's shadow, laid on the ground from its
+ * base (view.ts castOnGround), and the cyan outline of the hovered or
+ * keyboard-focused plant and wilting, which the plots had from CSS
+ * filters, are drawn here too.
  *
  * Canvas filters and canvas-to-canvas copies are costly per frame, so each
- * plant's shadow and its whole look at rest are cached, and rebuilt only
- * when the light, the canvas size, the plant's history, or its highlight
- * changes. A swaying frame draws each cached shadow and paints the plant
- * over it directly. The highlighted plant and wilting plants hold still,
+ * plant's shadow, already on the ground, and its whole look at rest are
+ * cached, and rebuilt only when the light, the canvas size, the plant's
+ * history, or its highlight changes. A swaying frame draws each cached
+ * shadow and paints the plant over it directly. The highlighted plant and
+ * wilting plants hold still,
  * drawn from their cached look: the outline then fits exactly. Without
  * motion (Static, reduced motion, or sway stopped by the probe) every plant
  * is one cached image.
@@ -51,6 +53,7 @@ import {
 import { setPlantsOnGpu, useSceneArt, type LitArt } from "./scene/client.ts";
 import {
   gardenScene,
+  groundLine,
   toDesign,
   type PlantDescription,
   type PlantInput,
@@ -59,6 +62,7 @@ import {
 import { PlantsGpu } from "./scene/plants-gpu.ts";
 import { useGpu } from "./scene/useGpu.ts";
 import {
+  castOnGround,
   DESIGN,
   lightKey,
   plantShadow,
@@ -357,6 +361,13 @@ interface Placement {
   y: number;
 }
 
+/** An image drawn with its corner at (left, top). */
+interface Placed {
+  canvas: HTMLCanvasElement;
+  left: number;
+  top: number;
+}
+
 /** A plant's cached images, drawn with their corner at (left, top). */
 interface Cached {
   key: string;
@@ -365,9 +376,9 @@ interface Cached {
   top: number;
   width: number;
   height: number;
-  /** The drop shadow alone; null when there is none. */
-  shadow: HTMLCanvasElement | null | undefined;
-  /** The plant at rest with its shadow or outline, wilted if wilting. */
+  /** The plant's shadow on the ground, with its own corner; null if none. */
+  shadow: Placed | null | undefined;
+  /** The plant at rest with its outline, wilted if wilting. */
   rest: HTMLCanvasElement | undefined;
 }
 
@@ -417,14 +428,26 @@ class Painter {
       const frame = frameOf(plant);
       const growing = frame !== settledFrame(plant.scene);
       const still = seconds === null || plant.highlighted || plant.wilting;
+      // Under the plant, its shadow on the ground, cast from its base.
+      if (!plant.highlighted && shadow && shadow.alpha > 0) {
+        cached.shadow ??= this.shadow(
+          plant,
+          at,
+          cached,
+          art,
+          badges,
+          shadow,
+          groundLine(plant) * t,
+        );
+        if (cached.shadow) {
+          const { canvas, left, top } = cached.shadow;
+          g.drawImage(canvas, left, top);
+        }
+      }
       if (still && !growing) {
-        cached.rest ??= this.rest(plant, at, cached, art, badges, shadow);
+        cached.rest ??= this.rest(plant, at, cached, art, badges);
         g.drawImage(cached.rest, cached.left, cached.top);
         continue;
-      }
-      if (!plant.highlighted && !plant.wilting) {
-        cached.shadow ??= this.shadow(plant, at, cached, art, badges, shadow);
-        if (cached.shadow) g.drawImage(cached.shadow, cached.left, cached.top);
       }
       g.setTransform(
         at.k,
@@ -471,7 +494,9 @@ class Painter {
       size,
       plant.highlighted,
       plant.wilting,
-      shadow ? cast(shadow).color : "",
+      shadow
+        ? `${silhouette(shadow).color} ${String(shadow.shear)} ${String(shadow.squash)}`
+        : "",
     ].join("|");
     const before = this.cache.get(plant.id);
     if (before?.key === key && before.scene === plant.scene) return before;
@@ -532,14 +557,40 @@ class Painter {
     art: LitArt,
     badges: BadgeStyle,
     shadow: PlantShadow | null,
-  ): HTMLCanvasElement | null {
+    baseY: number,
+  ): Placed | null {
     if (!shadow || shadow.alpha <= 0) return null;
     const source = this.atRest(plant, at, cached, art, badges);
-    const out = canvasOf(cached);
+    const upright = canvasOf(cached);
+    const g0 = upright.getContext("2d");
+    if (!g0) return null;
+    castShadows(
+      g0,
+      source,
+      cached.width,
+      cached.height,
+      [silhouette(shadow)],
+      at.k,
+    );
+    // Lay it on the ground once, into a canvas around where it falls.
+    const m = castOnGround(shadow, baseY);
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (const x of [cached.left, cached.left + cached.width])
+      for (const y of [cached.top, cached.top + cached.height]) {
+        xs.push(m[0] * x + m[2] * y + m[4]);
+        ys.push(m[1] * x + m[3] * y + m[5]);
+      }
+    const left = Math.floor(Math.min(...xs));
+    const top = Math.floor(Math.min(...ys));
+    const out = document.createElement("canvas");
+    out.width = Math.max(1, Math.ceil(Math.max(...xs)) - left);
+    out.height = Math.max(1, Math.ceil(Math.max(...ys)) - top);
     const g = out.getContext("2d");
-    if (g)
-      castShadows(g, source, cached.width, cached.height, [cast(shadow)], at.k);
-    return out;
+    if (!g) return null;
+    g.setTransform(m[0], m[1], m[2], m[3], m[4] - left, m[5] - top);
+    g.drawImage(upright, cached.left, cached.top);
+    return { canvas: out, left, top };
   }
 
   private rest(
@@ -548,22 +599,17 @@ class Painter {
     cached: Cached,
     art: LitArt,
     badges: BadgeStyle,
-    shadow: PlantShadow | null,
   ): HTMLCanvasElement {
     const source = this.atRest(plant, at, cached, art, badges);
     const out = canvasOf(cached);
     const g = out.getContext("2d");
     if (!g) return out;
-    const casts: readonly Cast[] = plant.highlighted
-      ? OUTLINE
-      : shadow && shadow.alpha > 0
-        ? [cast(shadow)]
-        : [];
+    const casts: readonly Cast[] = plant.highlighted ? OUTLINE : [];
     const { width: w, height: h } = cached;
-    // Safari before 18 has no canvas filters: shadows, but no wilting.
+    // Safari before 18 has no canvas filters: an outline, but no wilting.
     if (canvasFilters(g)) {
-      // The plots' CSS filters exactly: each drop shadow falls from what is
-      // drawn so far, so the outline builds up. Filter lengths are device
+      // The plots' CSS filters exactly: each glow falls from what is drawn
+      // so far, so the outline builds up. Filter lengths are device
       // pixels; the CSS ones scaled with the plant.
       const filters = casts.map(
         (c) =>
@@ -589,10 +635,11 @@ function canvasOf(cached: Cached): HTMLCanvasElement {
 
 const px = (v: number) => `${v.toFixed(2)}px`;
 
-function cast(shadow: PlantShadow): Cast {
+/** The shadow's silhouette, upright and in place: it is cast when drawn. */
+function silhouette(shadow: PlantShadow): Cast {
   return {
-    x: shadow.x,
-    y: shadow.y,
+    x: 0,
+    y: 0,
     blur: shadow.blur,
     color: `rgb(${PLANT_SHADOW_RGB} / ${shadow.alpha.toFixed(3)})`,
   };

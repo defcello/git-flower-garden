@@ -17,6 +17,8 @@ import {
   DAYTIME,
   lightKey,
   litColor,
+  castOnGround,
+  plantShadow,
   plantShadowStyle,
   sceneLight,
 } from "../../src/ui/scene/view.ts";
@@ -284,6 +286,39 @@ describe("lit plant colors and shadows", () => {
     expect(x(sunrise)).toBeGreaterThan(0);
     expect(x(sunset)).toBeLessThan(0);
     expect(plantShadowStyle(night)["--shadow-alpha"]).toBe("0");
+  });
+
+  it("lays each plant's shadow on the ground from its base", () => {
+    const apply = (
+      m: readonly number[],
+      x: number,
+      y: number,
+    ): [number, number] => [
+      (m[0] ?? 0) * x + (m[2] ?? 0) * y + (m[4] ?? 0),
+      (m[1] ?? 0) * x + (m[3] ?? 0) * y + (m[5] ?? 0),
+    ];
+    const base = 900;
+    for (const state of [noon, sunrise, sunset]) {
+      const shadow = plantShadow(state);
+      expect(shadow).not.toBeNull();
+      if (!shadow) continue;
+      const m = castOnGround(shadow, base);
+      // The base stays put, and the plant's top lands on the ground, never
+      // in the air above it: within the foreshortened reach of its height.
+      const [x0, y0] = apply(m, 40, base);
+      expect(x0).toBeCloseTo(40, 9);
+      expect(y0).toBeCloseTo(base, 9);
+      const [, topY] = apply(m, 40, base - 300);
+      expect(Math.abs(topY - base)).toBeLessThanOrEqual(300 * 0.3 * 3 + 1e-9);
+      expect(Math.abs(topY - base)).toBeGreaterThan(0);
+    }
+    // The noon Sun stands high behind the hill: a short shadow, toward us.
+    const short = plantShadow(noon);
+    expect(short?.squash).toBeGreaterThan(0);
+    expect(Math.abs(short?.shear ?? 1)).toBeLessThan(0.5);
+    // Low Suns throw long shadows to the side, away from them.
+    expect(plantShadow(sunrise)?.shear).toBeGreaterThan(1);
+    expect(plantShadow(sunset)?.shear).toBeLessThan(-1);
   });
 });
 

@@ -6,9 +6,10 @@
  *
  * Per plant, in the software tier's order (GardenCanvas.tsx):
  *
- * - its drop shadow, or its cyan outline when highlighted: a blurred
+ * - its shadow, or its cyan outline when highlighted: a blurred
  *   silhouette, made once per plant and size with Canvas 2D; the Sun
- *   moves it and fades it with uniforms, so the light never rebuilds it;
+ *   lays it on the ground (view.ts castOnGround) and fades it with
+ *   uniforms, so the light never rebuilds it;
  * - ground shadows, as ellipses;
  * - stems and knots: drawn unlit with Canvas 2D into a texture, rebuilt
  *   only while the plant grows, and lit in the shader with the stems'
@@ -40,7 +41,7 @@ import {
 } from "../paint.ts";
 import { swaySprites } from "../sway.ts";
 import { settledFrame, type Frame } from "../transition.ts";
-import { toDesign, type PlantDescription } from "./description.ts";
+import { groundLine, toDesign, type PlantDescription } from "./description.ts";
 import type { SceneDescription } from "./description.ts";
 import {
   compile,
@@ -65,6 +66,7 @@ import {
   PLANT_SHADOW_RGB,
   sceneLight,
   stemLight,
+  type PlantShadow,
 } from "./view.ts";
 
 /** CSS saturate(0.45) then brightness(0.92) (paint.ts WILTING), in GLSL. */
@@ -81,9 +83,13 @@ vec4 wilt(vec4 c) {
 }
 `;
 
-/** A textured rectangle in canvas pixels. */
+/**
+ * A textured rectangle in canvas pixels, upright, or laid on the ground as
+ * a shadow (view.ts castOnGround) when `uGround`'s squash is not 0.
+ */
 const QUAD_VS = `#version 300 es
 uniform vec4 uRect;
+uniform vec3 uGround; // shear, squash, base y
 uniform vec2 uResolution;
 out vec2 vUv;
 ${TO_CLIP_GLSL}
@@ -91,7 +97,12 @@ void main() {
   vec2 uv = vec2(gl_VertexID == 1 || gl_VertexID == 3 ? 1.0 : 0.0,
                  gl_VertexID >= 2 ? 1.0 : 0.0);
   vUv = uv;
-  gl_Position = toClip(uRect.xy + uv * uRect.zw, uResolution);
+  vec2 p = uRect.xy + uv * uRect.zw;
+  if (uGround.y != 0.0) {
+    float h = uGround.z - p.y;
+    p = vec2(p.x + uGround.x * h, uGround.z + uGround.y * h);
+  }
+  gl_Position = toClip(p, uResolution);
 }`;
 
 /**
@@ -278,6 +289,7 @@ export class PlantsGpu implements GpuRenderer {
     this.#sprite = compile(gl, SPRITE_VS, SPRITE_FS);
     this.#quadU = uniforms(gl, this.#quad, [
       "uRect",
+      "uGround",
       "uResolution",
       "uTexture",
       "uMode",
@@ -450,7 +462,7 @@ export class PlantsGpu implements GpuRenderer {
       // Under the plant: its outline, or its shadow.
       if (plant.highlighted) {
         entry.outline ??= this.#outline(plant, at, entry, art, badges);
-        this.#texture(entry.outline, entry, 0, 0, 0);
+        this.#texture(entry.outline, entry, 0);
       } else if (shadow !== null && shadow.alpha > 0) {
         entry.shadow ??= this.#shadow(plant, at, entry, art, badges);
         gl.useProgram(this.#quad);
@@ -461,7 +473,10 @@ export class PlantsGpu implements GpuRenderer {
           (SHADOW_RGB[2] ?? 0) * shadow.alpha,
           shadow.alpha,
         );
-        this.#texture(entry.shadow, entry, 2, shadow.x * k, shadow.y * k);
+        this.#texture(entry.shadow, entry, 2, {
+          shadow,
+          baseY: groundLine(plant) * t,
+        });
       }
 
       this.#grounds(frame, place, plant.wilting);
@@ -477,7 +492,7 @@ export class PlantsGpu implements GpuRenderer {
         );
         entry.stemsFrame = frame;
       }
-      this.#texture(entry.stems, entry, 1, 0, 0, plant.wilting);
+      this.#texture(entry.stems, entry, 1, null, plant.wilting);
       this.#sprites(
         swaySprites(frame.sprites, still ? null : seconds),
         place,
@@ -493,7 +508,7 @@ export class PlantsGpu implements GpuRenderer {
           },
           null,
         );
-        this.#texture(entry.badges, entry, 0, 0, 0, plant.wilting);
+        this.#texture(entry.badges, entry, 0, null, plant.wilting);
       }
     }
     for (const [id, entry] of this.#entries)
@@ -611,7 +626,7 @@ export class PlantsGpu implements GpuRenderer {
     const g = out.getContext("2d");
     if (!g) return null;
     // The shadow's shape, blurred as Software blurs it; the light only
-    // moves and fades it.
+    // casts and fades it.
     castShadows(
       g,
       source,
@@ -667,13 +682,15 @@ export class PlantsGpu implements GpuRenderer {
     return this.#out;
   }
 
-  /** Draw one of the entry's textures over its rectangle, offset by (dx, dy). */
+  /**
+   * Draw one of the entry's textures over its rectangle, or, given a
+   * shadow, laid on the ground from the plant's base at canvas `baseY`.
+   */
   #texture(
     texture: WebGLTexture | null | undefined,
     entry: Entry,
     mode: 0 | 1 | 2,
-    dx: number,
-    dy: number,
+    ground: { shadow: PlantShadow; baseY: number } | null = null,
     wilting = false,
   ): void {
     if (!texture) return;
@@ -682,10 +699,16 @@ export class PlantsGpu implements GpuRenderer {
     gl.useProgram(this.#quad);
     gl.uniform4f(
       u.uRect ?? null,
-      entry.left + dx,
-      entry.top + dy,
+      entry.left,
+      entry.top,
       entry.width,
       entry.height,
+    );
+    gl.uniform3f(
+      u.uGround ?? null,
+      ground?.shadow.shear ?? 0,
+      ground?.shadow.squash ?? 0,
+      ground?.baseY ?? 0,
     );
     gl.uniform1i(u.uMode ?? null, mode);
     gl.uniform1i(u.uWilting ?? null, wilting ? 1 : 0);
