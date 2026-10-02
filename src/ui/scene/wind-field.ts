@@ -34,6 +34,8 @@ const LATTICE = new Float64Array(128 * 128);
 for (let y = 0; y < 128; y++)
   for (let x = 0; x < 128; x++) LATTICE[y * 128 + x] = hash(x, y);
 const at = (x: number, y: number) => LATTICE[(y & 127) * 128 + (x & 127)] ?? 0;
+/** The lattice as the GPU reads it, row by row (an R32F texture). */
+export const WIND_LATTICE = Float32Array.from(LATTICE);
 function noise(x: number, y: number): number {
   const ix = Math.floor(x),
     iy = Math.floor(y);
@@ -113,15 +115,16 @@ export function windWave(
   return gustEnvelope(seconds, wind.speed) * waveShape(x, y, wind);
 }
 
-/** The same lattice, interpolation, and scales as the CPU field above. */
+/**
+ * The same lattice, interpolation, and scales as the CPU field above. The
+ * shader declares `uniform highp sampler2D uLattice` (a 128×128 R32F
+ * texture of WIND_LATTICE) and high float precision.
+ */
 export const WIND_GLSL = `
 float windHash(vec2 p) {
-  uvec2 i = uvec2(mod(mod(p, 128.0) + 128.0, 128.0));
-  uint h = i.x * 1664525u + i.y * 1013904223u;
-  h ^= h >> 16;
-  h *= 2246822519u;
-  h ^= h >> 13;
-  return float(h & 65535u) / 65535.0;
+  // The CPU's lattice, uploaded (WIND_LATTICE): no integer arithmetic,
+  // whose precision phones may cut to 16 bits.
+  return texelFetch(uLattice, ivec2(mod(p, 128.0)) & 127, 0).r;
 }
 float windNoise(vec2 p) {
   vec2 i = floor(p), f = fract(p);

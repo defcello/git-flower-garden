@@ -8,6 +8,7 @@ import {
   windDirection,
   windWave,
   WIND_GLSL,
+  WIND_LATTICE,
   TRAVEL_WRAP,
 } from "../../src/ui/scene/wind-field.ts";
 
@@ -134,6 +135,26 @@ describe("wind field", () => {
     expect(advance(0, 1000, 12)).toBeLessThan(waveSpeed(12));
   });
 
+  it("uploads the lattice the 32-bit hash defines, for phones' GPUs", () => {
+    // The shader reads this texture instead of hashing in integers, whose
+    // precision a phone may cut to 16 bits.
+    expect(WIND_LATTICE).toHaveLength(128 * 128);
+    for (const [x, y] of [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [127, 127],
+      [64, 3],
+    ] as const) {
+      let h = (Math.imul(x, 1664525) + Math.imul(y, 1013904223)) >>> 0;
+      h = (h ^ (h >>> 16)) >>> 0;
+      h = Math.imul(h, 2246822519) >>> 0;
+      h = (h ^ (h >>> 13)) >>> 0;
+      expect(WIND_LATTICE[y * 128 + x]).toBeCloseTo((h & 65535) / 65535, 6);
+    }
+    expect(new Set(WIND_LATTICE).size).toBeGreaterThan(8000);
+  });
+
   it("keeps the CPU and shader lattice and field formulas in parity", () => {
     for (const x of [0, 123, 723, 1919])
       for (const y of [650, 840, 1080]) {
@@ -148,11 +169,7 @@ describe("wind field", () => {
     // The shader is intentionally a direct transcription. Check every coefficient
     // and operation that controls noise sampling, evolution, and gust depth.
     for (const fragment of [
-      "mod(mod(p, 128.0) + 128.0, 128.0)",
-      "1664525u",
-      "1013904223u",
-      "2246822519u",
-      "65535u",
+      "texelFetch(uLattice, ivec2(mod(p, 128.0)) & 127, 0).r",
       "f * f * (3.0 - 2.0 * f)",
       "0.6 + 0.4",
       "650.0) / 430.0",
