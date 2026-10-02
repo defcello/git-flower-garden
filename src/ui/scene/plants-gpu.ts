@@ -494,7 +494,12 @@ export class PlantsGpu implements GpuRenderer {
       }
       this.#texture(entry.stems, entry, 1, null, plant.wilting);
       this.#sprites(
-        swaySprites(frame.sprites, still ? null : seconds),
+        swaySprites(
+          frame.sprites,
+          still ? null : seconds,
+          undefined,
+          (sprite) => toDesign(plant, sprite.x, sprite.y),
+        ),
         place,
         plant.wilting,
       );

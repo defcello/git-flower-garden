@@ -2,9 +2,9 @@
  * The garden's scene: sky, stars, Sun, Moon, and the relit ridge and hill,
  * behind the plants (ADR 0018). The GPU tier draws it with WebGL2 and
  * relights the ridge and hill in a shader (scene/gpu.ts); the software
- * tier draws it with Canvas 2D from layers relit in a worker. Nothing moves
- * yet, so it draws only when the light, the lit art, or the window
- * changes, and never while the page is hidden. Decorative: hidden from
+ * tier draws it with Canvas 2D from layers relit in a worker. The hill's
+ * wind follows the shared sway clock; the sky and worker-relit art change
+ * only with the light, weather, or window. Decorative: hidden from
  * assistive technology and never a pointer target.
  *
  * Either tier draws the light the plants' art was lit for, never ahead of
@@ -14,11 +14,14 @@ import { useEffect, useRef, useState } from "react";
 import type { LightingState } from "../environment/lighting.ts";
 import {
   preset,
+  listenSway,
   probingGpu,
   reportGpuFrame,
   useQuality,
   useWantsGpu,
 } from "./motion.ts";
+import { swayWind, windStrength } from "./sway.ts";
+import { gustEnvelope, waveShape } from "./scene/wind-field.ts";
 import { fitCanvas } from "./paint.ts";
 import {
   requestLight,
@@ -276,14 +279,104 @@ function SoftwareCanvas({
   }, [shown, art, weather, quality]);
 
   return (
-    <canvas
-      ref={canvas}
-      className="landscape-scene"
-      data-tier="software"
-      data-art={scene.state}
-      data-light-ms={art ? art.lightMs.toFixed(0) : undefined}
-    />
+    <>
+      <canvas
+        ref={canvas}
+        className="landscape-scene"
+        data-tier="software"
+        data-art={scene.state}
+        data-light-ms={art ? art.lightMs.toFixed(0) : undefined}
+      />
+      <GrassSheen art={art} shown={shown} />
+    </>
   );
+}
+
+/** Software keeps its relit hill still; this small raster carries the light wave. */
+function GrassSheen({
+  art,
+  shown,
+}: {
+  art: LitArt | null;
+  shown: LightingState;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const element = canvas.current;
+    const hill = art?.hill;
+    if (!element || !hill) return;
+    const g = element.getContext("2d");
+    if (!g) return;
+    const maskCanvas = document.createElement("canvas");
+    const mask = maskCanvas.getContext("2d", { willReadFrequently: true });
+    if (!mask) return;
+    let alpha = new Uint8Array(0);
+    let sx = new Float32Array(0);
+    let sy = new Float32Array(0);
+    let frame = g.createImageData(1, 1);
+    let width = 0;
+    let height = 0;
+    const resize = () => {
+      const w = Math.max(1, Math.ceil(element.clientWidth / 16));
+      const h = Math.max(1, Math.ceil(element.clientHeight / 16));
+      if (w === width && h === height) return;
+      width = maskCanvas.width = element.width = w;
+      height = maskCanvas.height = element.height = h;
+      const t = transform(w, h);
+      mask.drawImage(
+        hill,
+        t.ox,
+        t.oy,
+        DESIGN.width * t.scale,
+        DESIGN.height * t.scale,
+      );
+      const pixels = mask.getImageData(0, 0, w, h).data;
+      alpha = new Uint8Array(w * h);
+      sx = new Float32Array(w * h);
+      sy = new Float32Array(w * h);
+      for (let y = 0; y < h; y++)
+        for (let x = 0; x < w; x++) {
+          const i = y * w + x;
+          alpha[i] = pixels[i * 4 + 3] ?? 0;
+          sx[i] = (x + 0.5 - t.ox) / t.scale;
+          sy[i] = (y + 0.5 - t.oy) / t.scale;
+        }
+      frame = g.createImageData(w, h);
+    };
+    const drawWave = (seconds: number | null) => {
+      resize();
+      if (seconds === null || document.hidden) {
+        g.clearRect(0, 0, width, height);
+        return;
+      }
+      const wind = swayWind(seconds);
+      const light = Math.min(1, shown.sun.intensity);
+      const strength = windStrength(wind.speed);
+      const data = frame.data;
+      // The pulse is the same everywhere: once a frame, not per pixel.
+      const gain = light * strength * 0.16 * gustEnvelope(seconds, wind.speed);
+      for (let i = 0; i < alpha.length; i++) {
+        const o = i * 4;
+        const a = alpha[i] ?? 0;
+        data[o] = 204;
+        data[o + 1] = 231;
+        data[o + 2] = 177;
+        data[o + 3] =
+          a === 0
+            ? 0
+            : a * Math.max(0, waveShape(sx[i] ?? 0, sy[i] ?? 0, wind)) * gain;
+      }
+      g.putImageData(frame, 0, 0);
+    };
+    const clock = listenSway(drawWave);
+    drawWave(clock.seconds);
+    window.addEventListener("resize", resize);
+    return () => {
+      clock.stop();
+      window.removeEventListener("resize", resize);
+    };
+  }, [art, shown]);
+  return <canvas ref={canvas} className="grass-sheen" aria-hidden="true" />;
 }
 
 /** The GPU tier's landscape, on its own WebGL2 context (scene/useGpu.ts). */
@@ -318,13 +411,18 @@ function GpuCanvas({
   useEffect(() => {
     const element = canvas.current;
     if (!element || hidden) return;
+    let seconds: number | null = null;
     const redraw = () => {
       const gpu = renderer.current;
       if (document.hidden || gpu === null) return;
       fitCanvas(element, preset().pixelRatio);
       const timed = probingGpu("landscape");
       const start = performance.now();
-      const lit = gpu.draw(shown, weatherRasters(element, shown, weather));
+      const lit = gpu.draw(
+        shown,
+        weatherRasters(element, shown, weather),
+        seconds,
+      );
       if (timed && lit) {
         gpu.finish();
         reportGpuFrame("landscape", performance.now() - start);
@@ -337,10 +435,16 @@ function GpuCanvas({
         lit,
       );
     };
+    const clock = listenSway((at) => {
+      seconds = at;
+      redraw();
+    });
+    seconds = clock.seconds;
     redraw();
     document.addEventListener("visibilitychange", redraw);
     window.addEventListener("resize", redraw);
     return () => {
+      clock.stop();
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
     };

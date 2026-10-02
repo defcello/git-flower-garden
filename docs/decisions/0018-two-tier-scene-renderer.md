@@ -630,6 +630,49 @@ decision:
   the dedicated monitor and at one non-16:9 viewport, and the 24-hour
   soak.
 
+**Grass wind, 2026-10-02** (designed with Codex, reviewed and measured
+here). The hill's grass sways with the live wind, in rolling waves that
+pulse with it (`src/ui/scene/wind-field.ts`, pure, mirrored in GLSL):
+
+- **One wind field** for grass and plants, in design pixels: two scales of
+  smooth lattice noise carried downwind by an accumulated travel, so a new
+  forecast changes the speed (35 + 12 px/s per m/s, to 12 m/s) without the
+  waves jumping. A broader gust mask travels half again as fast and
+  strengthens the patches it crosses; a slow pulse (11, 17, and 29 s)
+  deepens with the wind, so in a gale the lulls fall to about a third of
+  the gusts, and calm air keeps a steady breeze. Patches shrink and slow
+  toward the crest, and are wider than tall on screen: a front about 2.6
+  times longer across the wind than along it, foreshortened on the hill.
+- **Plants** sample the field at their place on the hillside, so a gust
+  crosses grass and plants together; each keeps its own seeded rhythm, and
+  the sway stays within ±`SWAY_ANGLE`.
+- **GPU**: while the grass moves, everything behind the hill, and the
+  relit hill itself, are drawn once per change of light, weather, or size
+  into two textures; a frame copies the one and leans the other's blades
+  (only painted blade detail moves, up to 2.8 design pixels at the front,
+  times the wind strength, and its alpha stays put, so the crest never
+  moves), lightening the bent blades in daylight, in the rows the hill
+  covers. At rest the landscape draws directly, as before.
+- **Software** keeps its relit hill still and rolls only the light: a
+  1/16-scale sheen clipped to the hill, from coordinates and a mask made on
+  resize and a 128×128 noise table (2.5 ms a frame on the Surface Pro at
+  1/12 scale, before it went to 1/16).
+
+The landscape now draws on the sway clock, so it moves only when the
+plants do: never in Low, Static, under reduced motion, on a hidden page, or
+once the probe stops sway. Repainting the whole relit landscape every
+frame was first tried and made a GPU browser test time out under software
+WebGL; the cached textures restored its time (16.7 s, against 16.8 s
+before). Surface Pro, 8 plants, percent of one core, `main` → grass wind,
+same session: GPU Balanced 51–55 → 57–58, High 107–108 → 93–94; Software
+Balanced 81–82 → 83, High 131–133 → 138. The GPU probe's verdicts on the
+HD 4000 were noisy on both (slow at 85–142 ms in some runs, ok at 10–28 ms
+in others), as noted under step 6. Unit tests cover bounds, travel in
+either direction, gust patches moving, no jump on a speed change, deep
+lulls, and CPU/GLSL parity (`tests/ui/wind-field.test.ts`); a browser test
+checks that the grass moves on both tiers and returns exactly to rest
+(`tests/e2e/weather.spec.ts`).
+
 ## Verification
 
 - Unit tests: relighting on synthetic texels (facing and backlit light,

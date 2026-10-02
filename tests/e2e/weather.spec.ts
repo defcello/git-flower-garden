@@ -73,6 +73,50 @@ async function openGarden(page: Page) {
   await expect(page.locator(".garden-scene [data-plot]")).toHaveCount(1);
 }
 
+/** A small pixel signature of the hill, or the software sheen over it. */
+async function grassPixels(page: Page, selector: string): Promise<string> {
+  return page.locator(selector).evaluate((node) => {
+    const source = node as HTMLCanvasElement;
+    const copy = document.createElement("canvas");
+    copy.width = 160;
+    copy.height = 90;
+    const g = copy.getContext("2d");
+    if (!g) throw new Error("no canvas context");
+    g.drawImage(source, 0, 0, copy.width, copy.height);
+    const pixels = g.getImageData(0, 55, 160, 35).data;
+    let hash = 2166136261;
+    for (const channel of pixels) hash = Math.imul(hash ^ channel, 16777619);
+    return String(hash >>> 0);
+  });
+}
+
+test("grass waves move on both tiers and return exactly to rest", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await openGarden(page);
+  await page.getByLabel("Sky", { exact: true }).selectOption("noon");
+  await page.getByLabel("Weather", { exact: true }).selectOption("high-wind");
+  const drawing = page.getByLabel("Drawing", { exact: true });
+  const quality = page.getByLabel("Quality", { exact: true });
+  for (const tier of ["software", "gpu"] as const) {
+    await drawing.selectOption(tier);
+    const scene = page.locator(".landscape-scene:not([hidden])");
+    await expect(scene).toHaveAttribute("data-tier", tier);
+    await expect(scene).toHaveAttribute("data-lit", "true");
+    const selector =
+      tier === "gpu" ? ".landscape-scene:not([hidden])" : ".grass-sheen";
+    await quality.selectOption("low");
+    const rest = await grassPixels(page, selector);
+    await quality.selectOption("balanced");
+    await expect.poll(() => grassPixels(page, selector)).not.toBe(rest);
+    const first = await grassPixels(page, selector);
+    await expect.poll(() => grassPixels(page, selector)).not.toBe(first);
+    await quality.selectOption("low");
+    await expect.poll(() => grassPixels(page, selector)).toBe(rest);
+  }
+});
+
 /** Mean brightness and colorfulness (max - min channel) of a scene region. */
 async function region(
   page: Page,
@@ -169,9 +213,17 @@ test("weather previews are labelled, and both tiers draw the same clouds and lig
   const SKY = [0.3, 0.04, 0.4, 0.08] as const;
   const HILL = [0.45, 0.72, 0.1, 0.05] as const;
   const shot = async (name: string) => {
+    const quality = page.getByLabel("Quality", { exact: true });
+    const before = await quality.inputValue();
+    await quality.selectOption("low");
     await settled(page);
     await page.screenshot({ path: testInfo.outputPath(`${name}.png`) });
-    return { sky: await region(page, SKY), hill: await region(page, HILL) };
+    const result = {
+      sky: await region(page, SKY),
+      hill: await region(page, HILL),
+    };
+    await quality.selectOption(before);
+    return result;
   };
 
   await weather.selectOption("clear");

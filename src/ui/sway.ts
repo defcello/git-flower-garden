@@ -2,36 +2,46 @@
  * Restrained wind sway for the garden's artwork (ADR 0018, "Software tier";
  * roadmap P2-C): each leaf, flower, and fruit rocks gently about the point
  * where it meets its stem, as if pivoting there. Only sprites move; stems,
- * knots, and every hit target stay exactly where the graph puts them. Pure,
- * so any moment of the sway is testable.
+ * knots, and every hit target stay exactly where the graph puts them. The
+ * field's math is pure; this module keeps the travelled distance shared by
+ * the landscape and plants.
  */
 import { seeded, type Sprite } from "./botanical.ts";
+import { advance, windWave, type WindField } from "./scene/wind-field.ts";
 
 /** Largest rocking angle, in radians (about 3.4°). */
 export const SWAY_ANGLE = 0.06;
 /** Seconds per sway, the slowest and fastest. */
 const PERIOD_MIN = 3.2;
 const PERIOD_MAX = 5.2;
-/** Seconds for a breeze to cross 1,000 px of garden, left to right. */
-const GUST_CROSSING = 6;
+let wind: WindField = { speed: 4, windX: 0, travel: 0 };
+let windAt: number | null = null;
+
+/** One distance for every listener on the shared clock. Earlier clock readings do not rewind travel. */
+export function swayWind(seconds: number): WindField {
+  if (windAt !== null && seconds > windAt)
+    wind.travel = advance(wind.travel, seconds - windAt, wind.speed);
+  windAt = seconds;
+  return wind;
+}
 
 /**
- * The sway angle of one sprite at `seconds`. A slow breeze sweeps across
- * the garden and each sprite adds its own seeded rhythm, so neighbors never
+ * The sway angle of one sprite at `seconds`. The wind field at `position`
+ * (the sprite's place on the hillside) brings the gusts that roll through
+ * the grass, and each sprite adds its own seeded rhythm, so neighbors never
  * move in lockstep. Always within ±SWAY_ANGLE × `strength` (the wind).
  */
 export function swayAngle(
   sprite: Sprite,
   seconds: number,
   strength = 1,
+  position: { x: number; y: number } = sprite,
 ): number {
   const seed = seeded(`${sprite.key}|sway`);
   const period = PERIOD_MIN + (PERIOD_MAX - PERIOD_MIN) * seed;
   const own = Math.sin((2 * Math.PI * seconds) / period + seed * 2 * Math.PI);
-  const breeze = Math.sin(
-    (2 * Math.PI * (seconds - (sprite.x / 1000) * GUST_CROSSING)) / 9,
-  );
-  return SWAY_ANGLE * strength * (0.6 * own + 0.4 * breeze);
+  const field = windWave(position.x, position.y, seconds, swayWind(seconds));
+  return SWAY_ANGLE * strength * (0.55 * own + 0.45 * field);
 }
 
 /** The strongest wind sway, relative to the calm breeze (about 7.5°). */
@@ -49,10 +59,11 @@ export function windStrength(metersPerSecond: number): number {
 
 let currentStrength = 1;
 
-/** Set the wind the garden sways in (null: no weather, the calm breeze). */
-export function setSwayWind(metersPerSecond: number | null): void {
+/** Set the wind the garden sways in (null: no weather; field retains a default 4 m/s breeze). */
+export function setSwayWind(metersPerSecond: number | null, windX = 0): void {
   currentStrength =
     metersPerSecond === null ? 1 : windStrength(metersPerSecond);
+  wind = { ...wind, speed: metersPerSecond ?? 4, windX };
 }
 
 /**
@@ -64,10 +75,11 @@ export function swaySprites<T extends Sprite & { scale: number }>(
   sprites: readonly T[],
   seconds: number | null,
   strength = currentStrength,
+  place: (sprite: T) => { x: number; y: number } = (sprite) => sprite,
 ): readonly T[] {
   if (seconds === null) return sprites;
   return sprites.map((sprite) => {
-    const angle = swayAngle(sprite, seconds, strength);
+    const angle = swayAngle(sprite, seconds, strength, place(sprite));
     // The pivot sits half a (scaled) sprite below the center, in the
     // sprite's own rotated frame.
     const arm = (sprite.size * sprite.scale) / 2;
