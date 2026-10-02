@@ -229,7 +229,10 @@ export function App() {
   );
   const showsRainbow = rainbow(light, effects) !== null;
   useEffect(() => {
-    setSwayWind(effects === NO_WEATHER ? null : effects.windSpeed);
+    setSwayWind(
+      effects === NO_WEATHER ? null : effects.windSpeed,
+      effects.windX,
+    );
   }, [effects]);
   // Plant shadows change with the relit art, not ahead of it.
   const shownLight = useShownLight(light);

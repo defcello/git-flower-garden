@@ -462,7 +462,7 @@ class Painter {
         at.x - plant.bounds.x * at.k,
         at.y - plant.bounds.y * at.k,
       );
-      this.plant(g, frame, art, badges, still ? null : seconds);
+      this.plant(g, frame, art, badges, still ? null : seconds, plant);
       g.setTransform(1, 0, 0, 1, 0, 0);
     }
     for (const id of this.cache.keys())
@@ -479,9 +479,16 @@ class Painter {
     art: LitArt,
     badges: BadgeStyle,
     seconds: number | null,
+    plant: PlantDescription,
   ): void {
     paintBase(g, frame, art, this.paths);
-    paintSprites(g, swaySprites(frame.sprites, seconds), art);
+    paintSprites(
+      g,
+      swaySprites(frame.sprites, seconds, undefined, (sprite) =>
+        toDesign(plant, sprite.x, sprite.y),
+      ),
+      art,
+    );
     // Over the art, as the plot's hit layer drew them, but in depth order.
     paintBadges(g, frame.badges, badges);
   }
@@ -551,7 +558,7 @@ class Painter {
       at.x - cached.left - plant.bounds.x * at.k,
       at.y - cached.top - plant.bounds.y * at.k,
     );
-    this.plant(g, settledFrame(plant.scene), art, badges, null);
+    this.plant(g, settledFrame(plant.scene), art, badges, null, plant);
     return scratch;
   }
 

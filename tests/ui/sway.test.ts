@@ -9,6 +9,7 @@ import {
   swayAngle,
   setSwayWind,
   swaySprites,
+  swayWind,
   tooBusy,
   tooSlow,
   windStrength,
@@ -104,6 +105,15 @@ describe("wind (ADR 0018 step 5)", () => {
     } finally {
       setSwayWind(null);
     }
+  });
+
+  it("keeps the travelled wave when only the wind speed changes", () => {
+    setSwayWind(4, -4);
+    const before = swayWind(1000);
+    setSwayWind(9, -9);
+    expect(swayWind(1000).travel).toBe(before.travel);
+    expect(swayWind(1000).windX).toBe(-9);
+    setSwayWind(null);
   });
 });
 
