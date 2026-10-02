@@ -26,7 +26,7 @@ import {
   type Uniforms,
 } from "./gl.ts";
 import { LAYERS, type LayerLight } from "./shading.ts";
-import { WIND_GLSL } from "./wind-field.ts";
+import { WIND_GLSL, WIND_LATTICE } from "./wind-field.ts";
 import type { GpuRenderer } from "./useGpu.ts";
 import {
   DESIGN,
@@ -178,7 +178,9 @@ void main() { color = texelFetch(uImage, ivec2(gl_FragCoord.xy), 0); }`;
  */
 const WAVE_FS = `#version 300 es
 precision highp float;
+precision highp int;
 uniform sampler2D uLit, uAlbedo, uTranslucency;
+uniform highp sampler2D uLattice;
 uniform vec4 uView; // the cover transform: ox, oy, scale; canvas height
 uniform float uSeconds, uSpeed, uWindX, uTravel, uStrength, uDaylight;
 out vec4 color;
@@ -230,6 +232,8 @@ export class LandscapeGpu implements GpuRenderer {
   readonly #overlayProgram: WebGLProgram;
   readonly #backdropProgram: WebGLProgram;
   readonly #wave: WebGLProgram;
+  /** The wind's noise lattice (wind-field.ts), shared with the CPU. */
+  readonly #lattice: WebGLTexture;
   readonly #waveU: Uniforms;
   readonly #overlayU: Uniforms;
   /** Uploaded weather rasters, by kind, with the key of what is in each. */
@@ -266,7 +270,9 @@ export class LandscapeGpu implements GpuRenderer {
     this.#overlayProgram = compile(gl, LAYER_VS, OVERLAY_FS);
     this.#backdropProgram = compile(gl, FULL_VS, BACKDROP_FS);
     this.#wave = compile(gl, FULL_VS, WAVE_FS);
+    this.#lattice = latticeTexture(gl);
     this.#waveU = uniforms(gl, this.#wave, [
+      "uLattice",
       "uLit",
       "uAlbedo",
       "uTranslucency",
@@ -429,6 +435,7 @@ export class LandscapeGpu implements GpuRenderer {
     gl.uniform1i(u.uLit ?? null, 0);
     gl.uniform1i(u.uAlbedo ?? null, 1);
     gl.uniform1i(u.uTranslucency ?? null, 2);
+    gl.uniform1i(u.uLattice ?? null, 3);
     gl.uniform4f(u.uView ?? null, t.ox, t.oy, t.scale, H);
     gl.uniform1f(u.uSeconds ?? null, seconds);
     gl.uniform1f(u.uSpeed ?? null, wind.speed);
@@ -450,6 +457,9 @@ export class LandscapeGpu implements GpuRenderer {
     gl.bindTexture(gl.TEXTURE_2D, hill.albedo);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, hill.translucency ?? hill.albedo);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, this.#lattice);
+    gl.activeTexture(gl.TEXTURE0);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.disable(gl.SCISSOR_TEST);
     return true;
@@ -606,6 +616,30 @@ export class LandscapeGpu implements GpuRenderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
+}
+
+/** The wind's 128×128 noise lattice as an R32F texture, read with texelFetch. */
+function latticeTexture(gl: WebGL2RenderingContext): WebGLTexture {
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  // Float textures cannot be filtered without an extension; texelFetch
+  // never filters, but the texture must still be complete.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.R32F,
+    128,
+    128,
+    0,
+    gl.RED,
+    gl.FLOAT,
+    WIND_LATTICE,
+  );
+  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+  return texture;
 }
 
 /** A framebuffer with a texture the size of the canvas. */

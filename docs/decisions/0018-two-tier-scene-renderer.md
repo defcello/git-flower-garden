@@ -686,6 +686,17 @@ stopped it for the visit (`motionHold`, motion.ts); never for Static or
 Low, which the viewer chose. Surface Pro, 8 plants, high wind, percent of
 one core: GPU 59 (Balanced), 96 (High); Software 89, 140.
 
+**Grass wind on phone GPUs, 2026-10-02.** On the maintainer's phone the
+plants swayed but the grass's light patches still did not show, where the
+same deployed page moved plainly in desktop Chromium and in phone
+emulation (mean change between frames 4–7 levels on the hill, against
+0.74 on the phone). The shader hashed its noise lattice in unsigned
+integers, and fragment shaders default to medium integer precision, which
+phone GPUs may implement in 16 bits. The lattice is now made once on the
+CPU and uploaded as a 128×128 R32F texture (`WIND_LATTICE`), read with
+`texelFetch` through a high-precision sampler: no integer arithmetic, and
+the CPU and GPU read the very same values.
+
 ## Verification
 
 - Unit tests: relighting on synthetic texels (facing and backlit light,
