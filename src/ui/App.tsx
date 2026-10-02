@@ -16,6 +16,7 @@ import type {
 } from "../api/types.ts";
 import { STATIC_DEMO, useGardenData } from "./api.ts";
 import { Details } from "./Details.tsx";
+import { FullscreenButton, useFullscreen } from "./Fullscreen.tsx";
 import { BotanicalGraph } from "./BotanicalGraph.tsx";
 import type { Renderer } from "./botanical.ts";
 import { FocusGraph } from "./FocusGraph.tsx";
@@ -243,11 +244,12 @@ export function App() {
   // drawer start below them (styles.css --hud-height).
   const appRef = useHudHeight();
   const stageScale = useStageScale();
+  const fullscreen = useFullscreen(appRef);
 
   return (
     <div
       ref={appRef}
-      className={`app${renderer !== "technical" ? " botanical" : ""}${renderer !== "technical" && isNight(shownLight) ? " night" : ""}`}
+      className={`app${renderer !== "technical" ? " botanical" : ""}${renderer !== "technical" && isNight(shownLight) ? " night" : ""}${fullscreen.active ? " fullscreen" : ""}`}
       style={
         renderer !== "technical" ? plantShadowStyle(shownLight) : undefined
       }
@@ -486,6 +488,10 @@ export function App() {
         </div>
       )}
       {hover && <Tooltip hover={hover} />}
+      <FullscreenButton
+        active={fullscreen.active}
+        onToggle={fullscreen.toggle}
+      />
     </div>
   );
 }

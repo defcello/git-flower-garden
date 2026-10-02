@@ -75,7 +75,9 @@ git-flower-garden serve                       # http://127.0.0.1:4783/
 
 Press Ctrl+C to stop the service. To start it at login, add
 `git-flower-garden serve` to your operating system's startup items. For a dedicated
-monitor, open the page in a browser's fullscreen or kiosk mode.
+monitor, use the full-screen button in the bottom-right corner (it hides
+the controls; move the mouse or touch the screen to bring back its exit
+button), or open the page in a browser's kiosk mode.
 
 The configuration file is:
 
