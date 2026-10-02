@@ -16,7 +16,8 @@ change configuration or behavior, and the notes say how.
   plants catch the same gusts where they stand, with their own rhythm. The
   GPU leans the painted blades and lights their bent sides; Software, which
   keeps its hill still, rolls the light alone. Low, Static, reduced motion,
-  and hidden pages hold the grass still.
+  and hidden pages hold the grass still; the view's note says when reduced
+  motion or late frames are holding the garden still.
   ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
 - **Optional weather.** Set `environment.weather.enabled` to show this
   hour's forecast (cloud, rain, sleet or snow, wind, temperature) from MET

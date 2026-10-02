@@ -315,6 +315,9 @@ test("the GPU tier draws the landscape like Software, and hands over when its co
 }, testInfo) => {
   test.setTimeout(90_000);
   await page.setViewportSize({ width: 1920, height: 1080 });
+  // Nothing sways, so both tiers draw the grass at rest (its waves are
+  // tested in weather.spec.ts).
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await expect(page.locator("section.plot svg.graph")).toHaveCount(7);
   await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");

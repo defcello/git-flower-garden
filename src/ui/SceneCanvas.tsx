@@ -292,6 +292,12 @@ function SoftwareCanvas({
   );
 }
 
+/** 0 below 0.05, 1 above 0.5, smooth between (GLSL smoothstep). */
+function smooth(v: number): number {
+  const t = Math.min(1, Math.max(0, (v - 0.05) / 0.45));
+  return t * t * (3 - 2 * t);
+}
+
 /** Software keeps its relit hill still; this small raster carries the light wave. */
 function GrassSheen({
   art,
@@ -354,17 +360,20 @@ function GrassSheen({
       const strength = windStrength(wind.speed);
       const data = frame.data;
       // The pulse is the same everywhere: once a frame, not per pixel.
-      const gain = light * strength * 0.16 * gustEnvelope(seconds, wind.speed);
+      const gust =
+        (Math.min(strength, 2.2) / 2.2) * gustEnvelope(seconds, wind.speed);
+      const lift = light * gust * 0.32 * 255;
+      const sink = gust * 0.22 * 255;
       for (let i = 0; i < alpha.length; i++) {
         const o = i * 4;
-        const a = alpha[i] ?? 0;
-        data[o] = 204;
-        data[o + 1] = 231;
-        data[o + 2] = 177;
-        data[o + 3] =
-          a === 0
-            ? 0
-            : a * Math.max(0, waveShape(sx[i] ?? 0, sy[i] ?? 0, wind)) * gain;
+        const a = (alpha[i] ?? 0) / 255;
+        // Bent blades show their lighter sides; upright grass stands darker.
+        const bend = a === 0 ? 0 : waveShape(sx[i] ?? 0, sy[i] ?? 0, wind);
+        const bent = bend > 0;
+        data[o] = bent ? 214 : 12;
+        data[o + 1] = bent ? 236 : 30;
+        data[o + 2] = bent ? 190 : 8;
+        data[o + 3] = a * smooth(Math.abs(bend)) * (bent ? lift : sink);
       }
       g.putImageData(frame, 0, 0);
     };
