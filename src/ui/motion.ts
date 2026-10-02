@@ -181,6 +181,8 @@ const swayers = new Set<Listener>();
 /** Rain and snow, which hear it whenever it runs. */
 const fallers = new Set<Listener>();
 const tierListeners = new Set<() => void>();
+/** Hear when the reason motion is held (motionHold) may have changed. */
+const holdListeners = new Set<() => void>();
 const qualityListeners = new Set<() => void>();
 let timer = 0;
 let raf = 0;
@@ -247,9 +249,11 @@ function frame(now: number): void {
       if (frameMs() < FRAME_MS) {
         stepped = true;
         document.documentElement.dataset.sway = "stepped";
+        for (const listener of holdListeners) listener();
       } else {
         slow = true;
         document.documentElement.dataset.sway = "slow";
+        for (const listener of holdListeners) listener();
         settle();
         return;
       }
@@ -302,6 +306,7 @@ function update(): void {
   } else {
     settle();
   }
+  for (const listener of holdListeners) listener();
 }
 
 if (typeof document !== "undefined") {
@@ -401,4 +406,29 @@ export function useQuality(): Quality {
     qualityListeners.add(onChange);
     return () => qualityListeners.delete(onChange);
   }, getQuality);
+}
+
+/**
+ * Why the garden holds still when it would sway, for the view's note:
+ * the device asks for reduced motion (or the configuration does), or the
+ * probe stepped the preset down to 15 fps or stopped sway for this visit
+ * because frames ran late. Null when it moves as chosen, and for choices
+ * the viewer made (Static, Low).
+ */
+export type MotionHold = "reduced" | "stopped" | "stepped" | null;
+
+export function motionHold(): MotionHold {
+  if (tier === "static" || !preset().sway) return null;
+  if (!motionAllowed()) return "reduced";
+  if (slow) return "stopped";
+  if (stepped) return "stepped";
+  return null;
+}
+
+/** `motionHold`, re-rendering when it changes. */
+export function useMotionHold(): MotionHold {
+  return useSyncExternalStore((onChange) => {
+    holdListeners.add(onChange);
+    return () => holdListeners.delete(onChange);
+  }, motionHold);
 }

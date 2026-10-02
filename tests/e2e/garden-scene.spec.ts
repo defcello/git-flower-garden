@@ -569,11 +569,16 @@ test("leaves sway in the garden only, hit targets stay put, and Static and Low s
   // Reduced motion stills every tier.
   await page.getByLabel("Drawing", { exact: true }).selectOption("auto");
   expect(await moves(page, garden)).toBe(true);
+  const note = page.locator(".motion-note");
+  await expect(note).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForTimeout(200);
   expect(await moves(page, garden)).toBe(false);
+  // A still garden says why.
+  await expect(note).toHaveAttribute("data-hold", "reduced");
   await page.emulateMedia({ reducedMotion: "no-preference" });
   expect(await moves(page, garden)).toBe(true);
+  await expect(note).toHaveCount(0);
 
   // Low quality keeps the plants still, puts them back at rest, and is
   // remembered; Balanced sways again.
@@ -582,6 +587,8 @@ test("leaves sway in the garden only, hit targets stay put, and Static and Low s
   await page.waitForTimeout(200);
   expect(await moves(page, garden)).toBe(false);
   expect(await targets()).toEqual(still);
+  // The viewer chose stillness: nothing to explain.
+  await expect(note).toHaveCount(0);
   await page.reload();
   await expect(quality).toHaveValue("low");
   await holdLight(page);

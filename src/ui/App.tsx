@@ -33,8 +33,10 @@ import {
   setQuality,
   setTier,
   TIERS,
+  useMotionHold,
   useQuality,
   useTier,
+  type MotionHold,
   type Quality,
   type Tier,
 } from "./motion.ts";
@@ -228,6 +230,7 @@ export function App() {
     [baseLight, effects],
   );
   const showsRainbow = rainbow(light, effects) !== null;
+  const hold = useMotionHold();
   useEffect(() => {
     setSwayWind(
       effects === NO_WEATHER ? null : effects.windSpeed,
@@ -348,6 +351,7 @@ export function App() {
                   />{" "}
                 </>
               ) : null}
+              {motionNote(hold)}
               {showsRainbow && (
                 <>
                   The rainbow follows the optics of sunlit rain; it is inferred
@@ -1085,4 +1089,27 @@ function useHudHeight() {
     };
   }, []);
   return ref;
+}
+
+/**
+ * Why the garden is still when it would sway (motion.ts `motionHold`), so
+ * a still garden is never a mystery; nothing when it moves as chosen.
+ */
+function motionNote(hold: MotionHold) {
+  if (hold === null) return null;
+  const text = {
+    reduced:
+      "Held still: reduced motion is on (on this device or in the configuration), so plants and grass do not sway.",
+    stopped:
+      "Sway stopped for this visit: frames ran late on this device. A lower Quality may keep it moving.",
+    stepped:
+      "Sway slowed to 15 frames a second: frames ran late at this Quality.",
+  }[hold];
+  return (
+    <>
+      <span className="motion-note" data-hold={hold}>
+        {text}
+      </span>{" "}
+    </>
+  );
 }

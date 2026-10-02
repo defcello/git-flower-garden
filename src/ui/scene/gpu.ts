@@ -197,15 +197,20 @@ void main() {
   float detail = smoothstep(0.012, 0.11, abs(a - b));
   float depth = smoothstep(610.0, 1080.0, p.y);
   float interior = smoothstep(0.6, 0.95, texture(uAlbedo, art).a);
-  float lean = bend * detail * interior * mix(0.7, 2.8, depth) * uStrength;
+  float wind = min(uStrength, 2.2);
+  float lean = bend * detail * interior * mix(1.5, 6.0, depth) * wind;
   color = texture(uLit, uv - vec2(lean * uView.z / size.x, 0.0));
   color.rgb *= here.a / max(color.a, 0.001);
   color.a = here.a;
+  // Bent blades show their lighter, paler sides; upright grass between the
+  // waves stands darker. Crisp enough to read as patches, even on a phone.
   float map = luminance(texture(uTranslucency, art).rgb);
-  float sheen = max(0.0, bend) * uDaylight * (0.3 + 0.7 * map) *
-                (0.06 + 0.09 * detail) * min(uStrength, 2.2);
+  float weight = (0.5 + 0.5 * map) * (0.6 + 0.4 * detail) * wind / 2.2;
+  float sheen = smoothstep(0.05, 0.5, bend) * uDaylight * weight * 0.32;
+  float shade = smoothstep(0.05, 0.5, -bend) * weight * 0.22;
   color.rgb = mix(color.rgb, vec3(luminance(color.rgb)), sheen * 0.5);
   color.rgb += vec3(0.82, 0.94, 0.72) * sheen * color.a;
+  color.rgb *= 1.0 - shade;
 }`;
 
 interface LayerTextures {

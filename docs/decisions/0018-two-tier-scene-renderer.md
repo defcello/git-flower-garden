@@ -673,6 +673,19 @@ lulls, and CPU/GLSL parity (`tests/ui/wind-field.test.ts`); a browser test
 checks that the grass moves on both tiers and returns exactly to rest
 (`tests/e2e/weather.spec.ts`).
 
+**Grass wind, visible on phones, 2026-10-02.** On the maintainer's phone
+the first version read as static: at about half the design scale, a lean
+of 2.8 design pixels and a 5% lift were lost. Both tiers now shape the
+bend into crisp patches (smoothstep 0.05–0.5), lift bent grass by up to
+about a third and darken upright grass between the waves by up to about a
+fifth (scaled by the wind, and the lift by daylight), and the GPU leans
+blades up to 6 design pixels at the front. The phone had also stopped
+sway at High with no sign why: the view's note now says when the garden is
+held still by reduced motion, or when the probe stepped sway down or
+stopped it for the visit (`motionHold`, motion.ts); never for Static or
+Low, which the viewer chose. Surface Pro, 8 plants, high wind, percent of
+one core: GPU 59 (Balanced), 96 (High); Software 89, 140.
+
 ## Verification
 
 - Unit tests: relighting on synthetic texels (facing and backlit light,
