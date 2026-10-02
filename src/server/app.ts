@@ -28,6 +28,7 @@ import {
   type ConfigHealth,
   type StartedServer,
 } from "./server.ts";
+import { WeatherService } from "./weather.ts";
 import { startWebhookReceiver, type WebhookReceiver } from "./webhook.ts";
 
 export interface RunningApp {
@@ -56,6 +57,10 @@ export interface AppOptions extends ServiceOptions {
   webhookPort?: number;
   /** Wait until every repository has been read once before listening (default true). */
   waitForFirstRead?: boolean;
+  /** The application's version, sent to the weather provider. */
+  version?: string;
+  /** Replaces the weather provider's HTTP client (tests). */
+  weatherFetch?: typeof fetch;
 }
 
 /** dist/ui next to the running code, whether it runs from src/ or dist/. */
@@ -139,15 +144,32 @@ export async function startApp(
       }
     }
   }
+  // Weather runs beside monitoring, never in its way (ADR 0020).
+  let publish = () => {};
+  const weather = new WeatherService({
+    cacheRoot: service.cacheDirectory(),
+    version: options.version ?? "dev",
+    onChange: () => {
+      publish();
+    },
+    ...(options.now ? { now: options.now } : {}),
+    ...(options.weatherFetch ? { fetch: options.weatherFetch } : {}),
+  });
+  const currentHealth = (): ConfigHealth => ({
+    ...health,
+    webhooks: webhookStatus(),
+    weather: weather.status(),
+  });
   const server: StartedServer = await startServer(
     service,
     listen.host,
     listen.port,
-    {
-      uiDir,
-      health: () => ({ ...health, webhooks: webhookStatus() }),
-    },
+    { uiDir, health: currentHealth },
   );
+  publish = () => {
+    server.hub.publish();
+  };
+  void weather.configure(config.environment);
 
   const configPath = options.configPath;
   let lastHash: string | null = null;
@@ -193,6 +215,7 @@ export async function startApp(
           restartNeeded.push("webhooks");
         health = { ...health, configErrors: [], restartNeeded };
         await service.applyConfig(next);
+        await weather.configure(next.environment);
         server.hub.publish();
       } finally {
         reloading = null;
@@ -231,8 +254,9 @@ export async function startApp(
     service,
     url: server.url,
     reloadConfig,
-    health: () => ({ ...health, webhooks: webhookStatus() }),
+    health: currentHealth,
     close: async () => {
+      weather.stop();
       watcher?.close();
       if (debounce) clearTimeout(debounce);
       if (poll) clearInterval(poll);

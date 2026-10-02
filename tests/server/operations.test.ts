@@ -52,6 +52,7 @@ describe("demo mode", () => {
         longitude: -80.4139,
         elevationMeters: 634,
         timeZone: "America/New_York",
+        weather: null,
       });
       expect(body.repositories.map((r) => r.id)).toEqual([
         "garden-tour",
@@ -101,7 +102,53 @@ describe("environment", () => {
         longitude: -82.5515,
         elevationMeters: 0,
         timeZone: "America/New_York",
+        weather: null,
       });
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("weather (ADR 0020)", () => {
+  it("keeps monitoring and serving when every weather request fails", async () => {
+    const dir = await tempDir();
+    const fixture = await buildFixture(gardenTour, join(dir, "repo"));
+    const parsed = parseConfig(
+      JSON.stringify({
+        version: 1,
+        history: { timeZone: "America/New_York" },
+        repositories: [{ id: "tour", path: fixture.dir }],
+        environment: { weather: { enabled: true } },
+      }),
+      dir,
+    );
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
+    let requests = 0;
+    const app = await startApp(parsed.config, {
+      port: 0,
+      uiDir: null,
+      cacheRoot: join(dir, "cache"),
+      weatherFetch: () => {
+        requests += 1;
+        return Promise.reject(new TypeError("fetch failed"));
+      },
+    });
+    try {
+      await expect.poll(() => requests).toBeGreaterThan(0);
+      const body = (await getJson(`${app.url}api/repositories`)) as {
+        display: { environment: { weather: unknown } };
+        repositories: { status: { state: string } }[];
+      };
+      expect(body.repositories[0]?.status.state).toBe("ready");
+      expect(body.display.environment.weather).toMatchObject({
+        state: "unavailable",
+        conditions: null,
+        diagnostic: "The weather could not be fetched (fetch failed).",
+      });
+      expect(
+        (await app.service.graph("tour"))?.graph.nodes.size,
+      ).toBeGreaterThan(0);
     } finally {
       await app.close();
     }

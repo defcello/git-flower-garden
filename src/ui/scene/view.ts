@@ -83,6 +83,68 @@ export function skyPoint(body: { u: number; altitude: number }) {
   };
 }
 
+/** Design pixels per degree of altitude: the panorama's physical scale. */
+export const PIXELS_PER_DEGREE = (DESIGN.height * HORIZON) / 90;
+
+/**
+ * Where a point of the sky is drawn, in design pixels, without `skyPoint`'s
+ * floor below the horizon: for what is centred below it, like a rainbow.
+ */
+export function skyPlace(body: { u: number; altitude: number }) {
+  return {
+    x: DESIGN.width * (0.04 + 0.92 * body.u),
+    y: DESIGN.height * HORIZON * (1 - body.altitude / 90),
+  };
+}
+
+/** The primary rainbow's angle from the antisolar point, degrees (rainbow.ts). */
+export const RAINBOW_RADIUS = 42;
+
+/**
+ * Where rain meets the ground behind the hill, in design pixels: the
+ * lowest point of the hill's crest in the art (measured: from 0.622 of the
+ * height in the middle to 0.759 at the edges), so the hill hides it from
+ * edge to edge. A rainbow in rain stands on the ground; below this line it
+ * is never drawn.
+ */
+export const RAINBOW_GROUND = Math.round(0.76 * DESIGN.height);
+
+/**
+ * Design pixels per degree of a rainbow's own angles. The landscape is not
+ * at its true depth (the hill fills what would be tens of degrees below
+ * the horizon), so a rainbow drawn at the sky's scale looked small and
+ * showed the lower half of its circle over the ridges. Instead the bow
+ * stands on the ground line, its centre (the antisolar point) the Sun's
+ * altitude below it, so its lower half is always behind the hill
+ * (maintainer's rule, 2026-10-01); and this scale puts its top at the true
+ * height, 42° less the Sun's altitude on the sky's scale, at every Sun
+ * altitude. About 2.1 times the sky's scale.
+ */
+export const RAINBOW_SCALE =
+  (RAINBOW_GROUND - DESIGN.height * HORIZON) / RAINBOW_RADIUS +
+  PIXELS_PER_DEGREE;
+
+/** The centre of the rainbow's circles, in design pixels (see RAINBOW_SCALE). */
+export function rainbowCentre(antisolar: { u: number; altitude: number }) {
+  return {
+    x: skyPlace(antisolar).x,
+    y: RAINBOW_GROUND - antisolar.altitude * PIXELS_PER_DEGREE,
+  };
+}
+
+/**
+ * Degrees from the rainbow's centre to a design-space point, as a viewer
+ * facing the bow sees them: the same scale every way, so its circles are
+ * round although the panorama spreads azimuth wider than altitude.
+ */
+export function rainbowAngle(
+  x: number,
+  y: number,
+  centre: { x: number; y: number },
+): number {
+  return Math.hypot(x - centre.x, y - centre.y) / RAINBOW_SCALE;
+}
+
 export interface SkyBodies {
   horizonY: number;
   sun: { x: number; y: number; r: number; glow: number; alpha: number } | null;

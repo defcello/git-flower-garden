@@ -10,6 +10,7 @@
  *   npm run measure:garden               # 8 plants, Software then Static
  *   N=64 TIERS=software npm run measure:garden
  *   LOOP=1 TIERS=gpu,software npm run measure:garden  # while the day loops
+ *   WEATHER=heavy-rain TIERS=gpu,software npm run measure:garden
  *   GARDEN_E2E_CHANNEL=chrome npm run measure:garden
  *
  * Needs a display: the point is the real GPU path, which headless skips.
@@ -32,6 +33,8 @@ const plants = Number(process.env.N ?? 8);
 const tiers = (process.env.TIERS ?? "software,static").split(",");
 const SECONDS = 20;
 const loop = process.env.LOOP === "1";
+/** A weather preview to draw (weather-previews.ts), or none. */
+const weather = process.env.WEATHER ?? null;
 /** Kernel clock ticks per second (USER_HZ), as /proc reports CPU time. */
 const HZ = 100;
 
@@ -122,6 +125,8 @@ try {
   await page.goto(app.url);
   await page.getByLabel("Renderer", { exact: true }).selectOption("canvas");
   await page.getByLabel("Sky", { exact: true }).selectOption("noon");
+  if (weather !== null)
+    await page.getByLabel("Weather", { exact: true }).selectOption(weather);
   if (loop) await page.getByLabel("Loop", { exact: true }).check();
   console.log(
     `GPU: ${(await page.locator("html").getAttribute("data-gpu")) ?? "not probed"}`,
@@ -161,8 +166,15 @@ try {
     );
     const total = Object.values(percent).reduce((a, b) => a + b, 0);
     const sway = (await page.locator("html").getAttribute("data-sway")) ?? "on";
+    const particles =
+      (await page
+        .locator(".weather-fall")
+        .getAttribute("data-particles", {
+          timeout: 1000,
+        })
+        .catch(() => null)) ?? "0";
     console.log(
-      `${String(plants)} plants, ${tier} (drawn by ${drawn}): ${String(total)}% of one core ${JSON.stringify(percent)}; sway ${sway}; GPU probe ${probe}` +
+      `${String(plants)} plants, ${weather ?? "no weather"} (${particles} particles), ${tier} (drawn by ${drawn}): ${String(total)}% of one core ${JSON.stringify(percent)}; sway ${sway}; GPU probe ${probe}` +
         (loop
           ? `; ${(repaints / SECONDS).toFixed(1)} scene repaints a second`
           : ""),

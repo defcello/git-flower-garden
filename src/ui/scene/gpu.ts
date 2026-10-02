@@ -19,6 +19,7 @@ import {
   SHADE_GLSL,
   TO_CLIP_GLSL,
   uniforms,
+  uploadCanvas,
   uploadMap,
   type LayerMaps,
   type Uniforms,
@@ -144,6 +145,17 @@ void main() {
   if (color.a <= 0.0) discard;
 }`;
 
+/** A premultiplied overlay drawn one to one (the sky's weather). */
+const OVERLAY_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uImage;
+in vec2 vUv;
+out vec4 color;
+void main() {
+  color = texture(uImage, vUv);
+  if (color.a <= 0.0) discard;
+}`;
+
 interface LayerTextures {
   albedo: WebGLTexture;
   normal: WebGLTexture;
@@ -158,6 +170,13 @@ export class LandscapeGpu implements GpuRenderer {
   readonly #sky: WebGLProgram;
   readonly #star: WebGLProgram;
   readonly #lit: WebGLProgram;
+  readonly #overlayProgram: WebGLProgram;
+  readonly #overlayU: Uniforms;
+  /** Uploaded weather rasters, by kind, with the key of what is in each. */
+  readonly #weather = {
+    clouds: { texture: null as WebGLTexture | null, key: "" },
+    rainbow: { texture: null as WebGLTexture | null, key: "" },
+  };
   readonly #skyU: Uniforms;
   readonly #starU: Uniforms;
   readonly #litU: Uniforms;
@@ -179,6 +198,12 @@ export class LandscapeGpu implements GpuRenderer {
     this.#sky = compile(gl, FULL_VS, SKY_FS);
     this.#star = compile(gl, STAR_VS, STAR_FS);
     this.#lit = compile(gl, LAYER_VS, LIT_FS);
+    this.#overlayProgram = compile(gl, LAYER_VS, OVERLAY_FS);
+    this.#overlayU = uniforms(gl, this.#overlayProgram, [
+      "uRect",
+      "uResolution",
+      "uImage",
+    ]);
     this.#skyU = uniforms(gl, this.#sky, [
       "uBodies",
       "uResolution",
@@ -262,8 +287,19 @@ export class LandscapeGpu implements GpuRenderer {
     this.#gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 
-  /** Draw the whole landscape for `state`. Returns whether the layers were drawn. */
-  draw(state: LightingState): boolean {
+  /**
+   * Draw the whole landscape for `state`, with the sky's weather when
+   * given (weather-sky.ts): clouds over the Sun and Moon, a rainbow in
+   * front of the ridge. Rasters upload only when their keys change.
+   * Returns whether the layers were drawn.
+   */
+  draw(
+    state: LightingState,
+    weather: {
+      clouds: { canvas: HTMLCanvasElement; key: string } | null;
+      rainbow: { canvas: HTMLCanvasElement; key: string } | null;
+    } = { clouds: null, rainbow: null },
+  ): boolean {
     const gl = this.#gl;
     if (gl.isContextLost()) return false;
     const canvas = gl.canvas as HTMLCanvasElement;
@@ -322,6 +358,8 @@ export class LandscapeGpu implements GpuRenderer {
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
+    this.#overlay(weather.clouds, "clouds", W, H);
+
     const layers = this.#layers;
     if (layers !== null) {
       const p = sceneLight(state);
@@ -340,7 +378,13 @@ export class LandscapeGpu implements GpuRenderer {
       gl.uniform1i(u.uNormal ?? null, 1);
       gl.uniform1i(u.uTranslucency ?? null, 2);
       setLight(gl, u, p);
-      for (const layer of layers) {
+      layers.forEach((layer, index) => {
+        if (index === 1 && weather.rainbow !== null) {
+          // The rain a rainbow shines in is nearer than the ridge.
+          this.#overlay(weather.rainbow, "rainbow", W, H);
+          gl.useProgram(this.#lit);
+          gl.bindVertexArray(this.#empty);
+        }
         gl.uniform1f(u.uLayerHaze ?? null, layer.light.haze);
         gl.uniform1f(u.uLayerTranslucency ?? null, layer.light.translucency);
         gl.uniform1f(u.uLayerFill ?? null, layer.light.fill ? 1 : 0);
@@ -354,8 +398,37 @@ export class LandscapeGpu implements GpuRenderer {
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, layer.translucency ?? layer.normal);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      }
+      });
+    } else {
+      this.#overlay(weather.rainbow, "rainbow", W, H);
     }
     return layers !== null;
+  }
+
+  /** Draw a premultiplied raster over the whole canvas, uploading it if new. */
+  #overlay(
+    raster: { canvas: HTMLCanvasElement; key: string } | null,
+    kind: "clouds" | "rainbow",
+    W: number,
+    H: number,
+  ): void {
+    if (raster === null) return;
+    const gl = this.#gl;
+    const slot = this.#weather[kind];
+    if (raster.key !== slot.key || slot.texture === null) {
+      slot.texture = uploadCanvas(gl, raster.canvas, slot.texture);
+      slot.key = raster.key;
+    }
+    // The rainbow is light the rain sends back: it adds to the scene.
+    if (kind === "rainbow") gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(this.#overlayProgram);
+    gl.bindVertexArray(this.#empty);
+    gl.uniform2f(this.#overlayU.uResolution ?? null, W, H);
+    gl.uniform4f(this.#overlayU.uRect ?? null, 0, 0, W, H);
+    gl.uniform1i(this.#overlayU.uImage ?? null, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, slot.texture);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
 }

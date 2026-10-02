@@ -266,6 +266,48 @@ test("hovering a plant reveals its icon and name and outlines it in cyan; clicki
   await expect(page.locator(".garden-scene")).toHaveCount(1);
 });
 
+test("weather falls over the hillside but never covers a plant or its icon", async ({
+  page,
+}) => {
+  await openScene(page, small.url, 5);
+  await page
+    .getByLabel("Weather", { exact: true })
+    .selectOption("thunderstorm");
+  const overlay = page.locator(".weather-overlay");
+  await expect(overlay).toHaveAttribute("data-precipitation", "rain");
+  await expect(overlay).toHaveCSS("pointer-events", "none");
+  await expect(page.locator(".weather-fall")).toHaveAttribute(
+    "data-particles",
+    /^[1-9]/,
+  );
+  // Every plant can still be pointed at and its icon is never covered.
+  for (const id of ["tour", "fork", "three"]) {
+    const point = await exposedPoint(page, id);
+    expect(point, id).not.toBeNull();
+    if (!point) continue;
+    await page.mouse.move(point.x, point.y);
+    await expect.poll(() => lit(page)).toEqual([id]);
+    const icon = await iconCenter(page, id);
+    expect(
+      await page
+        .locator(`[data-plot="${id}"] .focus-button`)
+        .evaluate(
+          (el, p) => el.contains(document.elementFromPoint(p.x, p.y)),
+          icon,
+        ),
+      id,
+    ).toBe(true);
+  }
+  const point = await exposedPoint(page, "fork");
+  if (!point) throw new Error("fork plant is not exposed");
+  await page.mouse.click(point.x, point.y);
+  await expect(page.locator(".focus-head h2")).toHaveText("Fork and merge");
+  // The focus view stays dry, for reading.
+  await expect(page.locator(".weather-overlay")).toHaveCount(0);
+  await page.getByRole("button", { name: "Show all repositories" }).click();
+  await expect(page.locator(".weather-overlay")).toHaveCount(1);
+});
+
 test("hovering an icon reveals it and outlines its own plant; clicking it focuses", async ({
   page,
 }) => {
