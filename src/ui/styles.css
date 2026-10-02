@@ -1296,3 +1296,60 @@ code,
     font-size: 11px;
   }
 }
+
+/*
+ * Full screen, as video players do it (Fullscreen.tsx): a quiet expand
+ * button in the bottom-right corner; in full screen the controls and notes
+ * are hidden, and the exit button fades out until the pointer moves or a
+ * finger touches.
+ */
+.app.fullscreen {
+  overflow: auto;
+}
+/* The garden keeps its dark surround beyond the stage (.botanical). */
+.app.fullscreen:not(.botanical) {
+  background: var(--bg);
+}
+.app.fullscreen .hud {
+  display: none;
+}
+.fullscreen-button {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2200;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.75;
+  transition:
+    opacity 0.3s,
+    background 0.2s;
+}
+.fullscreen-button:hover,
+.fullscreen-button:focus-visible {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.5);
+}
+.fullscreen-button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.fullscreen-button svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fullscreen-button.asleep:not(:focus-visible) {
+  opacity: 0;
+  pointer-events: none;
+}
