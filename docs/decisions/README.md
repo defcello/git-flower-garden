@@ -30,5 +30,6 @@ supersedes the old one and update the roadmap, examples, schema, and tests toget
 | [0020](0020-weather-provider.md) | Weather from MET Norway, opt-in, fetched by the local service | Accepted |
 | [0021](0021-grass-sprites.md) | Grass as wind-bent tufts over a plain ground layer | Proposed |
 | [0022](0022-pluggable-renderers.md) | Pluggable renderers over a shared Model and view models | Proposed |
+| [0023](0023-hillside-layout.md) | Hillside layout computed for the garden's size, X first | Proposed |
 
 Benchmark and probe evidence (roadmap P0-B onward) also belongs in this directory.

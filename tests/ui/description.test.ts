@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GraphJson, GraphNodeJson } from "../../src/api/types.ts";
 import { botanicalScene } from "../../src/ui/botanical.ts";
-import { HILLSIDE_SLOTS } from "../../src/ui/hillside.ts";
+import { hillsideLayout } from "../../src/ui/hillside.ts";
 import {
   gardenScene,
   LAYERS,
@@ -74,7 +74,7 @@ const graphOf = (
 });
 
 const slot = (index: number) => {
-  const s = HILLSIDE_SLOTS[index];
+  const s = hillsideLayout(64)[index];
   if (!s) throw new Error(`no slot ${String(index)}`);
   return s;
 };
@@ -143,10 +143,11 @@ describe("garden scene description", () => {
   });
 
   it("keeps configuration order among plants in the same row", () => {
+    // Three plants at one depth.
     const row = [slot(8), slot(9), slot(10)].map((s, i) => ({
       id: `r${String(i)}`,
       graph: graphOf(`r${String(i)}`),
-      slot: s,
+      slot: { ...s, y: slot(8).y },
       wilting: false,
     }));
     expect(

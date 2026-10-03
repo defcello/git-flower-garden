@@ -9,6 +9,16 @@ change configuration or behavior, and the notes say how.
 
 ### Changes
 
+- **Plants spread across the hill.** Garden plants are now laid out for the
+  number of repositories instead of being picked from a fixed grid. Each
+  plant gets its own spot across the hill's width, slightly varied in
+  spacing and depth so the planting looks natural, and plants at a similar
+  depth no longer stand in front of one another. Up to 12 repositories
+  stand in one loose band. Up to 32 alternate between the back and the
+  front of the hill. Larger gardens use staggered rows. Every focus icon
+  stays reachable at 1080p and above.
+  ([ADR 0023](docs/decisions/0023-hillside-layout.md))
+
 - **Pluggable renderers.** The browser UI now has separate layers: a Model
   store for the service's data, shared view models (repository health, and
   the sky and weather), an app shell, and renderers that register in one

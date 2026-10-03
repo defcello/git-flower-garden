@@ -2,11 +2,12 @@ import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import {
-  HILLSIDE_COLUMNS,
-  HILLSIDE_SLOTS,
-  hillsideSlots,
+  COLUMN_LIMIT,
+  crestAt,
+  HILLSIDE_CAPACITY,
+  hillsideLayout,
+  type HillsideSlot,
 } from "../../src/ui/hillside.ts";
-import { generate } from "../../scripts/hillside-slots.ts";
 
 /** Minimal decoder for the hill layer: 8-bit RGBA, non-interlaced PNG. */
 function decodePng(file: string) {
@@ -67,10 +68,48 @@ function isGrass(xPercent: number, yPercent: number): boolean {
   return a >= 240 && g - b > 25 && r > b && g > 50;
 }
 
-describe("hillside slots", () => {
-  it("has 64 slots, reproducible by the generator", () => {
-    expect(HILLSIDE_SLOTS).toHaveLength(64);
-    expect(generate()).toEqual(HILLSIDE_SLOTS);
+const COUNTS = Array.from({ length: HILLSIDE_CAPACITY }, (_, i) => i + 1);
+
+/** The smallest separation of two 44 px icons, as max(|dx|, |dy|), in px. */
+function minIconSeparation(
+  slots: readonly HillsideSlot[],
+  width: number,
+  height: number,
+): number {
+  let min = Infinity;
+  for (const [i, a] of slots.entries())
+    for (const b of slots.slice(i + 1)) {
+      const dx = (Math.abs(a.iconX - b.iconX) * width) / 100;
+      const dy = (Math.abs(a.iconY - b.iconY) * height) / 100;
+      min = Math.min(min, Math.max(dx, dy));
+    }
+  return min;
+}
+
+/**
+ * Grass under and around a point: most texels within half a percent are
+ * grass. The painted hill has small pale and dark specks that a single texel
+ * can land on; a plant stands on the patch, not the speck.
+ */
+function onGrass(xPercent: number, yPercent: number): boolean {
+  let grass = 0;
+  let total = 0;
+  for (let dx = -0.5; dx <= 0.5; dx += 0.25)
+    for (let dy = -0.5; dy <= 0.5; dy += 0.25) {
+      total++;
+      if (isGrass(xPercent + dx, yPercent + dy)) grass++;
+    }
+  return grass / total >= 0.8;
+}
+
+describe("hillsideLayout", () => {
+  it("places every repository up to the capacity, and is the same every time", () => {
+    expect(hillsideLayout(0)).toEqual([]);
+    expect(hillsideLayout(80)).toHaveLength(HILLSIDE_CAPACITY);
+    for (const n of COUNTS) {
+      expect(hillsideLayout(n), `n=${String(n)}`).toHaveLength(n);
+      expect(hillsideLayout(n)).toEqual(hillsideLayout(n));
+    }
   });
 
   it("the classifier separates sky, ridges, and grass on the hill layer", () => {
@@ -83,88 +122,95 @@ describe("hillside slots", () => {
     // At 16:9 (the worst case for `cover`, center-bottom), scene and image
     // percentages coincide. The base and the 10 px (about 1 %) above it are
     // grass, so no plant sits on the crest line or in the forest.
-    for (const [i, s] of HILLSIDE_SLOTS.entries()) {
-      expect(isGrass(s.x, s.y), `slot ${String(i)} base`).toBe(true);
-      expect(isGrass(s.x, s.y - 1), `slot ${String(i)} above base`).toBe(true);
-      expect(s.y, `slot ${String(i)}`).toBeLessThan(98);
-    }
-  });
-
-  it("rows recede: back rows are higher on the hill and smaller", () => {
-    for (let r = 1; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const back = HILLSIDE_SLOTS[(r - 1) * 8 + c];
-        const front = HILLSIDE_SLOTS[r * 8 + c];
-        expect(front?.scale).toBeGreaterThan(back?.scale ?? Infinity);
-        expect(front?.y).toBeGreaterThan(back?.y ?? Infinity);
+    for (const n of COUNTS)
+      for (const [i, s] of hillsideLayout(n).entries()) {
+        const where = `n=${String(n)} plant ${String(i)}`;
+        expect(onGrass(s.x, s.y), `${where} base`).toBe(true);
+        expect(onGrass(s.x, s.y - 1), `${where} above base`).toBe(true);
+        expect(s.y, where).toBeLessThan(98);
       }
+  });
+
+  it("nearer plants are lower on the hill and larger", () => {
+    for (const n of COUNTS) {
+      // Depth is how far down the visible hill a base is, from its crest.
+      const down = (s: HillsideSlot) =>
+        (s.y - crestAt(s.x)) / (97.5 - crestAt(s.x));
+      const slots = [...hillsideLayout(n)].sort((a, b) => down(a) - down(b));
+      for (const [i, s] of slots.slice(1).entries())
+        expect(s.scale, `n=${String(n)}`).toBeGreaterThanOrEqual(
+          slots[i]?.scale ?? Infinity,
+        );
     }
   });
 
-  it("no two 44 px focus icons overlap at 1920x1080 or larger", () => {
+  it("no two 44 px focus icons overlap at 1920x1080 or larger, for any count", () => {
     for (const [width, height] of [
       [1920, 1080],
       [2560, 1440],
       [3840, 2160],
       [2560, 1080],
-    ] as const) {
-      for (let i = 0; i < 64; i++) {
-        for (let j = i + 1; j < 64; j++) {
-          const a = HILLSIDE_SLOTS[i],
-            b = HILLSIDE_SLOTS[j];
-          if (!a || !b) throw new Error("slot");
-          const dx = (Math.abs(a.iconX - b.iconX) * width) / 100;
-          const dy = (Math.abs(a.iconY - b.iconY) * height) / 100;
-          expect(
-            Math.max(dx, dy),
-            `icons ${String(i)} and ${String(j)} at ${String(width)}x${String(height)}`,
-          ).toBeGreaterThanOrEqual(44);
+    ] as const)
+      for (const n of COUNTS)
+        expect(
+          minIconSeparation(hillsideLayout(n), width, height),
+          `n=${String(n)} at ${String(width)}x${String(height)}`,
+        ).toBeGreaterThanOrEqual(44);
+  });
+
+  it("gives each plant its own column while the icons fit, left to right", () => {
+    for (let n = 2; n <= COLUMN_LIMIT; n++) {
+      const xs = hillsideLayout(n).map((s) => s.x);
+      for (const [i, x] of xs.slice(1).entries())
+        expect(x, `n=${String(n)}`).toBeGreaterThan((xs[i] ?? 0) + 2.29);
+    }
+  });
+
+  it("small gardens never stand one plant in front of another", () => {
+    // A front plant is about 7.3 % of the width. Up to 12 plants, each
+    // stands clear of every other whatever their depths; up to the column
+    // limit, plants that are not clear are in different depth bands.
+    for (let n = 2; n <= COLUMN_LIMIT; n++) {
+      const slots = hillsideLayout(n);
+      for (const [i, a] of slots.entries())
+        for (const b of slots.slice(i + 1)) {
+          const clear =
+            Math.abs(a.x - b.x) >= 7.3 * Math.max(a.scale, b.scale) * 0.85;
+          const where = `n=${String(n)}: ${JSON.stringify(a)} ${JSON.stringify(b)}`;
+          if (n <= 12) expect(clear, where).toBe(true);
+          else if (!clear)
+            expect(Math.abs(a.y - b.y), where).toBeGreaterThan(2);
         }
-      }
     }
   });
-});
 
-describe("hillsideSlots", () => {
-  it("assigns distinct slots, in order back to front and left to right", () => {
-    for (let n = 1; n <= 64; n++) {
-      const slots = hillsideSlots(n);
-      expect(slots, `n=${String(n)}`).toHaveLength(n);
-      expect(new Set(slots).size).toBe(n);
-      expect([...slots].sort((a, b) => a - b)).toEqual(slots);
-    }
-    expect(hillsideSlots(0)).toEqual([]);
-    expect(hillsideSlots(80)).toHaveLength(64);
-  });
-
-  it("fills every slot at 64", () => {
-    expect(hillsideSlots(64)).toEqual([...Array(64).keys()]);
-  });
-
-  it("spreads small gardens across the hill, not into one corner", () => {
-    for (let n = 2; n <= 64; n++) {
-      const slots = hillsideSlots(n);
-      const rows = new Set(slots.map((s) => Math.floor(s / HILLSIDE_COLUMNS)));
-      const xs = slots.map((s) => HILLSIDE_SLOTS[s]?.x ?? 0);
-      const ys = slots.map((s) => HILLSIDE_SLOTS[s]?.y ?? 0);
-      const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
-      // Centered on the hill, and using its width.
+  it("spreads every garden across the hill, centered", () => {
+    const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
+    for (const n of COUNTS.slice(1)) {
+      const xs = hillsideLayout(n).map((s) => s.x);
       expect(Math.abs(mean(xs) - 50), `n=${String(n)}`).toBeLessThan(8);
       expect(
         Math.max(...xs) - Math.min(...xs),
         `n=${String(n)}`,
-      ).toBeGreaterThan(35);
-      // Rows are evenly spaced: never all at the back or all at the front.
-      if (rows.size > 1) {
-        expect(Math.min(...ys), `n=${String(n)}`).toBeLessThan(86);
-        expect(Math.max(...ys), `n=${String(n)}`).toBeGreaterThan(84);
-      }
-      // Row sizes differ by at most one.
-      const counts = [...rows].map(
-        (r) =>
-          slots.filter((s) => Math.floor(s / HILLSIDE_COLUMNS) === r).length,
-      );
-      expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+      ).toBeGreaterThan(Math.min(35, 84 - 84 / n));
+    }
+    // One plant stands near the middle.
+    expect(Math.abs((hillsideLayout(1)[0]?.x ?? 0) - 50)).toBeLessThan(3);
+  });
+
+  it("is not a grid: spacing and depth vary", () => {
+    for (const n of [5, 8, 12, 20, 40, 64]) {
+      const slots = hillsideLayout(n);
+      const xs = slots.map((s) => s.x).sort((a, b) => a - b);
+      const gaps = xs.slice(1).map((x, i) => x - (xs[i] ?? 0));
+      expect(
+        Math.max(...gaps) - Math.min(...gaps),
+        `n=${String(n)}`,
+      ).toBeGreaterThan(0.5);
+      expect(
+        new Set(slots.map((s) => s.y)).size,
+        `n=${String(n)}`,
+      ).toBeGreaterThan(n * 0.9);
     }
   });
 });
