@@ -333,7 +333,7 @@ describe("scene art", () => {
         dimensions: { width: number; height: number };
       }[];
     };
-    expect(manifest.assets).toHaveLength(8);
+    expect(manifest.assets).toHaveLength(11);
     for (const asset of manifest.assets) {
       const bytes = readFileSync(`src/ui/assets/${asset.file}`);
       expect(createHash("sha256").update(bytes).digest("hex"), asset.file).toBe(

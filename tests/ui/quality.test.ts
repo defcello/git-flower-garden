@@ -18,6 +18,8 @@ describe("quality presets", () => {
       pixelRatio: 2,
       particles: { gpu: 1, software: 1 },
       sway: true,
+      // The grass tufts came later (ADR 0021).
+      grass: 0.75,
     });
   });
 
@@ -33,6 +35,7 @@ describe("quality presets", () => {
       expect(less.particles.software).toBeLessThanOrEqual(
         more.particles.software,
       );
+      expect(less.grass).toBeLessThanOrEqual(more.grass);
     }
     expect(low.sway).toBe(false);
     expect(high.sway).toBe(true);

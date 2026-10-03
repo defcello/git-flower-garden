@@ -18,6 +18,7 @@ import {
   type Pixels,
 } from "./relight.ts";
 import { SPRITE_ATLAS } from "./atlas.ts";
+import { GRASS_ATLAS } from "./grass.ts";
 import {
   type ArtUrls,
   type LitBitmaps,
@@ -65,7 +66,7 @@ async function load(url: string, size?: number): Promise<Pixels> {
 }
 
 async function loadArt(urls: ArtUrls): Promise<Art> {
-  const [ridge, hill, sprites] = await Promise.all([
+  const [ridge, hill, sprites, grass] = await Promise.all([
     Promise.all([load(urls.ridgeAlbedo), load(urls.ridgeNormal)]).then(
       ([albedo, normals]) => prepareLayer(albedo, normals, null),
     ),
@@ -74,8 +75,7 @@ async function loadArt(urls: ArtUrls): Promise<Art> {
       load(urls.hillNormal),
       load(urls.hillTranslucency),
     ]).then(([albedo, normals, translucency]) =>
-      // The Codex hill normal map came back with its X axis inverted.
-      prepareLayer(albedo, normals, translucency, { flipX: true }),
+      prepareLayer(albedo, normals, translucency),
     ),
     // Sprites draw at most a few hundred pixels across, even zoomed in on a
     // high-density display: light 256-pixel cells, not the source's 627.
@@ -86,12 +86,22 @@ async function loadArt(urls: ArtUrls): Promise<Art> {
     ]).then(([albedo, normals, translucency]) =>
       prepareLayer(albedo, normals, translucency),
     ),
+    // Tufts are drawn at most about 115 design pixels tall: 256-pixel cells.
+    Promise.all([
+      load(urls.grassAlbedo, GRASS_ATLAS),
+      load(urls.grassNormal, GRASS_ATLAS),
+      load(urls.grassTranslucency, GRASS_ATLAS),
+    ]).then(([albedo, normals, translucency]) =>
+      prepareLayer(albedo, normals, translucency),
+    ),
   ]);
   const layers: BandLayers = {
     ridge,
     hill,
     sprites,
     spritesMirrored: mirrorCells(sprites, 2),
+    grass,
+    grassMirrored: mirrorCells(grass, 2),
   };
   const names = Object.keys(layers) as (keyof BandLayers)[];
   const cut = Object.fromEntries(
@@ -116,6 +126,8 @@ async function loadArt(urls: ArtUrls): Promise<Art> {
         hill: band("hill").source,
         sprites: band("sprites").source,
         spritesMirrored: band("spritesMirrored").source,
+        grass: band("grass").source,
+        grassMirrored: band("grassMirrored").source,
       },
     };
     // Hand the band over: the whole layers are not kept here.
@@ -189,6 +201,8 @@ async function lightBands(
     hill: join("hill"),
     sprites: join("sprites"),
     spritesMirrored: join("spritesMirrored"),
+    grass: join("grass"),
+    grassMirrored: join("grassMirrored"),
   };
 }
 
@@ -220,7 +234,12 @@ async function handle(request: WorkerRequest): Promise<void> {
   const lightMs = performance.now() - start;
   const ridge = lit.ridge && canvasOf(layers.size.ridge, lit.ridge);
   const hill = lit.hill && canvasOf(layers.size.hill, lit.hill);
-  if (lit.sprites === null || lit.spritesMirrored === null)
+  if (
+    lit.sprites === null ||
+    lit.spritesMirrored === null ||
+    lit.grass === null ||
+    lit.grassMirrored === null
+  )
     throw new Error("sprite bands missing");
   const sprites = canvasOf(layers.size.sprites, lit.sprites);
   const spritesMirrored = canvasOf(
@@ -237,6 +256,11 @@ async function handle(request: WorkerRequest): Promise<void> {
     hill: hill?.transferToImageBitmap() ?? null,
     sprites: sprites.transferToImageBitmap(),
     spritesMirrored: spritesMirrored.transferToImageBitmap(),
+    grass: canvasOf(layers.size.grass, lit.grass).transferToImageBitmap(),
+    grassMirrored: canvasOf(
+      layers.size.grassMirrored,
+      lit.grassMirrored,
+    ).transferToImageBitmap(),
   };
   reply(
     {
@@ -251,6 +275,8 @@ async function handle(request: WorkerRequest): Promise<void> {
       bitmaps.hill,
       bitmaps.sprites,
       bitmaps.spritesMirrored,
+      bitmaps.grass,
+      bitmaps.grassMirrored,
     ].filter((b) => b !== null),
   );
 }

@@ -9,16 +9,15 @@ change configuration or behavior, and the notes say how.
 
 ### Changes
 
-- **Grass moves with the wind.** The hill's grass sways in the live
-  forecast's wind: irregular patches of bent, lighter grass roll downwind,
-  swelling as a gust sweeps across the hill and settling in the lulls, more
-  so the stronger the wind, and smaller and slower toward the crest. The
-  plants catch the same gusts where they stand, with their own rhythm. The
-  GPU leans the painted blades and lights their bent sides; Software, which
-  keeps its hill still, rolls the light alone. Low, Static, reduced motion,
-  and hidden pages hold the grass still; the view's note says when reduced
+- **Grass moves with the wind.** The hill is covered in painted grass
+  tufts that bend with the live forecast's wind: leaning downwind as it
+  blows, further as gusts roll across the hill in patches, springing back
+  in the lulls, more so the stronger the wind. Tufts nearer than a plant
+  grow in front of its stem; the plants catch the same gusts. The hill
+  beneath is a new, plainer ground. Low, Static, reduced motion, and
+  hidden pages hold the grass still; the view's note says when reduced
   motion or late frames are holding the garden still.
-  ([ADR 0018](docs/decisions/0018-two-tier-scene-renderer.md))
+  ([ADR 0021](docs/decisions/0021-grass-sprites.md))
 - **Optional weather.** Set `environment.weather.enabled` to show this
   hour's forecast (cloud, rain, sleet or snow, wind, temperature) from MET
   Norway's free service in the garden view's details, labelled as a model

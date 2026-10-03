@@ -12,6 +12,9 @@ import ridgeNormal from "../assets/scene/ridge-normal.png";
 import spritesAlbedo from "../assets/scene/sprites-albedo.png";
 import spritesNormal from "../assets/scene/sprites-normal.png";
 import spritesTranslucency from "../assets/scene/sprites-translucency.png";
+import grassAlbedo from "../assets/scene/grass-albedo.png";
+import grassNormal from "../assets/scene/grass-normal.png";
+import grassTranslucency from "../assets/scene/grass-translucency.png";
 import {
   NIGHT_TINT,
   RIM_GAIN,
@@ -225,6 +228,7 @@ export interface Maps {
   ridge: LayerMaps;
   hill: LayerMaps;
   sprites: LayerMaps;
+  grass: LayerMaps;
 }
 
 async function bitmap(url: string, premultiply: boolean): Promise<ImageBitmap> {
@@ -252,10 +256,14 @@ export function loadMaps(): Promise<Maps> {
     bitmap(spritesAlbedo, true),
     bitmap(spritesNormal, false),
     bitmap(spritesTranslucency, false),
-  ]).then(([ra, rn, ha, hn, ht, sa, sn, st]) => ({
+    bitmap(grassAlbedo, true),
+    bitmap(grassNormal, false),
+    bitmap(grassTranslucency, false),
+  ]).then(([ra, rn, ha, hn, ht, sa, sn, st, ga, gn, gt]) => ({
     ridge: { albedo: ra, normal: rn, translucency: null },
     hill: { albedo: ha, normal: hn, translucency: ht },
     sprites: { albedo: sa, normal: sn, translucency: st },
+    grass: { albedo: ga, normal: gn, translucency: gt },
   }));
   maps.catch(() => {
     maps = null;

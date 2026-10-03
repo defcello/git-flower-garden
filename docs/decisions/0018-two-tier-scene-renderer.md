@@ -630,6 +630,11 @@ decision:
   the dedicated monitor and at one non-16:9 viewport, and the 24-hour
   soak.
 
+**Superseded by [ADR 0021](0021-grass-sprites.md)** (the three "Grass
+wind" entries below record the first iteration: the hill's image warped
+and lit in waves; the grass is now wind-bent tufts, and the landscape no
+longer animates).
+
 **Grass wind, 2026-10-02** (designed with Codex, reviewed and measured
 here). The hill's grass sways with the live wind, in rolling waves that
 pulse with it (`src/ui/scene/wind-field.ts`, pure, mirrored in GLSL):

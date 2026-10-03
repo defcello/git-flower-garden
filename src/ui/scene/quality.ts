@@ -25,6 +25,11 @@ export interface Preset {
   particles: { gpu: number; software: number };
   /** Whether plants sway; rain and snow fall either way. */
   sway: boolean;
+  /**
+   * Grass tufts, as a density of the full field (scene/grass.ts). The same
+   * on both tiers: falling back to Software never changes the meadow.
+   */
+  grass: number;
 }
 
 /**
@@ -40,17 +45,20 @@ export const PRESETS: Readonly<Record<Quality, Preset>> = {
     pixelRatio: 1,
     particles: { gpu: 0.5, software: 0.5 },
     sway: false,
+    grass: 0.5,
   },
   balanced: {
     fps: 15,
     pixelRatio: 2,
     particles: { gpu: 1, software: 1 },
     sway: true,
+    grass: 0.75,
   },
   high: {
     fps: 30,
     pixelRatio: 2,
     particles: { gpu: 1.5, software: 1 },
     sway: true,
+    grass: 0.75,
   },
 };

@@ -10,6 +10,9 @@ export interface ArtUrls {
   spritesAlbedo: string;
   spritesNormal: string;
   spritesTranslucency: string;
+  grassAlbedo: string;
+  grassNormal: string;
+  grassTranslucency: string;
 }
 
 export type WorkerRequest =
@@ -28,6 +31,9 @@ export interface LitBitmaps {
   sprites: ImageBitmap;
   /** Each cell mirrored left to right and lit as such. */
   spritesMirrored: ImageBitmap;
+  /** The grass tufts (scene/grass.ts), and mirrored, lit as the sprites. */
+  grass: ImageBitmap;
+  grassMirrored: ImageBitmap;
 }
 
 export type WorkerResponse =

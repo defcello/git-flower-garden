@@ -20,6 +20,10 @@
  *   sway.ts, as in Software;
  * - hidden-commit badges, unlit, in the panels' colors.
  *
+ * Between the plants, the grass (grass.ts): instanced tufts, each leaning
+ * by a shear about its base, lit like the sprites from the grass maps; a
+ * plant stands in front of the tufts that grow behind its base.
+ *
  * Wilting is the CSS filter's color matrix, applied in the shader.
  */
 import type { LightingState } from "../../environment/lighting.ts";
@@ -39,7 +43,21 @@ import {
   type BadgeStyle,
   type PaintArt,
 } from "../paint.ts";
-import { swaySprites } from "../sway.ts";
+import {
+  currentWind,
+  MAX_WIND_STRENGTH,
+  swayStrength,
+  swaySprites,
+  swayWind,
+} from "../sway.ts";
+import { preset } from "../motion.ts";
+import {
+  grassField,
+  TUFT_BASE,
+  tuftLean,
+  tuftSquash,
+  type Tuft,
+} from "./grass.ts";
 import { settledFrame, type Frame } from "../transition.ts";
 import { groundLine, toDesign, type PlantDescription } from "./description.ts";
 import type { SceneDescription } from "./description.ts";
@@ -223,6 +241,40 @@ void main() {
 /** Floats per sprite instance: aSprite (4) and aCell (3). */
 const SPRITE_FLOATS = 7;
 
+/**
+ * A grass tuft growing from its base, leaning by a shear about it (the
+ * tip moves `lean` heights downwind) and shortened by `squash`, as
+ * GardenCanvas.tsx paintTuft draws it. Lit by SPRITE_FS.
+ */
+const GRASS_VS = `#version 300 es
+in vec4 aTuft;  // base x, y (design pixels), size, lean
+in vec3 aCell;  // kind, mirrored, squash
+uniform vec2 uResolution;
+uniform float uScale; // canvas pixels per design pixel
+uniform vec2 uBase[4];
+out vec2 vUv;
+flat out int vFlip;
+out float vAlpha;
+${TO_CLIP_GLSL}
+void main() {
+  vec2 local = vec2(gl_VertexID == 1 || gl_VertexID == 3 ? 1.0 : 0.0,
+                    gl_VertexID >= 2 ? 1.0 : 0.0);
+  vFlip = aCell.y > 0.5 ? 1 : 0;
+  vec2 base = uBase[int(aCell.x + 0.5)];
+  if (vFlip == 1) base.x = 1.0 - base.x;
+  vec2 p = (local - base) * aTuft.z;
+  p = vec2(p.x - aTuft.w * p.y, p.y * aCell.z);
+  vec2 cell = vec2(mod(aCell.x, 2.0), floor(aCell.x / 2.0)) * 0.5;
+  vUv = cell + vec2(vFlip == 1 ? 1.0 - local.x : local.x, local.y) * 0.5;
+  vAlpha = 1.0;
+  gl_Position = toClip((aTuft.xy + p) * uScale, uResolution);
+}`;
+
+/** Floats per tuft instance: aTuft (4) and aCell (3). */
+const GRASS_FLOATS = 7;
+/** The grass maps' texture units: clear of the sprites' (0–3) and uploads (7). */
+const GRASS_UNIT = 4;
+
 /** Parse an `rgba(r, g, b, a)` color into premultiplied 0..1 values. */
 function premultiplied(css: string): [number, number, number, number] {
   const [r = 0, g = 0, b = 0, a = 1] = (css.match(/[\d.]+/g) ?? []).map(Number);
@@ -255,6 +307,11 @@ export class PlantsGpu implements GpuRenderer {
   readonly #quad: WebGLProgram;
   readonly #ground: WebGLProgram;
   readonly #sprite: WebGLProgram;
+  readonly #grass: WebGLProgram;
+  readonly #grassU: Uniforms;
+  readonly #grassVao: WebGLVertexArrayObject;
+  readonly #grassBuffer: WebGLBuffer;
+  readonly #grassAttribs: { tuft: number; cell: number };
   readonly #quadU: Uniforms;
   readonly #groundU: Uniforms;
   readonly #spriteU: Uniforms;
@@ -267,6 +324,7 @@ export class PlantsGpu implements GpuRenderer {
     albedo: WebGLTexture;
     normal: WebGLTexture;
     translucency: WebGLTexture;
+    grass: [WebGLTexture, WebGLTexture, WebGLTexture];
   } | null = null;
   /** Unlit atlases at the Canvas painters' cell size, for silhouettes. */
   #silhouetteArt: PaintArt | null = null;
@@ -287,6 +345,19 @@ export class PlantsGpu implements GpuRenderer {
     this.#quad = compile(gl, QUAD_VS, QUAD_FS);
     this.#ground = compile(gl, GROUND_VS, GROUND_FS);
     this.#sprite = compile(gl, SPRITE_VS, SPRITE_FS);
+    this.#grass = compile(gl, GRASS_VS, SPRITE_FS);
+    this.#grassU = uniforms(gl, this.#grass, [
+      "uResolution",
+      "uScale",
+      "uBase",
+      "uAlbedo",
+      "uNormal",
+      "uTranslucency",
+      "uLayerFill",
+      "uLayerHaze",
+      "uWilting",
+      ...LIGHT_UNIFORMS,
+    ]);
     this.#quadU = uniforms(gl, this.#quad, [
       "uRect",
       "uGround",
@@ -338,19 +409,42 @@ export class PlantsGpu implements GpuRenderer {
     gl.enableVertexAttribArray(cell);
     gl.vertexAttribPointer(cell, 3, gl.FLOAT, false, stride, 16);
     gl.vertexAttribDivisor(cell, 1);
+
+    this.#grassBuffer = gl.createBuffer();
+    this.#grassVao = gl.createVertexArray();
+    gl.bindVertexArray(this.#grassVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.#grassBuffer);
+    this.#grassAttribs = {
+      tuft: gl.getAttribLocation(this.#grass, "aTuft"),
+      cell: gl.getAttribLocation(this.#grass, "aCell"),
+    };
+    for (const location of Object.values(this.#grassAttribs)) {
+      gl.enableVertexAttribArray(location);
+      gl.vertexAttribDivisor(location, 1);
+    }
     gl.bindVertexArray(null);
     this.renderer = rendererName(gl);
   }
 
   async load(): Promise<void> {
-    const { sprites } = await loadMaps();
+    const { sprites, grass } = await loadMaps();
     const art = await silhouetteArt(sprites.albedo);
     const gl = this.#gl;
-    if (gl.isContextLost() || sprites.translucency === null) return;
+    if (
+      gl.isContextLost() ||
+      sprites.translucency === null ||
+      grass.translucency === null
+    )
+      return;
     this.#maps = {
       albedo: uploadMap(gl, sprites.albedo),
       normal: uploadMap(gl, sprites.normal),
       translucency: uploadMap(gl, sprites.translucency),
+      grass: [
+        uploadMap(gl, grass.albedo),
+        uploadMap(gl, grass.normal),
+        uploadMap(gl, grass.translucency),
+      ],
     };
     this.#silhouetteArt = art;
   }
@@ -429,6 +523,36 @@ export class PlantsGpu implements GpuRenderer {
     gl.bindTexture(gl.TEXTURE_2D, maps.normal);
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, maps.translucency);
+    gl.useProgram(this.#grass);
+    const gu = this.#grassU;
+    setLight(gl, gu, p);
+    gl.uniform2f(gu.uResolution ?? null, W, H);
+    gl.uniform1f(gu.uScale ?? null, t);
+    gl.uniform2fv(
+      gu.uBase ?? null,
+      TUFT_BASE.flatMap((b) => [b.x, b.y]),
+    );
+    gl.uniform1i(gu.uAlbedo ?? null, GRASS_UNIT);
+    gl.uniform1i(gu.uNormal ?? null, GRASS_UNIT + 1);
+    gl.uniform1i(gu.uTranslucency ?? null, GRASS_UNIT + 2);
+    gl.uniform1f(gu.uLayerFill ?? null, 1);
+    gl.uniform1f(gu.uLayerHaze ?? null, LAYERS.sprites.haze);
+    gl.uniform1i(gu.uWilting ?? null, 0);
+    maps.grass.forEach((texture, i) => {
+      gl.activeTexture(gl.TEXTURE0 + GRASS_UNIT + i);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+    });
+    // The grass, back to front, between the plants: each plant stands in
+    // front of the tufts that grow behind its base.
+    const tufts = grassField(preset().grass);
+    this.#uploadGrass(tufts, seconds);
+    let next = 0;
+    const grassTo = (y: number) => {
+      let end = next;
+      while (end < tufts.length && (tufts[end]?.y ?? Infinity) <= y) end++;
+      this.#grassBatch(next, end);
+      next = end;
+    };
     gl.useProgram(this.#ground);
     gl.uniform2f(this.#groundU.uResolution ?? null, W, H);
     gl.uniform4fv(this.#groundU.uColor ?? null, GROUND);
@@ -440,6 +564,7 @@ export class PlantsGpu implements GpuRenderer {
     const seen = new Set<string>();
     for (const plant of description.plants) {
       seen.add(plant.id);
+      grassTo(plant.highlighted ? Infinity : plant.y);
       const corner = toDesign(plant, plant.bounds.x, plant.bounds.y);
       const k = plant.scale * t;
       const at = { k, x: corner.x * t, y: corner.y * t };
@@ -516,6 +641,8 @@ export class PlantsGpu implements GpuRenderer {
         this.#texture(entry.badges, entry, 0, null, plant.wilting);
       }
     }
+    grassTo(Infinity);
+    (gl.canvas as HTMLCanvasElement).dataset.tufts = String(tufts.length);
     for (const [id, entry] of this.#entries)
       if (!seen.has(id)) {
         this.#release(entry);
@@ -741,6 +868,53 @@ export class PlantsGpu implements GpuRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.#groundBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STREAM_DRAW);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, frame.grounds.length);
+  }
+
+  /** Every tuft's instance at `seconds` (null: at rest), for this frame. */
+  #uploadGrass(tufts: readonly Tuft[], seconds: number | null): void {
+    const gl = this.#gl;
+    const wind = seconds === null ? currentWind() : swayWind(seconds);
+    const strength = swayStrength();
+    const data = new Float32Array(tufts.length * GRASS_FLOATS);
+    tufts.forEach((tuft, i) => {
+      const lean = tuftLean(tuft, seconds, wind, strength, MAX_WIND_STRENGTH);
+      data.set(
+        [
+          tuft.x,
+          tuft.y,
+          tuft.size,
+          lean,
+          tuft.kind,
+          tuft.flip ? 1 : 0,
+          tuftSquash(lean),
+        ],
+        i * GRASS_FLOATS,
+      );
+    });
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.#grassBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STREAM_DRAW);
+  }
+
+  /** Draw tufts `from` up to `to` of this frame's upload. */
+  #grassBatch(from: number, to: number): void {
+    if (to <= from) return;
+    const gl = this.#gl;
+    const stride = GRASS_FLOATS * 4;
+    gl.useProgram(this.#grass);
+    gl.bindVertexArray(this.#grassVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.#grassBuffer);
+    // WebGL2 has no base instance: point the attributes at the batch.
+    const { tuft, cell } = this.#grassAttribs;
+    gl.vertexAttribPointer(tuft, 4, gl.FLOAT, false, stride, from * stride);
+    gl.vertexAttribPointer(
+      cell,
+      3,
+      gl.FLOAT,
+      false,
+      stride,
+      from * stride + 16,
+    );
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, to - from);
   }
 
   #sprites(

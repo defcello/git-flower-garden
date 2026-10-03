@@ -7,8 +7,6 @@ import {
   waveSpeed,
   windDirection,
   windWave,
-  WIND_GLSL,
-  WIND_LATTICE,
   TRAVEL_WRAP,
 } from "../../src/ui/scene/wind-field.ts";
 
@@ -30,56 +28,6 @@ const bestOffset = (a: number[], b: number[]) => {
   }
   return offset;
 };
-
-// JS evaluation of the shader's lattice and sampling expression. The hash uses
-// the same unsigned 32-bit operations as GLSL, so this also tests wrap parity.
-function shaderField(
-  x: number,
-  y: number,
-  seconds: number,
-  speed: number,
-  windX: number,
-  travel: number,
-): number {
-  const fract = (v: number) => v - Math.floor(v);
-  const hash = (x: number, y: number) => {
-    x = ((x % 128) + 128) % 128;
-    y = ((y % 128) + 128) % 128;
-    let h = (Math.imul(x, 1664525) + Math.imul(y, 1013904223)) >>> 0;
-    h = (h ^ (h >>> 16)) >>> 0;
-    h = Math.imul(h, 2246822519) >>> 0;
-    h = (h ^ (h >>> 13)) >>> 0;
-    return (h & 65535) / 65535;
-  };
-  const sample = (x: number, y: number) => {
-    const ix = Math.floor(x),
-      iy = Math.floor(y);
-    const fx = fract(x),
-      fy = fract(y);
-    const ux = fx * fx * (3 - 2 * fx),
-      uy = fy * fy * (3 - 2 * fy);
-    const lo = hash(ix, iy) * (1 - ux) + hash(ix + 1, iy) * ux;
-    const hi = hash(ix, iy + 1) * (1 - ux) + hash(ix + 1, iy + 1) * ux;
-    return lo * (1 - uy) + hi * uy;
-  };
-  const depth = 0.6 + 0.4 * Math.max(0, Math.min(1, (y - 650) / 430));
-  const qx = (x - 960) / depth,
-    qy = (y - 650) / depth;
-  const d = Math.abs(windX) > 0.15 ? Math.sign(windX) : 1;
-  const base =
-    0.72 * sample((qx - d * travel) / 250, qy / 160) +
-    0.28 *
-      sample((qx - d * travel * 0.75) / 125 + 19.7, qy / 80 + travel / 2000);
-  const patch = sample((qx - d * travel * 1.5) / 500 + 31.3, qy / 320 + 7.1);
-  const pulse =
-    0.5 * Math.sin((2 * Math.PI * seconds) / 11) +
-    0.32 * Math.sin((2 * Math.PI * seconds) / 17 + 0.9) +
-    0.18 * Math.sin((2 * Math.PI * seconds) / 29 + 1.7);
-  const envelope =
-    1 -
-    (0.04 + 0.64 * Math.max(0, Math.min(1, speed / 12))) * (0.5 - 0.5 * pulse);
-  return envelope * (base * 2 - 1) * (0.25 + 0.75 * patch);
-}
 
 describe("wind field", () => {
   it("is deterministic and bounded across the hill and through the wrap", () => {
@@ -133,60 +81,5 @@ describe("wind field", () => {
     );
     expect(advance(TRAVEL_WRAP - 1, 0.2, 12)).toBeLessThan(waveSpeed(12));
     expect(advance(0, 1000, 12)).toBeLessThan(waveSpeed(12));
-  });
-
-  it("uploads the lattice the 32-bit hash defines, for phones' GPUs", () => {
-    // The shader reads this texture instead of hashing in integers, whose
-    // precision a phone may cut to 16 bits.
-    expect(WIND_LATTICE).toHaveLength(128 * 128);
-    for (const [x, y] of [
-      [0, 0],
-      [1, 0],
-      [0, 1],
-      [127, 127],
-      [64, 3],
-    ] as const) {
-      let h = (Math.imul(x, 1664525) + Math.imul(y, 1013904223)) >>> 0;
-      h = (h ^ (h >>> 16)) >>> 0;
-      h = Math.imul(h, 2246822519) >>> 0;
-      h = (h ^ (h >>> 13)) >>> 0;
-      expect(WIND_LATTICE[y * 128 + x]).toBeCloseTo((h & 65535) / 65535, 6);
-    }
-    expect(new Set(WIND_LATTICE).size).toBeGreaterThan(8000);
-  });
-
-  it("keeps the CPU and shader lattice and field formulas in parity", () => {
-    for (const x of [0, 123, 723, 1919])
-      for (const y of [650, 840, 1080]) {
-        for (const t of [0, 4.3, 28.7]) {
-          const wind = { speed: 12, windX: -8, travel: t * 179 };
-          expect(windWave(x, y, t, wind)).toBeCloseTo(
-            shaderField(x, y, t, wind.speed, wind.windX, wind.travel),
-            10,
-          );
-        }
-      }
-    // The shader is intentionally a direct transcription. Check every coefficient
-    // and operation that controls noise sampling, evolution, and gust depth.
-    for (const fragment of [
-      "texelFetch(uLattice, ivec2(mod(p, 128.0)) & 127, 0).r",
-      "f * f * (3.0 - 2.0 * f)",
-      "0.6 + 0.4",
-      "650.0) / 430.0",
-      "0.72 * windNoise",
-      "0.28 * windNoise",
-      "travel * 0.75",
-      "travel / 2000.0",
-      "travel * 1.5",
-      "0.25 + 0.75 * gustPatch",
-      "q.y / 160.0",
-      "q.y / 80.0",
-      "q.y / 320.0",
-      "0.04 + 0.64",
-      "11.0",
-      "17.0",
-      "29.0",
-    ])
-      expect(WIND_GLSL).toContain(fragment);
   });
 });

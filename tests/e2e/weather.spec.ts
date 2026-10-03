@@ -73,7 +73,10 @@ async function openGarden(page: Page) {
   await expect(page.locator(".garden-scene [data-plot]")).toHaveCount(1);
 }
 
-/** A small pixel signature of the hill, or the software sheen over it. */
+/**
+ * A small pixel signature of a canvas: the left part of the hill, clear of
+ * the one plant in the middle.
+ */
 async function grassPixels(page: Page, selector: string): Promise<string> {
   return page.locator(selector).evaluate((node) => {
     const source = node as HTMLCanvasElement;
@@ -83,37 +86,53 @@ async function grassPixels(page: Page, selector: string): Promise<string> {
     const g = copy.getContext("2d");
     if (!g) throw new Error("no canvas context");
     g.drawImage(source, 0, 0, copy.width, copy.height);
-    const pixels = g.getImageData(0, 55, 160, 35).data;
+    const pixels = g.getImageData(0, 62, 50, 28).data;
     let hash = 2166136261;
     for (const channel of pixels) hash = Math.imul(hash ^ channel, 16777619);
     return String(hash >>> 0);
   });
 }
 
-test("grass waves move on both tiers and return exactly to rest", async ({
+test("grass tufts bend in the wind on both tiers and return exactly to rest", async ({
   page,
 }) => {
   test.setTimeout(120_000);
   await openGarden(page);
   await page.getByLabel("Sky", { exact: true }).selectOption("noon");
   await page.getByLabel("Weather", { exact: true }).selectOption("high-wind");
+  await page.getByLabel("Quality", { exact: true }).selectOption("balanced");
   const drawing = page.getByLabel("Drawing", { exact: true });
-  const quality = page.getByLabel("Quality", { exact: true });
   for (const tier of ["software", "gpu"] as const) {
     await drawing.selectOption(tier);
     const scene = page.locator(".landscape-scene:not([hidden])");
     await expect(scene).toHaveAttribute("data-tier", tier);
     await expect(scene).toHaveAttribute("data-lit", "true");
-    const selector =
-      tier === "gpu" ? ".landscape-scene:not([hidden])" : ".grass-sheen";
-    await quality.selectOption("low");
-    const rest = await grassPixels(page, selector);
-    await quality.selectOption("balanced");
-    await expect.poll(() => grassPixels(page, selector)).not.toBe(rest);
-    const first = await grassPixels(page, selector);
-    await expect.poll(() => grassPixels(page, selector)).not.toBe(first);
-    await quality.selectOption("low");
-    await expect.poll(() => grassPixels(page, selector)).toBe(rest);
+    const grass = `.garden-canvas[data-tier="${tier}"][data-ready="true"]`;
+    // The tufts are on the plants' canvas, between the plants.
+    expect(
+      Number(await page.locator(grass).getAttribute("data-tufts")),
+    ).toBeGreaterThan(500);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect
+      .poll(async () => {
+        const a = await grassPixels(page, grass);
+        await page.waitForTimeout(150);
+        return a === (await grassPixels(page, grass));
+      })
+      .toBe(true);
+    const rest = await grassPixels(page, grass);
+    const ground = await grassPixels(page, ".landscape-scene:not([hidden])");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await expect.poll(() => grassPixels(page, grass)).not.toBe(rest);
+    const first = await grassPixels(page, grass);
+    await expect.poll(() => grassPixels(page, grass)).not.toBe(first);
+    // The ground under the grass stays still: only the tufts move.
+    expect(await grassPixels(page, ".landscape-scene:not([hidden])")).toBe(
+      ground,
+    );
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect.poll(() => grassPixels(page, grass)).toBe(rest);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
   }
 });
 

@@ -9,7 +9,6 @@
  * as the software tier's SceneCanvas.
  */
 import type { LightingState } from "../../environment/lighting.ts";
-import { swayWind, windStrength } from "../sway.ts";
 import {
   compile,
   CONTEXT,
@@ -26,7 +25,6 @@ import {
   type Uniforms,
 } from "./gl.ts";
 import { LAYERS, type LayerLight } from "./shading.ts";
-import { WIND_GLSL, WIND_LATTICE } from "./wind-field.ts";
 import type { GpuRenderer } from "./useGpu.ts";
 import {
   DESIGN,
@@ -158,69 +156,12 @@ void main() {
   if (color.a <= 0.0) discard;
 }`;
 
-/** Above this share of the art's height, the hill has no grass. */
-const HILL_TOP = 0.6;
-
-/** A cached framebuffer copied one to one (the landscape behind the hill). */
-const BACKDROP_FS = `#version 300 es
-precision highp float;
-uniform sampler2D uImage;
-out vec4 color;
-void main() { color = texelFetch(uImage, ivec2(gl_FragCoord.xy), 0); }`;
-
-/**
- * The wind in the grass (wind-field.ts): the hill, relit once per light
- * change, sampled where the wind leans its blades. Only the painted blade
- * detail moves (no sliding sheet), more at the front than up the hill, and
- * the alpha stays where it was, so the crest never moves. Where the grass
- * bends, its blades show lighter, less saturated sides: the travelling
- * bands that make wind visible across a field.
- */
-const WAVE_FS = `#version 300 es
-precision highp float;
-precision highp int;
-uniform sampler2D uLit, uAlbedo, uTranslucency;
-uniform highp sampler2D uLattice;
-uniform vec4 uView; // the cover transform: ox, oy, scale; canvas height
-uniform float uSeconds, uSpeed, uWindX, uTravel, uStrength, uDaylight;
-out vec4 color;
-${SHADE_GLSL}
-${WIND_GLSL}
-void main() {
-  vec2 size = vec2(textureSize(uLit, 0));
-  vec2 uv = gl_FragCoord.xy / size;
-  vec4 here = texture(uLit, uv);
-  if (here.a <= 0.0) discard;
-  vec2 p = (vec2(gl_FragCoord.x, uView.w - gl_FragCoord.y) - uView.xy) / uView.z;
-  vec2 art = p / vec2(1920.0, 1080.0);
-  float bend = windWave(p, uSeconds, uSpeed, uWindX, uTravel);
-  float a = luminance(texture(uAlbedo, art + vec2(2.0 / 1920.0, 0.0)).rgb);
-  float b = luminance(texture(uAlbedo, art - vec2(2.0 / 1920.0, 0.0)).rgb);
-  float detail = smoothstep(0.012, 0.11, abs(a - b));
-  float depth = smoothstep(610.0, 1080.0, p.y);
-  float interior = smoothstep(0.6, 0.95, texture(uAlbedo, art).a);
-  float wind = min(uStrength, 2.2);
-  float lean = bend * detail * interior * mix(1.5, 6.0, depth) * wind;
-  color = texture(uLit, uv - vec2(lean * uView.z / size.x, 0.0));
-  color.rgb *= here.a / max(color.a, 0.001);
-  color.a = here.a;
-  // Bent blades show their lighter, paler sides; upright grass between the
-  // waves stands darker. Crisp enough to read as patches, even on a phone.
-  float map = luminance(texture(uTranslucency, art).rgb);
-  float weight = (0.5 + 0.5 * map) * (0.6 + 0.4 * detail) * wind / 2.2;
-  float sheen = smoothstep(0.05, 0.5, bend) * uDaylight * weight * 0.32;
-  float shade = smoothstep(0.05, 0.5, -bend) * weight * 0.22;
-  color.rgb = mix(color.rgb, vec3(luminance(color.rgb)), sheen * 0.5);
-  color.rgb += vec3(0.82, 0.94, 0.72) * sheen * color.a;
-  color.rgb *= 1.0 - shade;
-}`;
-
 interface LayerTextures {
   albedo: WebGLTexture;
   normal: WebGLTexture;
   translucency: WebGLTexture | null;
   light: LayerLight;
-  /** The Codex hill normal map came back with its X axis inverted (relight.ts). */
+  /** A normal map whose X axis points left (relight.ts); none at present. */
   flipX: boolean;
 }
 
@@ -230,11 +171,6 @@ export class LandscapeGpu implements GpuRenderer {
   readonly #star: WebGLProgram;
   readonly #lit: WebGLProgram;
   readonly #overlayProgram: WebGLProgram;
-  readonly #backdropProgram: WebGLProgram;
-  readonly #wave: WebGLProgram;
-  /** The wind's noise lattice (wind-field.ts), shared with the CPU. */
-  readonly #lattice: WebGLTexture;
-  readonly #waveU: Uniforms;
   readonly #overlayU: Uniforms;
   /** Uploaded weather rasters, by kind, with the key of what is in each. */
   readonly #weather = {
@@ -248,11 +184,6 @@ export class LandscapeGpu implements GpuRenderer {
   readonly #starVao: WebGLVertexArrayObject;
   readonly #empty: WebGLVertexArrayObject;
   #layers: LayerTextures[] | null = null;
-  /** While the grass moves: the landscape behind the hill, and the lit hill. */
-  #backdrop: Target | null = null;
-  #litHill: Target | null = null;
-  /** What the two targets were drawn for. */
-  #targetKey = "";
   /** The renderer's name, for diagnostics. */
   readonly renderer: string;
 
@@ -268,22 +199,6 @@ export class LandscapeGpu implements GpuRenderer {
     this.#star = compile(gl, STAR_VS, STAR_FS);
     this.#lit = compile(gl, LAYER_VS, LIT_FS);
     this.#overlayProgram = compile(gl, LAYER_VS, OVERLAY_FS);
-    this.#backdropProgram = compile(gl, FULL_VS, BACKDROP_FS);
-    this.#wave = compile(gl, FULL_VS, WAVE_FS);
-    this.#lattice = latticeTexture(gl);
-    this.#waveU = uniforms(gl, this.#wave, [
-      "uLattice",
-      "uLit",
-      "uAlbedo",
-      "uTranslucency",
-      "uView",
-      "uSeconds",
-      "uSpeed",
-      "uWindX",
-      "uTravel",
-      "uStrength",
-      "uDaylight",
-    ]);
     this.#overlayU = uniforms(gl, this.#overlayProgram, [
       "uRect",
       "uResolution",
@@ -347,7 +262,7 @@ export class LandscapeGpu implements GpuRenderer {
     });
     this.#layers = [
       layer(decoded.ridge, LAYERS.ridge, false),
-      layer(decoded.hill, LAYERS.hill, true),
+      layer(decoded.hill, LAYERS.hill, false),
     ];
   }
 
@@ -384,164 +299,67 @@ export class LandscapeGpu implements GpuRenderer {
       clouds: { canvas: HTMLCanvasElement; key: string } | null;
       rainbow: { canvas: HTMLCanvasElement; key: string } | null;
     } = { clouds: null, rainbow: null },
-    seconds: number | null = null,
   ): boolean {
     const gl = this.#gl;
     if (gl.isContextLost()) return false;
     const canvas = gl.canvas as HTMLCanvasElement;
     const W = canvas.width;
     const H = canvas.height;
-    // At rest, everything is drawn directly, exactly as before the wind.
-    if (seconds === null) return this.#paint(state, weather, "all");
-    const layers = this.#layers;
-    if (layers === null) return this.#paint(state, weather, "all");
-    // While the grass moves, everything behind the hill and the relit hill
-    // are drawn once per change of light, weather, or size; each frame only
-    // copies the one and leans the blades of the other.
-    const key = [
-      JSON.stringify(state),
-      weather.clouds?.key ?? "",
-      weather.rainbow?.key ?? "",
-    ].join("|");
-    const backdrop = (this.#backdrop = target(gl, this.#backdrop, W, H));
-    const lit = (this.#litHill = target(gl, this.#litHill, W, H));
-    if (this.#targetKey !== key || backdrop.fresh || lit.fresh) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, backdrop.buffer);
-      this.#paint(state, weather, "backdrop");
-      gl.bindFramebuffer(gl.FRAMEBUFFER, lit.buffer);
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      this.#paint(state, weather, "hill");
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      backdrop.fresh = lit.fresh = false;
-      this.#targetKey = key;
-    }
+    const t = transform(W, H);
+    const sky = skyBodies(t, state);
     gl.viewport(0, 0, W, H);
+
     gl.disable(gl.BLEND);
-    gl.useProgram(this.#backdropProgram);
+    gl.useProgram(this.#sky);
+    const s = this.#skyU;
+    gl.uniform1i(s.uBodies ?? null, 0);
+    gl.uniform2f(s.uResolution ?? null, W, H);
+    gl.uniform3fv(s.uZenith ?? null, state.sky.zenith);
+    gl.uniform3fv(s.uHorizon ?? null, state.sky.horizon);
+    gl.uniform1f(s.uHorizonY ?? null, sky.horizonY);
+    gl.uniform4f(
+      s.uSun ?? null,
+      sky.sun?.x ?? 0,
+      sky.sun?.y ?? 0,
+      sky.sun?.r ?? 1,
+      sky.sun?.glow ?? 1,
+    );
+    gl.uniform4f(s.uSunColor ?? null, ...state.sun.color, sky.sun?.alpha ?? 0);
+    gl.uniform4f(
+      s.uMoon ?? null,
+      sky.moon?.x ?? 0,
+      sky.moon?.y ?? 0,
+      sky.moon?.r ?? 1,
+      sky.moon?.alpha ?? 0,
+    );
+    gl.uniform3fv(s.uMoonS ?? null, sky.moon?.s ?? [0, 0, 1]);
+    gl.uniform3fv(s.uMoonColor ?? null, MOON_COLOR);
     gl.bindVertexArray(this.#empty);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, backdrop.texture);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    const hill = layers[1];
-    if (hill === undefined) return true;
-    const t = transform(W, H);
-    const wind = swayWind(seconds);
-    const u = this.#waveU;
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    gl.useProgram(this.#wave);
-    gl.uniform1i(u.uLit ?? null, 0);
-    gl.uniform1i(u.uAlbedo ?? null, 1);
-    gl.uniform1i(u.uTranslucency ?? null, 2);
-    gl.uniform1i(u.uLattice ?? null, 3);
-    gl.uniform4f(u.uView ?? null, t.ox, t.oy, t.scale, H);
-    gl.uniform1f(u.uSeconds ?? null, seconds);
-    gl.uniform1f(u.uSpeed ?? null, wind.speed);
-    gl.uniform1f(u.uWindX ?? null, wind.windX);
-    gl.uniform1f(u.uTravel ?? null, wind.travel);
-    gl.uniform1f(u.uStrength ?? null, windStrength(wind.speed));
-    gl.uniform1f(u.uDaylight ?? null, state.sun.intensity);
-    // Only the rows the hill covers (its crest is at 0.622 of the art's
-    // height at the highest).
-    const top = Math.max(
-      0,
-      Math.floor(t.oy + HILL_TOP * DESIGN.height * t.scale),
-    );
-    gl.enable(gl.SCISSOR_TEST);
-    gl.scissor(0, 0, W, Math.max(0, H - top));
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, lit.texture);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, hill.albedo);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, hill.translucency ?? hill.albedo);
-    gl.activeTexture(gl.TEXTURE3);
-    gl.bindTexture(gl.TEXTURE_2D, this.#lattice);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    gl.disable(gl.SCISSOR_TEST);
-    return true;
-  }
-
-  #paint(
-    state: LightingState,
-    weather: {
-      clouds: { canvas: HTMLCanvasElement; key: string } | null;
-      rainbow: { canvas: HTMLCanvasElement; key: string } | null;
-    },
-    /** Everything, everything behind the hill, or the hill alone. */
-    mode: "all" | "backdrop" | "hill",
-  ): boolean {
-    const gl = this.#gl;
-    const canvas = gl.canvas as HTMLCanvasElement;
-    const W = canvas.width,
-      H = canvas.height;
-    const t = transform(W, H);
-    const sky = mode === "hill" ? null : skyBodies(t, state);
-    gl.viewport(0, 0, W, H);
-    if (sky !== null) {
-      gl.disable(gl.BLEND);
+    if (sky.stars.length > 0) {
+      gl.useProgram(this.#star);
+      gl.uniform2f(this.#starU.uResolution ?? null, W, H);
+      gl.bindVertexArray(this.#starVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.#stars);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array(sky.stars.flatMap((p) => [p.x, p.y, p.r, p.a])),
+        gl.STREAM_DRAW,
+      );
+      gl.drawArrays(gl.POINTS, 0, sky.stars.length);
+    }
+    if (sky.sun !== null || sky.moon !== null) {
       gl.useProgram(this.#sky);
-      const s = this.#skyU;
-      gl.uniform1i(s.uBodies ?? null, 0);
-      gl.uniform2f(s.uResolution ?? null, W, H);
-      gl.uniform3fv(s.uZenith ?? null, state.sky.zenith);
-      gl.uniform3fv(s.uHorizon ?? null, state.sky.horizon);
-      gl.uniform1f(s.uHorizonY ?? null, sky.horizonY);
-      gl.uniform4f(
-        s.uSun ?? null,
-        sky.sun?.x ?? 0,
-        sky.sun?.y ?? 0,
-        sky.sun?.r ?? 1,
-        sky.sun?.glow ?? 1,
-      );
-      gl.uniform4f(
-        s.uSunColor ?? null,
-        ...state.sun.color,
-        sky.sun?.alpha ?? 0,
-      );
-      gl.uniform4f(
-        s.uMoon ?? null,
-        sky.moon?.x ?? 0,
-        sky.moon?.y ?? 0,
-        sky.moon?.r ?? 1,
-        sky.moon?.alpha ?? 0,
-      );
-      gl.uniform3fv(s.uMoonS ?? null, sky.moon?.s ?? [0, 0, 1]);
-      gl.uniform3fv(s.uMoonColor ?? null, MOON_COLOR);
+      gl.uniform1i(s.uBodies ?? null, 1);
       gl.bindVertexArray(this.#empty);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-      if (sky.stars.length > 0) {
-        gl.useProgram(this.#star);
-        gl.uniform2f(this.#starU.uResolution ?? null, W, H);
-        gl.bindVertexArray(this.#starVao);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.#stars);
-        gl.bufferData(
-          gl.ARRAY_BUFFER,
-          new Float32Array(sky.stars.flatMap((p) => [p.x, p.y, p.r, p.a])),
-          gl.STREAM_DRAW,
-        );
-        gl.drawArrays(gl.POINTS, 0, sky.stars.length);
-      }
-      if (sky.sun !== null || sky.moon !== null) {
-        gl.useProgram(this.#sky);
-        gl.uniform1i(s.uBodies ?? null, 1);
-        gl.bindVertexArray(this.#empty);
-        gl.drawArrays(gl.TRIANGLES, 0, 3);
-      }
-
-      this.#overlay(weather.clouds, "clouds", W, H);
     }
 
-    if (mode === "hill") {
-      gl.enable(gl.BLEND);
-      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-    }
+    this.#overlay(weather.clouds, "clouds", W, H);
+
     const layers = this.#layers;
     if (layers !== null) {
       const p = sceneLight(state);
@@ -561,9 +379,7 @@ export class LandscapeGpu implements GpuRenderer {
       gl.uniform1i(u.uTranslucency ?? null, 2);
       setLight(gl, u, p);
       layers.forEach((layer, index) => {
-        if (mode === "hill" && index === 0) return;
-        if (mode === "backdrop" && index === 1) return;
-        if (index === 1 && mode === "all" && weather.rainbow !== null) {
+        if (index === 1 && weather.rainbow !== null) {
           // The rain a rainbow shines in is nearer than the ridge.
           this.#overlay(weather.rainbow, "rainbow", W, H);
           gl.useProgram(this.#lit);
@@ -583,8 +399,7 @@ export class LandscapeGpu implements GpuRenderer {
         gl.bindTexture(gl.TEXTURE_2D, layer.translucency ?? layer.normal);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       });
-      if (mode === "backdrop") this.#overlay(weather.rainbow, "rainbow", W, H);
-    } else if (mode !== "hill") {
+    } else {
       this.#overlay(weather.rainbow, "rainbow", W, H);
     }
     return layers !== null;
@@ -616,81 +431,4 @@ export class LandscapeGpu implements GpuRenderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
-}
-
-/** The wind's 128×128 noise lattice as an R32F texture, read with texelFetch. */
-function latticeTexture(gl: WebGL2RenderingContext): WebGLTexture {
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  // Float textures cannot be filtered without an extension; texelFetch
-  // never filters, but the texture must still be complete.
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.R32F,
-    128,
-    128,
-    0,
-    gl.RED,
-    gl.FLOAT,
-    WIND_LATTICE,
-  );
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
-  return texture;
-}
-
-/** A framebuffer with a texture the size of the canvas. */
-interface Target {
-  texture: WebGLTexture;
-  buffer: WebGLFramebuffer;
-  width: number;
-  height: number;
-  /** Made or resized since it was last drawn. */
-  fresh: boolean;
-}
-
-/** `current` if it still fits a W×H canvas, else a new target (linear, for leaning). */
-function target(
-  gl: WebGL2RenderingContext,
-  current: Target | null,
-  W: number,
-  H: number,
-): Target {
-  if (current !== null && current.width === W && current.height === H)
-    return current;
-  if (current !== null) {
-    gl.deleteFramebuffer(current.buffer);
-    gl.deleteTexture(current.texture);
-  }
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA8,
-    W,
-    H,
-    0,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    null,
-  );
-  const buffer = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, buffer);
-  gl.framebufferTexture2D(
-    gl.FRAMEBUFFER,
-    gl.COLOR_ATTACHMENT0,
-    gl.TEXTURE_2D,
-    texture,
-    0,
-  );
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  return { texture, buffer, width: W, height: H, fresh: true };
 }
