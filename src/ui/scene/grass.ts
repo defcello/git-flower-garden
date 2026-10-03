@@ -41,12 +41,28 @@ export const TUFT_BASE: readonly { x: number; y: number }[] = [
   { x: 0.523, y: 0.944 },
 ];
 
-/** Share of each kind: short dense, tall, broad, seeding. */
-const KIND_WEIGHTS = [0.42, 0.2, 0.13, 0.25];
+/**
+ * What each tuft covers of its cell, as fractions (left, top, right,
+ * bottom; measured, with a little room): both tiers draw only this, not
+ * the whole cell, so its transparent margins cost no fill.
+ */
+export const TUFT_RECT: readonly (readonly [number, number, number, number])[] =
+  [
+    [0.07, 0.28, 0.97, 1],
+    [0.04, 0.065, 0.96, 1],
+    [0.04, 0.195, 1, 0.96],
+    [0, 0.03, 0.945, 0.96],
+  ];
+
+/**
+ * Share of each kind: short dense, tall, broad, seeding. Mostly slender:
+ * many small round dense tufts read as blobs, not as grass.
+ */
+const KIND_WEIGHTS = [0.22, 0.38, 0.1, 0.3];
 
 /** Cell size of a tuft at the crest and at the bottom edge, design pixels. */
-const SIZE_FAR = 12;
-const SIZE_NEAR = 115;
+const SIZE_FAR = 10;
+const SIZE_NEAR = 88;
 
 /** The crest's height at design `x`. */
 export function crestAt(x: number): number {
@@ -86,9 +102,11 @@ export function grassField(density = 1): readonly Tuft[] {
   for (let d = 0.01; d < 1.06; row++) {
     const size = tuftSize(d);
     // Far rows thin out: there the ground layer already reads as grass.
-    const sparse = 1 + 0.6 * (1 - Math.min(1, d));
-    const step = (size * 0.5 * sparse) / density;
-    const rowStep = (size * 0.32 * sparse) / density / rise;
+    const sparse = 1 + 0.3 * (1 - Math.min(1, d));
+    // Near tufts are large enough to close the gaps a little further apart.
+    const near = 1 + 0.3 * Math.min(1, d);
+    const step = (size * 0.34 * sparse * near) / density;
+    const rowStep = (size * 0.22 * sparse * near) / density / rise;
     for (let i = 0, x = -step * seeded(`grass|${String(row)}`); ; i++) {
       x += step * (0.75 + 0.5 * seeded(`grass|${String(row)}|${String(i)}|x`));
       if (x > DESIGN.width + size / 2) break;
@@ -116,29 +134,61 @@ export function grassField(density = 1): readonly Tuft[] {
 }
 
 /**
- * How far a tuft leans, as a shear (its tip moves this many tuft heights
- * downwind; + is right), in a wind of `strength` (sway.ts `windStrength`,
- * up to MAX_WIND_STRENGTH). With `seconds` null, its lean at rest: the
- * wind's steady push, without gusts or flutter. Within ±0.9.
+ * The sheen of bent grass (TuftPose `lift`), the same on both tiers: a
+ * fully bent tuft mixes this far toward this pale green, scaled by
+ * daylight; one standing up between the waves darkens by `shade`.
  */
-export function tuftLean(
+export const SHEEN = {
+  color: [0.82, 0.94, 0.72],
+  lift: 0.3,
+  shade: 0.2,
+} as const;
+
+/** A tuft's pose in the wind. */
+export interface TuftPose {
+  /**
+   * Its lean, as a shear: the tip moves this many tuft heights downwind
+   * (+ is right). Within ±0.9.
+   */
+  lean: number;
+  /**
+   * Its sheen, -1..1: how far the passing wave bends it beyond its steady
+   * lean. Bent grass shows its lighter sides; grass standing up between
+   * the waves, darker. This is what makes the waves readable at a distance,
+   * where a tuft's lean is a pixel or two.
+   */
+  lift: number;
+}
+
+/**
+ * A tuft's pose at `seconds` in a wind of `strength` (sway.ts
+ * `windStrength`, up to `maxStrength`). Neighbors move together: the lean
+ * is the wind's steady push plus the shared wave field (wind-field.ts)
+ * at the tuft's base, rolling across the hill as gusts pass, with only a
+ * trace of each tuft's own flutter. With `seconds` null, at rest: the
+ * steady push alone.
+ */
+export function tuftPose(
   tuft: Tuft,
   seconds: number | null,
   wind: WindField,
   strength: number,
   maxStrength: number,
-): number {
+): TuftPose {
   const s = Math.min(strength, maxStrength) / maxStrength;
   const direction = windDirection(wind.windX);
-  const steady = direction * s * 0.3;
-  if (seconds === null) return steady;
-  const gust = windWave(tuft.x, tuft.y, seconds, wind);
+  const steady = direction * s * 0.28;
+  if (seconds === null) return { lean: steady, lift: 0 };
+  const wave = windWave(tuft.x, tuft.y, seconds, wind);
   const period = 1.2 + 0.9 * tuft.seed;
   const flutter = Math.sin(
     (2 * Math.PI * seconds) / period + tuft.seed * 2 * Math.PI,
   );
-  const lean = steady + direction * s * 0.4 * gust + 0.05 * (0.4 + s) * flutter;
-  return Math.max(-0.9, Math.min(0.9, lean));
+  const lean = steady + direction * s * 0.45 * wave + 0.012 * flutter;
+  return {
+    lean: Math.max(-0.9, Math.min(0.9, lean)),
+    lift: wave * Math.min(1, 0.35 + s),
+  };
 }
 
 /** How much a leaning tuft shortens, so its blades keep their length. */

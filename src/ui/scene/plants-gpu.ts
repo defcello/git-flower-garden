@@ -50,11 +50,13 @@ import {
   swaySprites,
   swayWind,
 } from "../sway.ts";
-import { preset } from "../motion.ts";
+import { gpuSupport, preset } from "../motion.ts";
 import {
   grassField,
   TUFT_BASE,
-  tuftLean,
+  TUFT_RECT,
+  SHEEN,
+  tuftPose,
   tuftSquash,
   type Tuft,
 } from "./grass.ts";
@@ -241,37 +243,71 @@ void main() {
 /** Floats per sprite instance: aSprite (4) and aCell (3). */
 const SPRITE_FLOATS = 7;
 
+/** SPRITE_FS for the grass, with the sheen of the passing waves (grass.ts SHEEN). */
+const GRASS_FS = `#version 300 es
+precision highp float;
+uniform sampler2D uAlbedo, uNormal, uTranslucency;
+uniform float uLayerFill, uLayerHaze, uDaylight;
+in vec2 vUv;
+flat in int vFlip;
+in float vAlpha;
+in float vLift;
+out vec4 color;
+${SHADE_GLSL}
+const float BIAS = -0.75;
+void main() {
+  vec4 lit = shadeTexel(texture(uAlbedo, vUv, BIAS),
+                        texture(uNormal, vUv, BIAS).rgb, vFlip == 1,
+                        luminance(texture(uTranslucency, vUv, BIAS).rgb),
+                        uLayerFill, uLayerHaze, ${LAYERS.grass.night.toFixed(1)});
+  if (lit.a <= 0.0) discard;
+  float up = max(vLift, 0.0) * ${SHEEN.lift.toFixed(3)} * uDaylight;
+  lit.rgb = mix(lit.rgb, vec3(${SHEEN.color.map((c) => c.toFixed(3)).join(", ")}) * lit.a, up);
+  lit.rgb *= 1.0 - max(-vLift, 0.0) * ${SHEEN.shade.toFixed(3)};
+  color = lit;
+}`;
+
 /**
  * A grass tuft growing from its base, leaning by a shear about it (the
  * tip moves `lean` heights downwind) and shortened by `squash`, as
- * GardenCanvas.tsx paintTuft draws it. Lit by SPRITE_FS.
+ * GardenCanvas.tsx paintTuft draws it, with its sheen. Lit by GRASS_FS.
  */
 const GRASS_VS = `#version 300 es
 in vec4 aTuft;  // base x, y (design pixels), size, lean
-in vec3 aCell;  // kind, mirrored, squash
+in vec4 aCell;  // kind, mirrored, squash, lift
 uniform vec2 uResolution;
 uniform float uScale; // canvas pixels per design pixel
 uniform vec2 uBase[4];
+uniform vec4 uRect[4]; // what each tuft covers of its cell (grass.ts)
 out vec2 vUv;
 flat out int vFlip;
 out float vAlpha;
+out float vLift;
 ${TO_CLIP_GLSL}
 void main() {
   vec2 local = vec2(gl_VertexID == 1 || gl_VertexID == 3 ? 1.0 : 0.0,
                     gl_VertexID >= 2 ? 1.0 : 0.0);
   vFlip = aCell.y > 0.5 ? 1 : 0;
-  vec2 base = uBase[int(aCell.x + 0.5)];
+  vLift = aCell.w;
+  int kind = int(aCell.x + 0.5);
+  vec2 base = uBase[kind];
+  vec4 rect = uRect[kind];
+  // Only the tuft's own rectangle of its cell, in cell fractions.
+  local = mix(rect.xy, rect.zw, local);
+  // A mirrored tuft is placed mirrored and samples its cell as it is (the
+  // shader negates its normals' x).
   if (vFlip == 1) base.x = 1.0 - base.x;
-  vec2 p = (local - base) * aTuft.z;
+  vec2 drawn = vec2(vFlip == 1 ? 1.0 - local.x : local.x, local.y);
+  vec2 p = (drawn - base) * aTuft.z;
   p = vec2(p.x - aTuft.w * p.y, p.y * aCell.z);
   vec2 cell = vec2(mod(aCell.x, 2.0), floor(aCell.x / 2.0)) * 0.5;
-  vUv = cell + vec2(vFlip == 1 ? 1.0 - local.x : local.x, local.y) * 0.5;
+  vUv = cell + local * 0.5;
   vAlpha = 1.0;
   gl_Position = toClip((aTuft.xy + p) * uScale, uResolution);
 }`;
 
-/** Floats per tuft instance: aTuft (4) and aCell (3). */
-const GRASS_FLOATS = 7;
+/** Floats per tuft instance: aTuft (4) and aCell (4). */
+const GRASS_FLOATS = 8;
 /** The grass maps' texture units: clear of the sprites' (0–3) and uploads (7). */
 const GRASS_UNIT = 4;
 
@@ -345,17 +381,18 @@ export class PlantsGpu implements GpuRenderer {
     this.#quad = compile(gl, QUAD_VS, QUAD_FS);
     this.#ground = compile(gl, GROUND_VS, GROUND_FS);
     this.#sprite = compile(gl, SPRITE_VS, SPRITE_FS);
-    this.#grass = compile(gl, GRASS_VS, SPRITE_FS);
+    this.#grass = compile(gl, GRASS_VS, GRASS_FS);
     this.#grassU = uniforms(gl, this.#grass, [
       "uResolution",
       "uScale",
       "uBase",
+      "uRect",
       "uAlbedo",
       "uNormal",
       "uTranslucency",
       "uLayerFill",
       "uLayerHaze",
-      "uWilting",
+      "uDaylight",
       ...LIGHT_UNIFORMS,
     ]);
     this.#quadU = uniforms(gl, this.#quad, [
@@ -532,19 +569,26 @@ export class PlantsGpu implements GpuRenderer {
       gu.uBase ?? null,
       TUFT_BASE.flatMap((b) => [b.x, b.y]),
     );
+    gl.uniform4fv(gu.uRect ?? null, TUFT_RECT.flat());
     gl.uniform1i(gu.uAlbedo ?? null, GRASS_UNIT);
     gl.uniform1i(gu.uNormal ?? null, GRASS_UNIT + 1);
     gl.uniform1i(gu.uTranslucency ?? null, GRASS_UNIT + 2);
     gl.uniform1f(gu.uLayerFill ?? null, 1);
-    gl.uniform1f(gu.uLayerHaze ?? null, LAYERS.sprites.haze);
-    gl.uniform1i(gu.uWilting ?? null, 0);
+    gl.uniform1f(gu.uLayerHaze ?? null, LAYERS.grass.haze);
+    gl.uniform1f(gu.uDaylight ?? null, Math.min(1, state.sun.intensity));
     maps.grass.forEach((texture, i) => {
       gl.activeTexture(gl.TEXTURE0 + GRASS_UNIT + i);
       gl.bindTexture(gl.TEXTURE_2D, texture);
     });
     // The grass, back to front, between the plants: each plant stands in
     // front of the tufts that grow behind its base.
-    const tufts = grassField(preset().grass);
+    // Software WebGL (only by hand: Auto refuses it) fills on the CPU too,
+    // so it plants Software's grass.
+    const tufts = grassField(
+      gpuSupport() === "hardware"
+        ? preset().grass.gpu
+        : preset().grass.software,
+    );
     this.#uploadGrass(tufts, seconds);
     let next = 0;
     const grassTo = (y: number) => {
@@ -877,7 +921,13 @@ export class PlantsGpu implements GpuRenderer {
     const strength = swayStrength();
     const data = new Float32Array(tufts.length * GRASS_FLOATS);
     tufts.forEach((tuft, i) => {
-      const lean = tuftLean(tuft, seconds, wind, strength, MAX_WIND_STRENGTH);
+      const { lean, lift } = tuftPose(
+        tuft,
+        seconds,
+        wind,
+        strength,
+        MAX_WIND_STRENGTH,
+      );
       data.set(
         [
           tuft.x,
@@ -887,6 +937,7 @@ export class PlantsGpu implements GpuRenderer {
           tuft.kind,
           tuft.flip ? 1 : 0,
           tuftSquash(lean),
+          lift,
         ],
         i * GRASS_FLOATS,
       );
@@ -908,7 +959,7 @@ export class PlantsGpu implements GpuRenderer {
     gl.vertexAttribPointer(tuft, 4, gl.FLOAT, false, stride, from * stride);
     gl.vertexAttribPointer(
       cell,
-      3,
+      4,
       gl.FLOAT,
       false,
       stride,

@@ -46,8 +46,8 @@ addEventListener("message", (event: MessageEvent<BandRequest>) => {
     hill: request.spritesOnly ? null : relight(layers.hill, p, LAYERS.hill),
     sprites: relight(layers.sprites, p, LAYERS.sprites),
     spritesMirrored: relight(layers.spritesMirrored, p, LAYERS.sprites),
-    grass: relight(layers.grass, p, LAYERS.sprites),
-    grassMirrored: relight(layers.grassMirrored, p, LAYERS.sprites),
+    grass: relight(layers.grass, p, LAYERS.grass),
+    grassMirrored: relight(layers.grassMirrored, p, LAYERS.grass),
   };
   postMessage(response, {
     transfer: [
