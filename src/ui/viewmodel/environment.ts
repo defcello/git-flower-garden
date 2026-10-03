@@ -29,7 +29,9 @@ export interface SceneEnvironment {
    * while its art is relit; equal to `light` for renderers that relight at once.
    */
   shownLight: LightingState;
-  /** The weather to draw; `NO_WEATHER` when there is none. */
+  /** The forecast (or weather preview) before the viewer's wind controls. */
+  forecast: WeatherEffects;
+  /** The weather to draw, wind controls applied; `NO_WEATHER` when there is none. */
   effects: WeatherEffects;
   /** Weather plus the sky's clock in whole minutes, for seeded motion; null without weather. */
   weather: { effects: WeatherEffects; minutes: number } | null;
@@ -51,7 +53,7 @@ export function sceneEnvironment(
   baseLight: LightingState,
   effects: WeatherEffects,
   weatherPreview: string | null,
-): Omit<SceneEnvironment, "shownLight"> {
+): Omit<SceneEnvironment, "shownLight" | "forecast"> {
   const light = weatherLighting(baseLight, effects);
   const minutes = Math.floor((sky?.snapshot.time.getTime() ?? 0) / 60_000);
   return {

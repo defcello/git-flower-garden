@@ -2,8 +2,9 @@
  * The garden's scene: sky, stars, Sun, Moon, and the relit ridge and hill,
  * behind the plants (ADR 0018). The GPU tier draws it with WebGL2 and
  * relights the ridge and hill in a shader (scene/gpu.ts); the software
- * tier draws it with Canvas 2D from layers relit in a worker. Nothing moves
- * yet, so it draws only when the light, the lit art, or the window
+ * tier draws it with Canvas 2D from layers relit in a worker. Only the
+ * clouds move, drifting with the wind's speed while the plants sway, so
+ * it draws when they have moved, the light, the lit art, or the window
  * changes, and never while the page is hidden. Decorative: hidden from
  * assistive technology and never a pointer target.
  *
@@ -13,6 +14,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { LightingState } from "../environment/lighting.ts";
 import {
+  gpuSupport,
+  listenSway,
   preset,
   probingGpu,
   reportGpuFrame,
@@ -32,10 +35,14 @@ import { LandscapeGpu } from "./scene/gpu.ts";
 import { useGpu } from "./scene/useGpu.ts";
 import {
   cloudLayer,
+  cloudPlaces,
   rainbowLayer,
+  type CloudRaster,
   type Raster,
   type SkyWeather,
 } from "./scene/weather-sky.ts";
+import { cloudDrift } from "../environment/weather-effects.ts";
+import { cloudTravel, swayWind } from "./sway.ts";
 import {
   DESIGN,
   lightKey,
@@ -90,7 +97,7 @@ function weatherRasters(
   element: HTMLCanvasElement,
   state: LightingState,
   weather: SkyWeather | null,
-): { clouds: Raster | null; rainbow: Raster | null } {
+): { clouds: CloudRaster | null; rainbow: Raster | null } {
   const clouds =
     weather && cloudLayer(element.width, element.height, state, weather);
   const bow =
@@ -98,6 +105,80 @@ function weatherRasters(
   element.dataset.clouds = String(Boolean(clouds));
   element.dataset.rainbow = String(Boolean(bow));
   return { clouds, rainbow: bow };
+}
+
+/** How far the clouds have drifted: by the sky's clock and while animating. */
+function cloudOffset(weather: SkyWeather | null): number {
+  if (weather === null) return 0;
+  return cloudDrift(weather.effects, weather.minutes) + cloudTravel();
+}
+
+/**
+ * Redraw the landscape as its clouds move: on the sway clock, whenever they
+ * have moved half a canvas pixel. With no clouds, or while the plants rest
+ * (Low, Static, reduced motion, a hidden page), nothing is drawn. Returns
+ * a function to stop.
+ */
+function followClouds(
+  element: HTMLCanvasElement,
+  weather: SkyWeather | null,
+  redraw: () => void,
+  /** Milliseconds between redraws at least: each is costly on software WebGL. */
+  interval = 0,
+): () => void {
+  const moving =
+    weather !== null &&
+    weather.effects.cloudCover > 0.02 &&
+    weather.effects.windSpeed > 0;
+  if (!moving) return () => undefined;
+  let drawn = cloudTravel();
+  let at = 0;
+  const clock = listenSway((seconds) => {
+    if (seconds === null) return;
+    swayWind(seconds);
+    const scale = transform(element.width, element.height).scale;
+    if (Math.abs(cloudTravel() - drawn) * scale < 0.5) return;
+    if (seconds * 1000 - at < interval) return;
+    at = seconds * 1000;
+    drawn = cloudTravel();
+    redraw();
+  });
+  return clock.stop;
+}
+
+/** A canvas of the canvas's size, made once per element and kind. */
+const layers = new WeakMap<
+  HTMLCanvasElement,
+  Map<string, { key: unknown[]; canvas: HTMLCanvasElement }>
+>();
+function layer(
+  element: HTMLCanvasElement,
+  kind: string,
+  key: unknown[],
+  paint: (g: CanvasRenderingContext2D) => void,
+): HTMLCanvasElement {
+  let kinds = layers.get(element);
+  if (!kinds) {
+    kinds = new Map<string, { key: unknown[]; canvas: HTMLCanvasElement }>();
+    layers.set(element, kinds);
+  }
+  const known = kinds.get(kind);
+  if (
+    known &&
+    known.key.length === key.length &&
+    known.key.every((v, i) => v === key[i])
+  )
+    return known.canvas;
+  const canvas = known?.canvas ?? document.createElement("canvas");
+  canvas.width = element.width;
+  canvas.height = element.height;
+  const g = canvas.getContext("2d");
+  if (g) {
+    g.clearRect(0, 0, canvas.width, canvas.height);
+    paint(g);
+  }
+  kinds.set(kind, { key, canvas });
+  return canvas;
 }
 
 function draw(
@@ -112,8 +193,69 @@ function draw(
   const W = element.width;
   const H = element.height;
   const t = transform(W, H);
-  const sky = skyBodies(t, state);
+  const weatherLayers = weatherRasters(element, state, weather);
+  const clouds = weatherLayers.clouds;
+  // With clouds, which move, what stays still is drawn once, in layers, so
+  // each step of the clouds is a few copies; without, it is drawn directly.
+  const layered = clouds !== null;
+  if (layered)
+    g.drawImage(
+      layer(element, "sky", [W, H, state], (g) => {
+        paintSky(g, state, W, H);
+      }),
+      0,
+      0,
+    );
+  else paintSky(g, state, W, H);
+  if (clouds)
+    for (const x of cloudPlaces(W, H, cloudOffset(weather)))
+      g.drawImage(clouds.canvas, x, 0, clouds.span, H);
+  const lit = art !== null && art.ridge !== null && art.hill !== null;
+  if (lit) {
+    const paint = (g: CanvasRenderingContext2D, image: ImageBitmap) => {
+      g.imageSmoothingEnabled = true;
+      g.imageSmoothingQuality = "high";
+      g.drawImage(
+        image,
+        t.ox,
+        t.oy,
+        DESIGN.width * t.scale,
+        DESIGN.height * t.scale,
+      );
+    };
+    const show = (kind: string, image: ImageBitmap) => {
+      if (layered)
+        g.drawImage(
+          layer(element, kind, [W, H, image], (g) => {
+            paint(g, image);
+          }),
+          0,
+          0,
+        );
+      else paint(g, image);
+    };
+    if (art.ridge) show("ridge", art.ridge);
+    // The rain a rainbow shines in is nearer than the ridges.
+    if (weatherLayers.rainbow) {
+      // Light the rain sends back adds to what is behind it.
+      g.globalCompositeOperation = "lighter";
+      g.drawImage(weatherLayers.rainbow.canvas, 0, 0, W, H);
+      g.globalCompositeOperation = "source-over";
+    }
+    if (art.hill) show("hill", art.hill);
+  }
+  mark(element, state, art?.key, lit);
+}
 
+/** The sky behind the clouds: its gradient, the stars, the Sun and Moon. */
+function paintSky(
+  g: CanvasRenderingContext2D,
+  state: LightingState,
+  W: number,
+  H: number,
+): void {
+  const t = transform(W, H);
+  const sky = skyBodies(t, state);
   const gradient = g.createLinearGradient(0, 0, 0, sky.horizonY);
   gradient.addColorStop(0, css(state.sky.zenith));
   gradient.addColorStop(1, css(state.sky.horizon));
@@ -155,25 +297,6 @@ function draw(
     );
     g.globalAlpha = 1;
   }
-  const weatherLayers = weatherRasters(element, state, weather);
-  if (weatherLayers.clouds) g.drawImage(weatherLayers.clouds.canvas, 0, 0);
-  const lit = art !== null && art.ridge !== null && art.hill !== null;
-  if (lit) {
-    g.imageSmoothingEnabled = true;
-    g.imageSmoothingQuality = "high";
-    const w = DESIGN.width * t.scale;
-    const h = DESIGN.height * t.scale;
-    if (art.ridge) g.drawImage(art.ridge, t.ox, t.oy, w, h);
-    // The rain a rainbow shines in is nearer than the ridges.
-    if (weatherLayers.rainbow) {
-      // Light the rain sends back adds to what is behind it.
-      g.globalCompositeOperation = "lighter";
-      g.drawImage(weatherLayers.rainbow.canvas, 0, 0, W, H);
-      g.globalCompositeOperation = "source-over";
-    }
-    if (art.hill) g.drawImage(art.hill, t.ox, t.oy, w, h);
-  }
-  mark(element, state, art?.key, lit);
 }
 
 /** Test and diagnostic attributes shared by both tiers. */
@@ -269,9 +392,11 @@ function SoftwareCanvas({
     redraw();
     document.addEventListener("visibilitychange", redraw);
     window.addEventListener("resize", redraw);
+    const stopClouds = followClouds(element, weather, redraw);
     return () => {
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
+      stopClouds();
     };
   }, [shown, art, weather, quality]);
 
@@ -324,7 +449,15 @@ function GpuCanvas({
       fitCanvas(element, preset().pixelRatio);
       const timed = probingGpu("landscape");
       const start = performance.now();
-      const lit = gpu.draw(shown, weatherRasters(element, shown, weather));
+      const rasters = weatherRasters(element, shown, weather);
+      const lit = gpu.draw(shown, {
+        ...rasters,
+        cloudPlaces: cloudPlaces(
+          element.width,
+          element.height,
+          cloudOffset(weather),
+        ),
+      });
       if (timed && lit) {
         gpu.finish();
         reportGpuFrame("landscape", performance.now() - start);
@@ -340,9 +473,18 @@ function GpuCanvas({
     redraw();
     document.addEventListener("visibilitychange", redraw);
     window.addEventListener("resize", redraw);
+    // Software WebGL (only by hand: Auto refuses it) relights the whole
+    // landscape on the CPU for each step of the clouds.
+    const stopClouds = followClouds(
+      element,
+      weather,
+      redraw,
+      gpuSupport() === "hardware" ? 0 : 500,
+    );
     return () => {
       document.removeEventListener("visibilitychange", redraw);
       window.removeEventListener("resize", redraw);
+      stopClouds();
     };
   }, [
     shown,

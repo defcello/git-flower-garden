@@ -38,7 +38,11 @@ export interface WeatherEffects {
   } | null;
   /** Screen-space wind: + blows to the right (westward), m/s. */
   windX: number;
+  /** + blows away from the viewer, into the scene (southward), m/s. */
+  windZ: number;
   windSpeed: number;
+  /** How much faster than `windSpeed` the gusts blow, m/s. */
+  windGust: number;
   thunder: boolean;
 }
 
@@ -48,7 +52,9 @@ export const NO_WEATHER: WeatherEffects = {
   fog: 0,
   precipitation: null,
   windX: 0,
+  windZ: 0,
   windSpeed: 0,
+  windGust: 0,
   thunder: false,
 };
 
@@ -63,8 +69,10 @@ const DENSITY: Record<Intensity, number> = {
 };
 
 /**
- * The scene's weather from normalized conditions. East is on the left of
- * the panorama, so wind blowing toward the west moves things right.
+ * The scene's weather from normalized conditions. The viewer faces south:
+ * east is on the left of the panorama, so wind blowing toward the west
+ * moves things right, and wind from the north blows into the scene. The
+ * forecast gives no gusts: they are taken as half again the mean wind.
  */
 export function weatherEffects(c: WeatherConditions | null): WeatherEffects {
   if (c === null) return NO_WEATHER;
@@ -92,7 +100,9 @@ export function weatherEffects(c: WeatherConditions | null): WeatherEffects {
         ? null
         : { type, density: DENSITY[p.intensity], showers: p.showers },
     windX: -Math.sin(toward) * c.wind.speedMetersPerSecond,
+    windZ: -Math.cos(toward) * c.wind.speedMetersPerSecond,
     windSpeed: c.wind.speedMetersPerSecond,
+    windGust: 0.5 * c.wind.speedMetersPerSecond,
     thunder: c.thunder,
   };
 }
@@ -176,8 +186,24 @@ export interface CloudField {
 const CLOUD_COUNT = 14;
 /** Wide enough that wrapped clouds enter and leave off screen. */
 const SPAN = 1920 + 900;
-/** Design pixels a 1 m/s wind moves the clouds, per minute. */
+/**
+ * The span the clouds wrap within, in design pixels: they are drawn once
+ * at no drift (cloudField at minute 0) and moved as one, wrapping.
+ */
+export const CLOUD_SPAN = { left: -450, width: SPAN };
+/** Design pixels a 1 m/s wind moves the clouds, per minute of the sky's clock. */
 const DRIFT_PER_MINUTE = 2.5;
+/**
+ * Design pixels a 1 m/s wind moves the clouds per second while the scene
+ * animates: a cloud a kilometre or two up crosses the view in minutes in
+ * a breeze, in under a minute in a storm.
+ */
+export const CLOUD_SPEED = 0.8;
+
+/** How far the clouds have drifted downwind by `minutes` (design pixels). */
+export function cloudDrift(w: WeatherEffects, minutes: number): number {
+  return w.windX * DRIFT_PER_MINUTE * minutes;
+}
 
 function random(seed: number) {
   let s = seed >>> 0;
@@ -204,7 +230,7 @@ export function cloudField(w: WeatherEffects, minutes: number): CloudField {
   const rand = random(19_850_314);
   const puffs: Puff[] = [];
   const shown = Math.round(CLOUD_COUNT * Math.min(1, w.cloudCover * 1.15));
-  const drift = w.windX * DRIFT_PER_MINUTE * minutes;
+  const drift = cloudDrift(w, minutes);
   for (let i = 0; i < CLOUD_COUNT; i++) {
     const base = rand() * SPAN;
     const y = 120 + rand() * 330;

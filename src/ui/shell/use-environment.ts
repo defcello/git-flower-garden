@@ -17,6 +17,7 @@ import { useShownLight } from "../scene/client.ts";
 import { DAYTIME } from "../scene/view.ts";
 import { LIVE, useSky, type SkySetting } from "../sky.ts";
 import { setSwayWind } from "../sway.ts";
+import { applyWind, type WindSetting } from "../WindControls.tsx";
 import {
   isNight,
   sceneEnvironment,
@@ -30,6 +31,7 @@ export function useSceneEnvironment(
   environment: EnvironmentJson | null,
   skySetting: SkySetting,
   weatherSetting: WeatherSetting,
+  wind: WindSetting,
 ): SceneEnvironment | null {
   const sky = useSky(enabled ? environment : null, enabled ? skySetting : LIVE);
   // Weather: live conditions with the live sky, or a developer preview;
@@ -43,7 +45,7 @@ export function useSceneEnvironment(
     skyTime === null ? 0 : Math.floor(skyTime / 3_600_000) * 3_600_000;
   // Every server message parses anew; the weather changes far less often.
   const liveKey = JSON.stringify(liveConditions);
-  const effects = useMemo(
+  const forecast = useMemo(
     () =>
       !enabled
         ? NO_WEATHER
@@ -52,6 +54,11 @@ export function useSceneEnvironment(
           : weatherEffects(previewConditions(weatherSetting, previewHour)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [enabled, weatherSetting, liveKey, previewHour],
+  );
+  // The wind controls replace the forecast's wind (WindControls.tsx).
+  const effects = useMemo(
+    () => (enabled ? applyWind(forecast, wind) : forecast),
+    [enabled, forecast, wind],
   );
   const baseLight = sky?.state ?? DAYTIME;
   const skyMinutes = Math.floor((skyTime ?? 0) / 60_000);
@@ -71,13 +78,17 @@ export function useSceneEnvironment(
     setSwayWind(
       effects === NO_WEATHER ? null : effects.windSpeed,
       effects.windX,
+      effects.windZ,
+      effects.windGust,
     );
   }, [effects]);
   // Plant shadows and night panels change with the relit art, not ahead of it.
   const shownLight = useShownLight(scene.light);
   return useMemo(
     () =>
-      enabled ? { ...scene, shownLight, night: isNight(shownLight) } : null,
-    [enabled, scene, shownLight],
+      enabled
+        ? { ...scene, forecast, shownLight, night: isNight(shownLight) }
+        : null,
+    [enabled, scene, forecast, shownLight],
   );
 }

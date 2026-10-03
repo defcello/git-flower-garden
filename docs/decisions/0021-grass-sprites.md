@@ -170,16 +170,119 @@ the HD 4000 could not keep High at 30; before Software's cap it cost
 browser test that drags the time slider through 35 relights takes 26–31
 of its 30 seconds, as on `main` (27); on CI it takes 6–10.
 
+## Third iteration: even density, character, bending, and a wind preview (2026-10-03)
+
+The maintainer's review of the second iteration: more convincing, then
+four requests. Bare spots near the viewer, with the back no thinner than
+it was; a little randomness per tuft, in size and in how late it answers
+the wind, so tufts do not look rubber-stamped; no more shear, which
+stretches the grass as if it were elastic, but a bend that keeps the
+blades' length (pre-drawn lean frames from Codex, or procedural grass,
+were offered as options); and wind controls in the demo, for direction,
+speed (still air to a hurricane), and gusts, with the speed also driving
+the clouds.
+
+- **Density**: tufts grow closer together toward the viewer
+  (`tuftSpacing`: 1.25 of the old spacing at the crest, 0.95 at the
+  bottom edge, where it was about 1.3 throughout), so near rows have no
+  bare ground between them. On the maintainer's second look, at 1.6 the
+  back was too sparse, so it is now a little denser than in the second
+  iteration. The GPU plants 8,986 tufts at Balanced and High (7,369
+  before), Software 4,047 (3,336).
+- **Character**: each tuft has its own size (0.75–1.25 of its depth's,
+  from 0.8–1.2), height (`stretch`, 0.85–1.2 of its width), stiffness
+  (`stiff`, 0.8–1.2 of the gusts' bend), and delay (`delay`, up to 0.15 s:
+  it bends as the wave was a moment before, a little upwind). Neighbors
+  still move as one (correlation above 0.9 a tuft apart; above 0.5 even
+  at the largest difference in delay).
+- **Bending**: a procedural bend of the painted tufts, chosen over new
+  art. It needs no new generated images, so nothing more waits on
+  redistribution approval, and it is continuous where frames would step.
+  A tuft's stem bends along a circular arc, tips most (`tuftBend`): the
+  point `v` up a stem of height `h` bent by `θ` lies `v(1 − cos φ)/φ`
+  downwind and `v sin φ / φ` up, with `φ = θv/h`. Every point of a row
+  moves as the stem does, so each upright blade becomes an arc of its own
+  length. The pose is now an angle: `steadyBend` for the wind's speed
+  (about 15° at 4 m/s, 60° in a hurricane) plus `gustBend` for its gusts
+  (up to about 57°) times the wave, within −34° and 83°. The GPU draws
+  each tuft as a strip of six rows bent in the vertex shader. Software
+  draws it in horizontal bands, one per quarter radian of bend (up to
+  six), each mapped so that its top and bottom rows land exactly where
+  the arc puts them, so the bands meet. Far patches are drawn with the
+  steady bend and shear only by the difference at the tip.
+- **Direction**: the wind now blows across the ground, not only left or
+  right (`WindField.windZ`, from the forecast's direction; the view faces
+  south). Wave fronts run across the wind on the ground: a north wind
+  rolls them up the hill, foreshortened (`FORESHORTEN`, 3), and tufts
+  bending into the scene look shorter, their tips a little higher
+  (`VIEW_TILT`).
+- **Gusts**: `WindField.gust` (m/s above the mean) sets how far the waves
+  bend the grass beyond its steady bend, how bright the sheen is, and how
+  deep the lulls are. The forecast has no gusts, so they are taken as
+  half the mean wind.
+- **Wind preview**: a Wind control in the top bar: "Weather" (the
+  forecast's or the weather preview's wind) or a compass point, with
+  Speed (0–160 mph, named after the Beaufort scale) and Gusts (0–80 mph
+  above the speed) sliders, labelled "Wind preview" in the art notice. It
+  replaces the wind for the grass, the plants, the rain's slant, and the
+  clouds.
+- **Clouds**: they drift on the animation clock at 0.8 design pixels a
+  second per m/s of wind (a breeze crosses the view in minutes, a
+  hurricane in under a minute), as well as by the minute of the sky's
+  clock as before; for now always left or right (direction comes with
+  their later overhaul). The cloud raster covers their whole wrapping
+  span and is drawn once, then placed at the drift in two copies, so
+  moving them never redraws them. The landscape redraws only when they
+  have moved half a canvas pixel. Software keeps the sky, ridge, and hill
+  as layers at canvas size, so a redraw is a few copies. They hold still
+  when the plants do.
+
+- **Cost**: each tuft's fixed part of the wave (its place and the noise
+  that bends the fronts) is computed once, at planting (`waveSite`), and
+  what every tuft shares in a frame once per frame (`poseFrame`), so
+  posing about 9,000 tufts costs less than 7,400 did. The GPU tier writes
+  its instances into one array kept between frames.
+- **Software smoothing**: tufts are drawn at well under their atlas
+  size, and Canvas's default smoothing let thin, leaning blades alias
+  into combs. Software now draws each tuft from the halved copy of the lit
+  atlas nearest its size (`grassMip`, made once per light with
+  high-quality smoothing), as the GPU's mipmaps do. High-quality smoothing
+  on every draw looked the same but, rasterized on the CPU, slowed a 4K
+  browser test past its limit.
+- **Tier parity**: the tiers place every tuft alike, but light and filter
+  the near grass's thin blades a little differently; with the near grass
+  denser, larger, and bent, the worst 8-pixel block differs by up to
+  about 27 of 255 levels at noon (12 before), so `botanical.spec.ts`
+  allows 30, where it allowed 16. Neither the bands, the sizes, the
+  heights, the bend, the spacing, nor the GPU's texture bias accounts for
+  it alone.
+
+Surface Pro, 8 plants, the high-wind preview, Balanced, percent of one
+core, measured twice, interleaved with `main` to cancel drift over the
+session (single runs varied by up to a third): GPU 53 and 53 against
+`main`'s 67 and 67; Software 117 and 121 against 108 and 108; with the
+smoothing above, GPU 55 and Software 121 (106 with high-quality smoothing
+on every draw). Under
+today's conditions, High stepped down to 15 frames a second on both
+branches, on both tiers. Neither the clouds' motion (58 against 56 with
+it held) nor Software's banding (107 against 109 with one band) costs
+measurably.
+
 ## Verification
 
 - Unit: `tests/ui/grass.test.ts` (planting on the crest, back to front,
-  deterministic, larger toward the viewer, the whole width covered, the
-  budget; leaning downwind, further in stronger wind, bounded, moving with
-  the gusts; blades keeping their length), `tests/ui/wind-field.test.ts`,
+  deterministic, larger and closer together toward the viewer, the whole
+  width covered, the budget, each tuft's own size, height, stiffness, and
+  delay; bending downwind, further in stronger wind and gusts, bounded,
+  still in still air; waves moving neighbors together, travelling
+  downwind, up the hill in a north wind; blades bent along arcs of their
+  own length), `tests/ui/wind-field.test.ts`,
   `tests/ui/quality.test.ts`, the asset manifest's checksums
   (`tests/ui/relight.test.ts`), and the hillside slots against the new
   ground (`tests/ui/hillside.test.ts`).
 - Browser: tufts on both tiers bend in the wind and return exactly to
-  rest while the ground stays still (`weather.spec.ts`); both tiers draw
+  rest while the ground stays still; the wind preview is labelled and
+  sets the wind, and the clouds hold in still air and under reduced
+  motion and drift in a storm (`weather.spec.ts`); both tiers draw
   the plants and grass alike at rest (`botanical.spec.ts`); hover outlines,
   lost contexts, and all 64 icons as before (`garden-scene.spec.ts`).

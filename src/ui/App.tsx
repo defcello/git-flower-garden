@@ -19,6 +19,12 @@ import { FullscreenButton, useFullscreen } from "./Fullscreen.tsx";
 import { reasonText, shortOid } from "./format.ts";
 import { WeatherNote } from "./WeatherNote.tsx";
 import {
+  describeWind,
+  WEATHER_WIND,
+  WindControls,
+  type WindSetting,
+} from "./WindControls.tsx";
+import {
   WEATHER_PREVIEWS,
   WEATHER_PREVIEW_NAMES,
 } from "../environment/weather-previews.ts";
@@ -48,6 +54,7 @@ export function App() {
   const [skySetting, setSkySetting] = useState<SkySetting>(LIVE);
   const [weatherSetting, setWeatherSetting] = useState<WeatherSetting>("live");
   const [looping, setLooping] = useState(false);
+  const [wind, setWind] = useState<WindSetting>(WEATHER_WIND);
   useSkyLoop(looping && usesEnvironment, setSkySetting);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -61,6 +68,7 @@ export function App() {
     environmentJson,
     skySetting,
     weatherSetting,
+    wind,
   );
   const sky = environment?.sky ?? null;
   // A focused repository that disappears from the configuration shows the garden.
@@ -208,6 +216,13 @@ export function App() {
               </select>
             </label>
           )}
+          {usesEnvironment && environment && (
+            <WindControls
+              setting={wind}
+              effects={environment.forecast}
+              onChange={setWind}
+            />
+          )}
         </header>
         <div className="hud-notes">
           {usesEnvironment && (
@@ -236,6 +251,14 @@ export function App() {
                   />{" "}
                 </>
               ) : null}
+              {describeWind(wind) !== null && (
+                <>
+                  <strong className="weather-preview-badge">
+                    Wind preview
+                  </strong>{" "}
+                  {describeWind(wind)}{" "}
+                </>
+              )}
               {environment?.rainbow === true && (
                 <>
                   The rainbow follows the optics of sunlit rain; it is inferred
