@@ -17,7 +17,7 @@ export interface WindField {
   travel: number;
 }
 
-/** A multiple of every lattice period travel moves through: wrapping changes no sample. */
+/** A multiple of every lattice period and of WAVELENGTH: wrapping changes no sample. */
 export const TRAVEL_WRAP = 256000;
 const TAU = 2 * Math.PI;
 const lattice = (n: number) => ((n % 128) + 128) % 128;
@@ -84,11 +84,17 @@ export function gustPatch(x: number, y: number, wind: WindField): number {
   );
 }
 
+/** Design pixels from one wave front to the next, along the wind, near. */
+export const WAVELENGTH = 320;
+
 /**
- * Patches of bent grass, smaller and slower toward the crest. On the ground
- * a front is about 2.6 times longer across the wind than along it, but the
- * hillside's depth is foreshortened about fourfold on screen, so on screen
- * a patch is wider than it is tall.
+ * Waves of bent grass rolling downwind, smaller and slower toward the
+ * crest: fronts across the wind, one WAVELENGTH apart, bent and broken by
+ * slow noise so they never run in straight bars, with a little finer
+ * texture, and strong only where a gust patch is passing. On the ground a
+ * front runs across the wind, but the hillside's depth is foreshortened
+ * about fourfold on screen, so the bends are tighter in depth than across.
+ * Bounded by one.
  */
 export function waveShape(x: number, y: number, wind: WindField): number {
   const depth = 0.6 + 0.4 * Math.min(1, Math.max(0, (y - 650) / 430));
@@ -96,12 +102,15 @@ export function waveShape(x: number, y: number, wind: WindField): number {
   const px = (x - 960) / depth;
   const py = (y - 650) / depth;
   const travel = direction * wind.travel;
-  const base =
-    0.72 * noise((px - travel) / 250, py / 160) +
-    0.28 *
-      noise((px - travel * 0.75) / 125 + 19.7, py / 80 + wind.travel / 2000);
-  const patch = gustPatch(x, y, wind);
-  return (base * 2 - 1) * (0.25 + 0.75 * patch);
+  // How far each front is pushed ahead or held back: ±3.5 radians.
+  const bend = 7 * (noise(px / 600 + 3.1, py / 220 + 11.3) - 0.5);
+  const front = Math.sin((TAU * (px - travel)) / WAVELENGTH + bend);
+  const fine =
+    noise((px - travel * 0.75) / 125 + 19.7, py / 80 + wind.travel / 2000) * 2 -
+    1;
+  const p = gustPatch(x, y, wind);
+  const patch = p * p * (3 - 2 * p);
+  return (0.78 * front + 0.22 * fine) * (0.15 + 0.85 * patch);
 }
 
 export function windWave(

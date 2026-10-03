@@ -9,10 +9,11 @@ change configuration or behavior, and the notes say how.
 
 ### Changes
 
-- **Grass moves with the wind.** The hill is covered in painted grass
-  tufts that bend with the live forecast's wind: leaning downwind as it
-  blows, further as gusts roll across the hill in patches, springing back
-  in the lulls, more so the stronger the wind. Tufts nearer than a plant
+- **Grass moves with the wind.** The hill is covered in dense painted
+  grass tufts that bend with the live forecast's wind: leaning downwind as
+  it blows, and swept together by waves that roll across the hill as the
+  gusts pass, paler where the grass bends and darker where it stands up,
+  settling in the lulls, more so the stronger the wind. Tufts nearer than a plant
   grow in front of its stem; the plants catch the same gusts. The hill
   beneath is a new, plainer ground. Low, Static, reduced motion, and
   hidden pages hold the grass still; the view's note says when reduced

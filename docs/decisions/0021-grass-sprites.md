@@ -114,6 +114,62 @@ took 27 s of its 30). Options for the maintainer: accept it; plant fewer
 tufts on every tier; let Software hold far tufts still; or let Software
 draw the grass at half its frame rate.
 
+## Second iteration: density and waves (2026-10-03)
+
+The maintainer's review of the first tufts (#18): good, but sparser than
+the painted hill they replaced, and moving semi-randomly per tuft instead
+of in the waves the first iteration simulated. A tuft's lean was a gust
+term (about ±0.12 of its height) plus its own flutter (about ±0.07), so
+the shared field drowned in jitter; and the field itself, value noise
+whose `2b − 1` rarely passes ±0.5, made weak blotches rather than waves.
+
+- **Waves**: `waveShape` (wind-field.ts) is now fronts across the wind,
+  one `WAVELENGTH` (320 design pixels; it divides the travel wrap) apart,
+  carried downwind, bent ±3.5 radians by slow noise so they never run in
+  straight bars, with a little finer texture, and strong only where a gust
+  patch passes (15% elsewhere). The plants share it.
+- **Coherence**: a tuft's lean is the steady push plus 0.45 of the wave
+  at its base (times the wind's strength), with a trace of its own flutter
+  (0.012). Neighbors lean almost as one (correlation above 0.9 a tuft's
+  width apart); tufts half a wave apart do not; the pattern travels
+  downwind (`tests/ui/grass.test.ts`).
+- **Sheen**: as in the first iteration, the waves show as light: a tuft
+  bent beyond its steady lean is paler (toward `SHEEN.color`, by up to 0.3,
+  scaled by daylight), one standing up between the waves darker (by up to
+  0.2). The GPU applies it per tuft in the grass's fragment shader;
+  Software draws each tuft from the nearest of five sheen levels of the
+  lit atlas, made once per light (patches too, at each level).
+- **Density**: smaller tufts (10 to 88 design pixels), closer together,
+  mostly slender kinds (round dense tufts read as blobs when small): the
+  full field is 12,948 tufts. Both tiers draw only each tuft's own
+  rectangle of its cell (`TUFT_RECT`), so the cells' transparent margins
+  cost no fill.
+- **Software plants fewer** (ADR 0018 allows a reduced software tier).
+  The GPU plants 7,369 tufts at Balanced and High (about 1.5 screens of
+  quads a frame); without a GPU the canvas is often filled on the CPU,
+  where that many slowed the whole page (under headless Chromium, the
+  time slider and hovering stalled and tests timed out). Software plants
+  3,336 (0.67 screens, about what the first tufts took) at every preset,
+  as the GPU does at Low, so the tiers are compared there. This reverses
+  the first iteration's "the same field on both tiers".
+- **Software patches** now hold the wind's steady lean and are used at
+  rest too (copied as they are), lean only by the difference while
+  moving, take every tuft under 60 design pixels, and draw each sheen
+  level only when first needed; their cache no longer changes when a
+  plant is hovered. Before that, each hover and each relight (each step of
+  the time slider) redrew every far tuft five times.
+- **Grass at night** goes as grey as the ground (`LAYERS.grass`: the
+  sprites' light, but full night vision; the plants keep half their color
+  because it carries Git meaning).
+
+Surface Pro, 8 plants, high wind, percent of one core (Low / Balanced /
+High): GPU 1 / 69 / 98, High at 30 frames a second; Software 2 / 103 /
+176, as the first tufts (4 / 102 / 175). Before the quads were trimmed,
+the HD 4000 could not keep High at 30; before Software's cap it cost
+110 at Balanced. Under headless Chromium on this 2-core machine, one
+browser test that drags the time slider through 35 relights takes 26–31
+of its 30 seconds, as on `main` (27); on CI it takes 6–10.
+
 ## Verification
 
 - Unit: `tests/ui/grass.test.ts` (planting on the crest, back to front,

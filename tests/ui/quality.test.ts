@@ -19,7 +19,7 @@ describe("quality presets", () => {
       particles: { gpu: 1, software: 1 },
       sway: true,
       // The grass tufts came later (ADR 0021).
-      grass: 0.75,
+      grass: { gpu: 0.75, software: 0.5 },
     });
   });
 
@@ -35,7 +35,8 @@ describe("quality presets", () => {
       expect(less.particles.software).toBeLessThanOrEqual(
         more.particles.software,
       );
-      expect(less.grass).toBeLessThanOrEqual(more.grass);
+      expect(less.grass.gpu).toBeLessThanOrEqual(more.grass.gpu);
+      expect(less.grass.software).toBeLessThanOrEqual(more.grass.software);
     }
     expect(low.sway).toBe(false);
     expect(high.sway).toBe(true);

@@ -96,6 +96,9 @@ export const LAYERS = {
   ridge: { haze: 0.5, translucency: 0, fill: false, night: 1 },
   hill: { haze: 0, translucency: 0.6, fill: true, night: 1 },
   sprites: { haze: 0, translucency: 0.9, fill: true, night: 0.5 },
+  // Lit as the sprites, but grass goes as dark at night as the ground
+  // (the sprites keep some light, to stay readable).
+  grass: { haze: 0, translucency: 0.9, fill: true, night: 1 },
 } as const satisfies Record<string, LayerLight>;
 
 const mirrored = (v: Vector3): Vector3 => ({ ...v, z: Math.abs(v.z) });

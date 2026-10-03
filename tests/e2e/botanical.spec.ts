@@ -462,6 +462,9 @@ test("the GPU tier draws the plants like Software, lit at once", async ({
   const garden = page.locator(".garden-canvas");
   const drawing = page.getByLabel("Drawing", { exact: true });
   const sky = page.getByLabel("Sky", { exact: true });
+  // Low plants the same grass on both tiers (Software plants less above
+  // it, ADR 0021).
+  await page.getByLabel("Quality", { exact: true }).selectOption("low");
   // Software by name: on graphics hardware (--headed), Auto is the GPU.
   await drawing.selectOption("software");
   await expect(garden).toHaveAttribute("data-tier", "software");
