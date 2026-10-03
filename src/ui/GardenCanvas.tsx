@@ -578,7 +578,7 @@ class Painter {
         continue;
       }
       const pose = plantBend(plant, seconds, poses);
-      if (pose) {
+      if (pose && seconds !== null) {
         this.bent(g, plant, at, cached, frame, art, badges, seconds, pose, t);
         continue;
       }
