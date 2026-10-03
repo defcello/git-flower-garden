@@ -159,6 +159,7 @@ checking. Unknown keys are errors.
 | `monitor.remotePollSeconds` | `60` | Remote fetch interval (10–86400); failures back off up to 15 minutes |
 | `monitor.maxConcurrentFetches` | `2` | Fetches running at once across all repositories (1–16) |
 | `monitor.fetchTimeoutSeconds` | `120` | Per-fetch limit; raise it for a very large first fetch (10–3600) |
+| `display.renderer` | `technical` | The view to open on until the viewer picks one: `technical`, `canvas`, `svg`, `pixel`, or a renderer you added ([docs/renderers.md](renderers.md)); an unknown id falls back to `technical` |
 | `display.reducedMotion` | `false` | Reduce motion further (the OS setting is always honored) |
 | `environment.enabled` | `true` | Follow the real sun, moon, and stars in the garden view; `false` lights it by a fixed noon sun |
 | `environment.latitude`, `environment.longitude` | Blacksburg, Virginia | Your location in degrees; north and east are positive. Give both or neither |

@@ -9,6 +9,17 @@ change configuration or behavior, and the notes say how.
 
 ### Changes
 
+- **Pluggable renderers.** The browser UI now has separate layers: a Model
+  store for the service's data, shared view models (repository health, and
+  the sky and weather), an app shell, and renderers that register in one
+  file. A new **Pixel art** view draws the same repositories, sky, and
+  weather as a small pixel garden and serves as a template for your own.
+  Open any view with `?renderer=<id>`, or set `display.renderer` in the
+  configuration. It now accepts any renderer id, and unknown ids fall back
+  to the technical view. Guides: [renderers](docs/renderers.md) and the
+  [HTTP API](docs/api.md) for renderers outside the browser.
+  ([ADR 0022](docs/decisions/0022-pluggable-renderers.md))
+
 - **Grass moves with the wind.** The hill is covered in dense painted
   grass tufts that bend with the live forecast's wind: leaning downwind as
   it blows, and swept together by waves that roll across the hill as the

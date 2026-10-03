@@ -68,7 +68,8 @@ export interface Config {
     maxConcurrentFetches: number;
     fetchTimeoutSeconds: number;
   };
-  display: { renderer: "technical"; reducedMotion: boolean };
+  /** `renderer` names a browser renderer (src/ui/renderers/registry.ts). */
+  display: { renderer: string; reducedMotion: boolean };
   repositories: RepositoryConfig[];
   /** Real-time sky (ADR 0018). Computed offline; nothing leaves the machine. */
   environment: EnvironmentConfig;
@@ -123,6 +124,9 @@ export function systemTimeZone(): string {
 
 /** Where the sky is computed when no place is configured. */
 export const DEFAULT_PLACE = { ...BLACKSBURG, timeZone: BLACKSBURG_ZONE };
+
+/** A renderer id, as `display.renderer` and the registry name it. */
+export const RENDERER_ID = /^[a-z][a-z0-9-]{0,39}$/;
 
 export const DEFAULTS = {
   server: { host: "127.0.0.1", port: 4783 },
@@ -424,11 +428,19 @@ export function validateConfig(
     display.reducedMotion,
     false,
   );
-  if (display.renderer !== undefined && display.renderer !== "technical") {
-    err(
-      "/display/renderer",
-      'must be "technical" (the garden renderer is not available yet)',
-    );
+  // The service cannot know which renderers a browser build registers, so
+  // any well-formed id is accepted; the browser falls back from unknown ids.
+  let renderer: string = DEFAULTS.display.renderer;
+  if (display.renderer !== undefined) {
+    if (
+      typeof display.renderer !== "string" ||
+      !RENDERER_ID.test(display.renderer)
+    )
+      err(
+        "/display/renderer",
+        "must be a renderer id: lowercase letters, digits, and hyphens, starting with a letter (at most 40 characters)",
+      );
+    else renderer = display.renderer;
   }
   const webhookSection = section(root, "webhooks", [
     "enabled",
@@ -726,7 +738,7 @@ export function validateConfig(
       server: { host, port },
       history: { businessDays, weekdays, timeZone, maxRecentCommits },
       monitor: monitorValues,
-      display: { renderer: "technical", reducedMotion },
+      display: { renderer, reducedMotion },
       repositories,
       environment: environmentConfig,
       webhooks: {

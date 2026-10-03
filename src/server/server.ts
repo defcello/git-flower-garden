@@ -150,6 +150,7 @@ export function repositoriesJson(
       timeZone: service.config.history.timeZone,
       businessDays: service.config.history.businessDays,
       reducedMotion: service.config.display.reducedMotion,
+      renderer: service.config.display.renderer,
       windowStartMs: service.windowStartMs(),
       notice: health.notice ?? null,
       environment: environmentJson(

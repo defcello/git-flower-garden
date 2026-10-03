@@ -102,6 +102,16 @@ git-flower-garden is built to run on your machine and nowhere else.
 The public demo shows only public repositories and runs entirely in your
 browser. See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
+## Build your own renderer
+
+The garden is one way to draw the data. The service supplies Git history
+and the sky; renderers decide what it looks like. Pick one from the *View*
+menu, with `?renderer=<id>` in the URL, or with `display.renderer` in the
+configuration. The repository includes the technical graph, the hillside
+garden, and a small pixel-art garden that you can copy as a template. See
+[Build your own renderer](docs/renderers.md) for browser renderers, or the
+[HTTP API](docs/api.md) for renderers in another language or engine.
+
 ## Project status and contributing
 
 Version 0.3 is a beta. The technical view is complete. The garden view is in
