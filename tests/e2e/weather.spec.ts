@@ -116,6 +116,10 @@ test("grass tufts bend in the wind on both tiers and return exactly to rest", as
     expect(
       Number(await page.locator(grass).getAttribute("data-tufts")),
     ).toBeGreaterThan(500);
+    // Running first, so the rest below is the settled tier's, not a frame
+    // from while it started.
+    const starting = await grassPixels(page, grass);
+    await expect.poll(() => grassPixels(page, grass)).not.toBe(starting);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect
       .poll(async () => {
