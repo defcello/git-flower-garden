@@ -23,7 +23,7 @@ import {
   threeHeads,
 } from "../../src/demo/fixtures.ts";
 import { startApp, type RunningApp } from "../../src/server/app.ts";
-import { HILLSIDE_SLOTS, hillsideSlots } from "../../src/ui/hillside.ts";
+import { hillsideLayout } from "../../src/ui/hillside.ts";
 
 const CYAN = "rgb(0, 229, 255)";
 
@@ -156,11 +156,12 @@ async function cyanPixels(page: Page) {
   });
 }
 
-/** A point on the plant not under any other element (an icon or another plant). */
+/** A point on the plant not under another plot (its own icon may cover it). */
 async function exposedPoint(page: Page, id: string) {
   return page.evaluate((plotId) => {
-    const plant = document.querySelector(`[data-plot="${plotId}"] .plant`);
-    if (!plant) return null;
+    const plot = document.querySelector(`[data-plot="${plotId}"]`);
+    const plant = plot?.querySelector(".plant");
+    if (!plot || !plant) return null;
     const targets = plant.querySelectorAll(
       ".commit .hit, .plant-bed, .plant-stake, .stake-tag",
     );
@@ -171,7 +172,9 @@ async function exposedPoint(page: Page, id: string) {
           const x = box.left + box.width * fx;
           const y = box.top + box.height * fy;
           const hit = document.elementFromPoint(x, y);
-          if (hit && plant.contains(hit)) return { x, y };
+          // The plot's own focus icon may sit over a small bed: still a
+          // target for this repository.
+          if (hit && plot.contains(hit)) return { x, y };
         }
       }
     }
@@ -383,11 +386,11 @@ test("empty and broken repositories stay visible without text, and are targets t
   await expect(missing.locator(".status")).toContainText("Error");
 });
 
-test("small gardens are spread evenly over the fixed hillside slots", async ({
+test("small gardens grow where the hillside layout places them", async ({
   page,
 }) => {
   await openScene(page, small.url, 5);
-  const expected = hillsideSlots(5).map((s) => HILLSIDE_SLOTS[s]);
+  const expected = hillsideLayout(5);
   const bases = await basePoints(page);
   expect(bases).toHaveLength(5);
   for (const [i, base] of bases.entries()) {
@@ -442,9 +445,10 @@ test("64 plants: each grows from its own slot, and all 64 icons are reachable", 
 }) => {
   test.setTimeout(180_000);
   await openScene(page, full.url, 64);
+  const layout = hillsideLayout(64);
   const bases = await basePoints(page);
   for (const [i, base] of bases.entries()) {
-    const slot = HILLSIDE_SLOTS[i];
+    const slot = layout[i];
     if (!slot) throw new Error("slot");
     const id = `r${String(i)}`;
     expect(Math.abs(base.x - (slot.x / 100) * 1920), id).toBeLessThan(2);
@@ -454,7 +458,7 @@ test("64 plants: each grows from its own slot, and all 64 icons are reachable", 
   // and outlines exactly its own plant.
   for (let i = 0; i < 64; i++) {
     const id = `r${String(i)}`;
-    const slot = HILLSIDE_SLOTS[i];
+    const slot = layout[i];
     if (!slot) throw new Error("slot");
     const icon = await iconCenter(page, id);
     expect(Math.abs(icon.x - (slot.iconX / 100) * 1920), id).toBeLessThan(2);

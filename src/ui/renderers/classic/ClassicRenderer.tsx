@@ -37,8 +37,8 @@ import {
   type Tier,
 } from "../../motion.ts";
 import {
-  HILLSIDE_SLOTS,
-  hillsideSlots,
+  HILLSIDE_CAPACITY,
+  hillsideLayout,
   type HillsideSlot,
 } from "../../hillside.ts";
 import { SceneCanvas } from "../../SceneCanvas.tsx";
@@ -72,13 +72,15 @@ export function ClassicRenderer({
     rendererId === "canvas" || rendererId === "svg" ? rendererId : "technical";
   const repos = garden.repositories;
   const focused = repos.find((r) => r.id === focusedId);
-  // The hillside has 64 fixed plant slots; dense planting is intended (focus
-  // view isolates one plant). Larger gardens use the card layout.
-  const sceneMode =
-    mode !== "technical" && repos.length <= HILLSIDE_SLOTS.length;
-  const sceneSlots = sceneMode ? hillsideSlots(repos.length) : [];
-  const slotOf = (index: number) =>
-    sceneMode ? (HILLSIDE_SLOTS[sceneSlots[index] ?? 0] ?? null) : null;
+  // Up to 64 plants grow on the hillside (hillside.ts lays them out); dense
+  // planting is intended (focus view isolates one plant). Larger gardens use
+  // the card layout.
+  const sceneMode = mode !== "technical" && repos.length <= HILLSIDE_CAPACITY;
+  const sceneSlots = useMemo(
+    () => (sceneMode ? hillsideLayout(repos.length) : []),
+    [sceneMode, repos.length],
+  );
+  const slotOf = (index: number) => sceneSlots[index] ?? null;
   // With the Canvas compositor the hillside's art is one scene, drawn by
   // one canvas (ADR 0018); each plot keeps only its hit and label layer.
   const sceneDrawn = sceneMode && mode === "canvas";
@@ -325,7 +327,7 @@ interface PlotProps {
   onFocus: () => void;
   onSelect: (oid: string) => void;
   onHover: (node: GraphNodeJson | null, event?: React.PointerEvent) => void;
-  /** Fixed hillside slot, or null when plots are laid out as cards. */
+  /** Hillside position, or null when plots are laid out as cards. */
   slot: HillsideSlot | null;
 }
 
