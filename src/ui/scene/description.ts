@@ -15,7 +15,7 @@
 import type { GraphJson } from "../../api/types.ts";
 import { botanicalScene, type Scene } from "../botanical.ts";
 import type { HillsideSlot } from "../hillside.ts";
-import { SWAY_ANGLE } from "../sway.ts";
+import { MAX_SWAY } from "../sway.ts";
 import { DESIGN } from "./view.ts";
 
 /** Backdrop layers, back to front, each covering the design space. */
@@ -96,7 +96,7 @@ export function sceneBounds(scene: Scene, graph: GraphJson): Box {
     bottom = Math.max(bottom, y + r);
   };
   for (const sprite of scene.sprites)
-    reach(sprite.x, sprite.y, sprite.size * (0.71 + SWAY_ANGLE * 2) + 1);
+    reach(sprite.x, sprite.y, sprite.size * (0.71 + 1.12 * MAX_SWAY) + 1);
   for (const knot of scene.knots) reach(knot.x, knot.y, knot.r);
   for (const ground of scene.grounds)
     reach(ground.x, ground.y, ground.width / 2);

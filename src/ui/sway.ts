@@ -16,8 +16,14 @@ import {
   type WindField,
 } from "./scene/wind-field.ts";
 
-/** Largest rocking angle, in radians (about 3.4°). */
-export const SWAY_ANGLE = 0.06;
+/**
+ * Largest rocking angle in the calm breeze, in radians (about 8°): enough
+ * that leaves and flowers visibly swing with the waves rolling through the
+ * grass, though they pivot where they meet the stem.
+ */
+export const SWAY_ANGLE = 0.14;
+/** How far the breeze leans every sprite downwind, in radians (about 3.4°). */
+export const WIND_LEAN = 0.06;
 /** Seconds per sway, the slowest and fastest. */
 const PERIOD_MIN = 3.2;
 const PERIOD_MAX = 5.2;
@@ -51,7 +57,9 @@ export function cloudTravel(): number {
  * The sway angle of one sprite at `seconds`. The wind field at `position`
  * (the sprite's place on the hillside) brings the gusts that roll through
  * the grass, and each sprite adds its own seeded rhythm, so neighbors never
- * move in lockstep. Always within ±SWAY_ANGLE × `strength` (the wind).
+ * move in lockstep; a wind across the view leans them all downwind, more
+ * as each gust arrives. Always within ±(SWAY_ANGLE + WIND_LEAN) ×
+ * `strength` (the wind).
  */
 export function swayAngle(
   sprite: Sprite,
@@ -62,12 +70,23 @@ export function swayAngle(
   const seed = seeded(`${sprite.key}|sway`);
   const period = PERIOD_MIN + (PERIOD_MAX - PERIOD_MIN) * seed;
   const own = Math.sin((2 * Math.PI * seconds) / period + seed * 2 * Math.PI);
-  const field = windWave(position.x, position.y, seconds, swayWind(seconds));
-  return SWAY_ANGLE * strength * (0.55 * own + 0.45 * field);
+  const wind = swayWind(seconds);
+  const field = windWave(position.x, position.y, seconds, wind);
+  // Across the view only: a wind into the scene or toward the viewer
+  // leans nothing sideways.
+  const across =
+    Math.abs(wind.windX) > 0.15
+      ? wind.windX / Math.hypot(wind.windX, wind.windZ ?? 0)
+      : 0;
+  const lean = WIND_LEAN * across * (0.5 + 0.5 * Math.max(0, field));
+  return strength * (SWAY_ANGLE * (0.35 * own + 0.65 * field) + lean);
 }
 
-/** The strongest wind sway, relative to the calm breeze (about 7.5°). */
+/** The strongest wind sway, relative to the calm breeze (about 26° at most). */
 export const MAX_WIND_STRENGTH = 2.2;
+
+/** The largest angle any sprite turns, radians (swayAngle at MAX_WIND_STRENGTH). */
+export const MAX_SWAY = (SWAY_ANGLE + WIND_LEAN) * MAX_WIND_STRENGTH;
 
 /**
  * How strongly the garden sways in a wind of `metersPerSecond`: a light

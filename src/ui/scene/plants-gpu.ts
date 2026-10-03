@@ -57,6 +57,13 @@ import {
   type Tuft,
 } from "./grass.ts";
 import { windHeading, type WindField } from "./wind-field.ts";
+import {
+  bendReach,
+  bendSprites,
+  plantBend,
+  STEM_ROWS,
+  type PlantBend,
+} from "./plant-bend.ts";
 import { settledFrame, type Frame } from "../transition.ts";
 import { groundLine, toDesign, type PlantDescription } from "./description.ts";
 import type { SceneDescription } from "./description.ts";
@@ -107,14 +114,27 @@ vec4 wilt(vec4 c) {
 const QUAD_VS = `#version 300 es
 uniform vec4 uRect;
 uniform vec3 uGround; // shear, squash, base y
+uniform vec4 uBend; // plant-bend.ts: bend, heading x, base y, height (canvas)
+uniform float uBendZ; // VIEW_TILT times |heading z|
 uniform vec2 uResolution;
 out vec2 vUv;
 ${TO_CLIP_GLSL}
 void main() {
-  vec2 uv = vec2(gl_VertexID == 1 || gl_VertexID == 3 ? 1.0 : 0.0,
-                 gl_VertexID >= 2 ? 1.0 : 0.0);
+  // A strip of STEM_ROWS rows, so a bent plant curves.
+  vec2 uv = vec2(float(gl_VertexID % 2),
+                 float(gl_VertexID / 2) / ${STEM_ROWS.toFixed(1)});
   vUv = uv;
   vec2 p = uRect.xy + uv * uRect.zw;
+  if (uBend.x != 0.0) {
+    // plant-bend.ts bendAt: every point of a row moves as the stems' arc
+    // does there, so the stems keep their length.
+    float h = clamp(uBend.z - p.y, 0.0, uBend.w);
+    float phi = uBend.x * h / uBend.w;
+    bool small = abs(phi) < 1e-4;
+    float along = small ? h * phi * 0.5 : h * (1.0 - cos(phi)) / phi;
+    float rise = small ? h : h * sin(phi) / phi;
+    p += vec2(uBend.y * along, h - rise + uBendZ * along);
+  }
   if (uGround.y != 0.0) {
     float h = uGround.z - p.y;
     p = vec2(p.x + uGround.x * h, uGround.z + uGround.y * h);
@@ -408,6 +428,8 @@ export class PlantsGpu implements GpuRenderer {
     this.#quadU = uniforms(gl, this.#quad, [
       "uRect",
       "uGround",
+      "uBend",
+      "uBendZ",
       "uResolution",
       "uTexture",
       "uMode",
@@ -601,6 +623,7 @@ export class PlantsGpu implements GpuRenderer {
     );
     const wind = seconds === null ? currentWind() : swayWind(seconds);
     const heading = windHeading(wind);
+    const poses = poseFrame(wind);
     gl.uniform2f(gu.uHeading ?? null, heading.x, heading.z);
     this.#uploadGrass(tufts, seconds, wind);
     let next = 0;
@@ -626,10 +649,13 @@ export class PlantsGpu implements GpuRenderer {
       const k = plant.scale * t;
       const at = { k, x: corner.x * t, y: corner.y * t };
       const entry = this.#entry(plant, at, `${size}|${badgeKey}`);
+      const pose = plantBend(plant, seconds, poses);
+      const bent = pose && { pose, t };
+      const reach = bendReach(pose) * t;
       if (
-        entry.left + entry.width + MARGIN * k < 0 ||
+        entry.left + entry.width + MARGIN * k + reach < 0 ||
         entry.top + entry.height + MARGIN * k < 0 ||
-        entry.left - MARGIN * k > W ||
+        entry.left - MARGIN * k - reach > W ||
         entry.top - MARGIN * k > H
       )
         continue;
@@ -674,10 +700,10 @@ export class PlantsGpu implements GpuRenderer {
         );
         entry.stemsFrame = frame;
       }
-      this.#texture(entry.stems, entry, 1, null, plant.wilting);
+      this.#texture(entry.stems, entry, 1, null, plant.wilting, bent);
       this.#sprites(
         swaySprites(
-          frame.sprites,
+          bendSprites(frame.sprites, plant, pose),
           still ? null : seconds,
           undefined,
           (sprite) => toDesign(plant, sprite.x, sprite.y),
@@ -695,7 +721,7 @@ export class PlantsGpu implements GpuRenderer {
           },
           null,
         );
-        this.#texture(entry.badges, entry, 0, null, plant.wilting);
+        this.#texture(entry.badges, entry, 0, null, plant.wilting, bent);
       }
     }
     grassTo(Infinity);
@@ -881,6 +907,7 @@ export class PlantsGpu implements GpuRenderer {
     mode: 0 | 1 | 2,
     ground: { shadow: PlantShadow; baseY: number } | null = null,
     wilting = false,
+    bend: { pose: PlantBend; t: number } | null = null,
   ): void {
     if (!texture) return;
     const gl = this.#gl;
@@ -899,12 +926,23 @@ export class PlantsGpu implements GpuRenderer {
       ground?.shadow.squash ?? 0,
       ground?.baseY ?? 0,
     );
+    gl.uniform4f(
+      u.uBend ?? null,
+      bend?.pose.bend ?? 0,
+      bend?.pose.heading.x ?? 0,
+      (bend?.pose.baseY ?? 0) * (bend?.t ?? 1),
+      (bend?.pose.height ?? 1) * (bend?.t ?? 1),
+    );
+    gl.uniform1f(
+      u.uBendZ ?? null,
+      VIEW_TILT * Math.abs(bend?.pose.heading.z ?? 0),
+    );
     gl.uniform1i(u.uMode ?? null, mode);
     gl.uniform1i(u.uWilting ?? null, wilting ? 1 : 0);
     gl.activeTexture(gl.TEXTURE3);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.bindVertexArray(this.#empty);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 2 * (STEM_ROWS + 1));
   }
 
   #grounds(
