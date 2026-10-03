@@ -9,6 +9,15 @@ change configuration or behavior, and the notes say how.
 
 ### Changes
 
+- **Flower bushes move with the wind.** Each plant bends with the same
+  wind and gusts as the grass beside it, at half the grass's angle since
+  its stems are stiffer: its stems curve along an arc that keeps their
+  length, its leaves, flowers, and fruit ride with them and swing more
+  visibly about where they meet the stem, and a wind across the view
+  leans them all downwind. A wind into the scene or toward the viewer
+  dips the plants' tops, and gusts buffet them a little sideways. Plants
+  at rest, hovered or focused, and wilting stand still, so what can be
+  clicked never moves.
 - **Plants spread across the hill.** Garden plants are now laid out for the
   number of repositories instead of being picked from a fixed grid. Each
   plant gets its own spot across the hill's width, slightly varied in

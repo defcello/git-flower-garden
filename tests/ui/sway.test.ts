@@ -5,7 +5,9 @@ import {
   MAX_WIND_STRENGTH,
   PROBE_FRAMES,
   PROBE_LIMIT_MS,
+  MAX_SWAY,
   SWAY_ANGLE,
+  WIND_LEAN,
   swayAngle,
   setSwayWind,
   swaySprites,
@@ -39,7 +41,7 @@ describe("sway", () => {
   it("stays within its angle and is the same for the same moment", () => {
     for (let t = 0; t < 30; t += 0.37) {
       const angle = swayAngle(sprite("leaf:1"), t);
-      expect(Math.abs(angle)).toBeLessThanOrEqual(SWAY_ANGLE);
+      expect(Math.abs(angle)).toBeLessThanOrEqual(SWAY_ANGLE + WIND_LEAN);
       expect(swayAngle(sprite("leaf:1"), t)).toBe(angle);
     }
   });
@@ -86,7 +88,7 @@ describe("wind (ADR 0018 step 5)", () => {
     expect(windStrength(0)).toBeLessThan(1);
     expect(windStrength(16)).toBeGreaterThan(1.5);
     expect(windStrength(60)).toBe(MAX_WIND_STRENGTH);
-    expect(SWAY_ANGLE * MAX_WIND_STRENGTH).toBeLessThan(0.14); // about 7.5°
+    expect(MAX_SWAY).toBeLessThan(0.45); // about 26°
     const leaf = sprite("leaf:1");
     for (let t = 0; t < 10; t += 0.7)
       expect(swayAngle(leaf, t, 2)).toBeCloseTo(2 * swayAngle(leaf, t), 12);
@@ -102,6 +104,27 @@ describe("wind (ADR 0018 step 5)", () => {
       expect(Math.abs(angle())).toBeGreaterThan(Math.abs(breeze) * 1.5);
       setSwayWind(0);
       expect(Math.abs(angle())).toBeLessThan(Math.abs(breeze));
+    } finally {
+      setSwayWind(null);
+    }
+  });
+
+  it("leans downwind in a wind across the view, and not in still air", () => {
+    const leaf = sprite("leaf:1");
+    const mean = () => {
+      let sum = 0;
+      for (let t = 0; t < 120; t += 0.25) sum += swayAngle(leaf, t);
+      return sum / 480;
+    };
+    try {
+      setSwayWind(8, 8);
+      const right = mean();
+      setSwayWind(8, -8);
+      const left = mean();
+      expect(right).toBeGreaterThan(0.02);
+      expect(left).toBeLessThan(-0.02);
+      setSwayWind(8, 0, 8);
+      expect(Math.abs(mean())).toBeLessThan(0.02);
     } finally {
       setSwayWind(null);
     }

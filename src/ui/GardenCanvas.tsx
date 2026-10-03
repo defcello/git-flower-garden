@@ -87,6 +87,13 @@ import {
   type Tuft,
 } from "./scene/grass.ts";
 import { windHeading } from "./scene/wind-field.ts";
+import {
+  bendAt,
+  bendSprites,
+  plantBend,
+  STEM_ROWS,
+  type PlantBend,
+} from "./scene/plant-bend.ts";
 import { currentWind, swaySprites, swayWind } from "./sway.ts";
 import {
   blendScenes,
@@ -406,6 +413,12 @@ interface Cached {
   shadow: Placed | null | undefined;
   /** The plant at rest with its outline, wilted if wilting. */
   rest: HTMLCanvasElement | undefined;
+  /** Its grounds and stems, and its badges, as `frame` shows them, to draw bent. */
+  layers?: {
+    frame: Frame;
+    stems: HTMLCanvasElement;
+    badges: HTMLCanvasElement;
+  };
 }
 
 class Painter {
@@ -483,6 +496,7 @@ class Painter {
     const wind = seconds === null ? currentWind() : swayWind(seconds);
     const heading = windHeading(wind);
     const frame = poseFrame(wind);
+    const poses = frame;
     // At rest every tuft holds the wind's steady bend (the same for all),
     // which the patches are drawn with: at rest they are copied as they are.
     const steady = Math.round(steadyBend(wind.speed) * 1000) / 1000;
@@ -563,6 +577,11 @@ class Painter {
         g.drawImage(cached.rest, cached.left, cached.top);
         continue;
       }
+      const pose = plantBend(plant, seconds, poses);
+      if (pose && seconds !== null) {
+        this.bent(g, plant, at, cached, frame, art, badges, seconds, pose, t);
+        continue;
+      }
       g.setTransform(
         at.k,
         0,
@@ -602,6 +621,95 @@ class Painter {
     );
     // Over the art, as the plot's hit layer drew them, but in depth order.
     paintBadges(g, frame.badges, badges);
+  }
+
+  /**
+   * The plant bent in the wind (plant-bend.ts): its grounds and stems, and
+   * its badges, painted once per frame of growth and drawn in STEM_ROWS
+   * rows, each slid along the stems' arc; its sprites moved with them.
+   */
+  private bent(
+    g: CanvasRenderingContext2D,
+    plant: PlantDescription,
+    at: Placement,
+    cached: Cached,
+    frame: Frame,
+    art: LitArt,
+    badges: BadgeStyle,
+    seconds: number,
+    pose: PlantBend,
+    t: number,
+  ): void {
+    const { left, top, width, height } = cached;
+    const layer = (draw: (h: CanvasRenderingContext2D) => void) => {
+      const out = canvasOf(cached);
+      const h = out.getContext("2d");
+      if (h) {
+        h.setTransform(
+          at.k,
+          0,
+          0,
+          at.k,
+          at.x - left - plant.bounds.x * at.k,
+          at.y - top - plant.bounds.y * at.k,
+        );
+        draw(h);
+      }
+      return out;
+    };
+    if (cached.layers?.frame !== frame)
+      cached.layers = {
+        frame,
+        stems: layer((h) => {
+          paintBase(h, frame, art, this.paths);
+        }),
+        badges: layer((h) => {
+          paintBadges(h, frame.badges, badges);
+        }),
+      };
+    const rows = (source: HTMLCanvasElement) => {
+      const step = height / STEM_ROWS;
+      for (let row = 0; row < STEM_ROWS; row++) {
+        const y = row * step;
+        // Each row moved as the stems' arc crosses its middle
+        // (plant-bend.ts bendAt), so the stems keep their length; a pixel
+        // of overlap closes the seams between rows.
+        const { dx, dy } = bendAt(pose, pose.baseY - (top + y + step / 2) / t);
+        g.drawImage(
+          source,
+          0,
+          y,
+          width,
+          step + 1,
+          left + dx * t,
+          top + y + dy * t,
+          width,
+          step + 1,
+        );
+      }
+      g.setTransform(1, 0, 0, 1, 0, 0);
+    };
+    rows(cached.layers.stems);
+    g.setTransform(
+      at.k,
+      0,
+      0,
+      at.k,
+      at.x - plant.bounds.x * at.k,
+      at.y - plant.bounds.y * at.k,
+    );
+    paintSprites(
+      g,
+      swaySprites(
+        bendSprites(frame.sprites, plant, pose),
+        seconds,
+        undefined,
+        (sprite) => toDesign(plant, sprite.x, sprite.y),
+      ),
+      art,
+    );
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (frame.badges.length > 0) rows(cached.layers.badges);
   }
 
   /** The plant's cache entry, emptied when what it shows has changed. */

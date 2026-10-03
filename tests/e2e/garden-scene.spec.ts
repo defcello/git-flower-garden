@@ -402,8 +402,22 @@ test("small gardens grow where the hillside layout places them", async ({
   }
 });
 
-/** Commits whose knot is not painted where their (invisible) node sits. */
-function knotMisses(page: Page): Promise<string[]> {
+/**
+ * Commits whose knot is not painted where their (invisible) node sits, with
+ * the plants at rest: in the wind their stems bend (plant-bend.ts) and the
+ * knots ride them, while the nodes stay where the graph puts them.
+ */
+async function knotMisses(page: Page): Promise<string[]> {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.waitForTimeout(200);
+  try {
+    return await paintedKnotMisses(page);
+  } finally {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+  }
+}
+
+function paintedKnotMisses(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const canvas = document.querySelector<HTMLCanvasElement>(".garden-canvas");
     // Read through a 2D copy, so either tier's canvas works.
