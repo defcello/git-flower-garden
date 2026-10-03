@@ -12,6 +12,8 @@ export interface BandLayers {
   hill: LayerSource;
   sprites: LayerSource;
   spritesMirrored: LayerSource;
+  grass: LayerSource;
+  grassMirrored: LayerSource;
 }
 
 export type BandRequest =
@@ -24,6 +26,8 @@ export interface BandResponse {
   hill: Uint8ClampedArray<ArrayBuffer> | null;
   sprites: Uint8ClampedArray<ArrayBuffer>;
   spritesMirrored: Uint8ClampedArray<ArrayBuffer>;
+  grass: Uint8ClampedArray<ArrayBuffer>;
+  grassMirrored: Uint8ClampedArray<ArrayBuffer>;
 }
 
 let layers: BandLayers | null = null;
@@ -42,6 +46,8 @@ addEventListener("message", (event: MessageEvent<BandRequest>) => {
     hill: request.spritesOnly ? null : relight(layers.hill, p, LAYERS.hill),
     sprites: relight(layers.sprites, p, LAYERS.sprites),
     spritesMirrored: relight(layers.spritesMirrored, p, LAYERS.sprites),
+    grass: relight(layers.grass, p, LAYERS.sprites),
+    grassMirrored: relight(layers.grassMirrored, p, LAYERS.sprites),
   };
   postMessage(response, {
     transfer: [
@@ -49,6 +55,8 @@ addEventListener("message", (event: MessageEvent<BandRequest>) => {
       response.hill,
       response.sprites,
       response.spritesMirrored,
+      response.grass,
+      response.grassMirrored,
     ]
       .filter((b) => b !== null)
       .map((b) => b.buffer),

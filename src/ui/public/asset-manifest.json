@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "scope": "Relit scene art (ADR 0018): flat-lit albedo, normal, and translucency maps for the sprites, ridge, and hill. The P2-A atlas and backdrop are retired to docs/art/p2a/.",
+  "scope": "Relit scene art (ADR 0018, ADR 0021): flat-lit albedo, normal, and translucency maps for the sprites, ridge, ground (the hill), and grass tufts. The P2-A atlas and backdrop are retired to docs/art/p2a/.",
   "assets": [
     {
       "id": "sprites-albedo",
@@ -149,17 +149,17 @@
     {
       "id": "hill-albedo",
       "file": "scene/hill-albedo.png",
-      "sha256": "3b93325f296b26b5e392cd9dcb03e63e6a38f5035d56033ccce7036adf3afcf3",
-      "role": "Flat-lit albedo: grassy hill, transparent above",
+      "sha256": "b43e4feca692d769a0a42da10fea1e4129d574a39d9204c17dee81a495cba5fd",
+      "role": "Flat-lit albedo: plain ground under the grass tufts, transparent above the crest",
       "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
-      "source": "Original text-to-image generation; no reference images supplied",
+      "source": "Image-to-image generation with the previous hill layer (spikes/relight/art/hill-albedo.png) as the layout reference; raw output in docs/art/grass/ground-albedo-codex.png",
       "license": "MIT (project distribution license; see root LICENSE)",
       "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
       "provenance": {
-        "date": "2026-09-27",
-        "tool": "codex exec, built-in image generation",
-        "prompt": "docs/art/prompts.md#hill-layer-flat-lit-albedo",
-        "edits": "None; original output copied unchanged. At load, alpha below 8 snaps to 0 and 240 or above to 255 (keyed transparency is noisy)"
+        "date": "2026-10-02",
+        "tool": "codex exec, built-in image generation; scripts/grass-art.ts",
+        "prompt": "docs/art/prompts.md#ground-layer-flat-lit-albedo",
+        "edits": "Graded darker toward the tufts’ foot (RGB gains 0.55, 0.63, 0.48), and given the previous hill’s crest as a clean alpha (opaque below a smoothed crest line, one-pixel soft edge; the raw output had a checkerboard baked in above its crest), by scripts/grass-art.ts"
       },
       "dimensions": {
         "width": 1672,
@@ -170,51 +170,143 @@
       "scaleVariants": [
         "Drawn to the 1920×1080 design frame, cover-scaled to the viewport and upscaled above 1080p"
       ],
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
     },
     {
       "id": "hill-normal",
       "file": "scene/hill-normal.png",
-      "sha256": "3eae52c37bedb6346cc168943d065cb0b7567b200fa92d3490c081ba8fea43c5",
+      "sha256": "448f737a51e01bc0f06e7379abe6b148841b76e2f43c59953d8a3b5fbe30e075",
       "role": "Normal map for hill-albedo",
-      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
-      "source": "Original text-to-image generation; no reference images supplied",
+      "author": "Derived for git-flower-garden by scripts/grass-art.ts (deterministic, no model)",
+      "source": "The previous hill normal map (Codex, spikes/relight/art/hill-normal-codex.png) and hill-albedo",
       "license": "MIT (project distribution license; see root LICENSE)",
       "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
       "provenance": {
-        "date": "2026-09-27",
-        "tool": "codex exec, built-in image generation",
-        "prompt": "docs/art/prompts.md#hill-layer-normal-map",
-        "edits": "None; original output copied unchanged. Came back with its X axis inverted: negated at load (worker.ts, flipX); otherwise as ridge-normal"
+        "date": "2026-10-02",
+        "tool": "scripts/grass-art.ts",
+        "prompt": "none (derived)",
+        "edits": "The previous map’s X axis corrected (it pointed left) and blurred (box radius 12, twice) to keep the dome without the old blade streaks, plus fine detail from hill-albedo’s luminance; flat outside the crest. Standard OpenGL convention: no correction at load"
       },
       "dimensions": {
         "width": 1672,
         "height": 941
       },
       "alpha": false,
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
     },
     {
       "id": "hill-translucency",
       "file": "scene/hill-translucency.png",
-      "sha256": "1fb71820b9ebab2a3a530bbed12ed8e8fa87f398f91e65107ee53e8c7ab3eeed",
+      "sha256": "720bdfa7fe5101b654e7206f0b72fcbb348d9f350fde9616c60fc5f9e412969e",
       "role": "Translucency map for hill-albedo",
-      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
-      "source": "Original text-to-image generation; no reference images supplied",
+      "author": "Derived for git-flower-garden by scripts/grass-art.ts (deterministic, no model)",
+      "source": "hill-albedo",
       "license": "MIT (project distribution license; see root LICENSE)",
       "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
       "provenance": {
-        "date": "2026-09-27",
-        "tool": "codex exec, built-in image generation",
-        "prompt": "docs/art/prompts.md#hill-layer-translucency-map",
-        "edits": "None; original output copied unchanged. Gray: white passes light, black is opaque; read as luminance inside the albedo's silhouette"
+        "date": "2026-10-02",
+        "tool": "scripts/grass-art.ts",
+        "prompt": "none (derived)",
+        "edits": "Short turf passes little light: 0.12 to 0.30 by luminance, inside the albedo’s silhouette"
       },
       "dimensions": {
         "width": 1672,
         "height": 941
       },
       "alpha": false,
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (2026-09-27). No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
+    },
+    {
+      "id": "grass-albedo",
+      "file": "scene/grass-albedo.png",
+      "sha256": "e93af10cc17f92cabc2c4e48b9eaea29e057bc477e4c95314e724d66aa1f4fad",
+      "role": "Flat-lit albedo: four grass tufts",
+      "author": "Generated for git-flower-garden with the Codex CLI's built-in image generation",
+      "source": "Original text-to-image generation; no reference images supplied",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-10-02",
+        "tool": "codex exec, built-in image generation",
+        "prompt": "docs/art/prompts.md#grass-tufts-flat-lit-albedo",
+        "edits": "None; original output copied unchanged (also kept as docs/art/grass/grass-albedo-codex.png). At load, alpha below 8 snaps to 0 and 240 or above to 255"
+      },
+      "dimensions": {
+        "width": 1254,
+        "height": 1254
+      },
+      "alpha": true,
+      "anchorConvention": "Normalized cell coordinates of where each tuft grows from (measured); drawn bending about it",
+      "cells": [
+        {
+          "name": "dense-tuft",
+          "rect": [0, 0, 627, 627],
+          "anchor": [0.515, 0.998]
+        },
+        {
+          "name": "tall-tuft",
+          "rect": [627, 0, 627, 627],
+          "anchor": [0.521, 0.998]
+        },
+        {
+          "name": "broad-clump",
+          "rect": [0, 627, 627, 627],
+          "anchor": [0.548, 0.944]
+        },
+        {
+          "name": "seeding-tuft",
+          "rect": [627, 627, 627, 627],
+          "anchor": [0.523, 0.944]
+        }
+      ],
+      "scaleVariants": [
+        "Resampled to a 512×512 atlas (256-pixel cells) before relighting; a mirrored copy is lit for mirrored tufts"
+      ],
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
+    },
+    {
+      "id": "grass-normal",
+      "file": "scene/grass-normal.png",
+      "sha256": "aaae830c03ece72688f06a9d44f2ce6ad146f2ad41671ea1aae39bf71391096f",
+      "role": "Normal map for grass-albedo",
+      "author": "Derived for git-flower-garden by scripts/grass-art.ts (deterministic, no model)",
+      "source": "grass-albedo",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-10-02",
+        "tool": "scripts/grass-art.ts (deriveNormals, as the relight spike)",
+        "prompt": "none (derived); Codex’s own normal map for the tufts did not line up with the albedo and was discarded",
+        "edits": "Each blade a rounded strip from the silhouette (radius 5) with luminance detail (2); OpenGL convention"
+      },
+      "dimensions": {
+        "width": 1254,
+        "height": 1254
+      },
+      "alpha": true,
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
+    },
+    {
+      "id": "grass-translucency",
+      "file": "scene/grass-translucency.png",
+      "sha256": "1e1df549a9c8f0b05e4b737d12184fa26ec3a1a06d04d001406b21804c93c4d3",
+      "role": "Translucency map for grass-albedo",
+      "author": "Derived for git-flower-garden by scripts/grass-art.ts (deterministic, no model)",
+      "source": "grass-albedo",
+      "license": "MIT (project distribution license; see root LICENSE)",
+      "attribution": "Provenance retained in this manifest and docs/art/prompts.md",
+      "provenance": {
+        "date": "2026-10-02",
+        "tool": "scripts/grass-art.ts",
+        "prompt": "none (derived); Codex’s own translucency map for the tufts did not line up with the albedo and was discarded",
+        "edits": "Thin blades pass light, most toward their tips and narrow edges, least at each tuft’s foot"
+      },
+      "dimensions": {
+        "width": 1254,
+        "height": 1254
+      },
+      "alpha": false,
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
     }
   ],
   "location": "Source images are in src/ui/assets/ of the repository; the build fingerprints their file names under dist/ui/assets/."

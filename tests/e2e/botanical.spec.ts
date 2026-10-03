@@ -122,7 +122,9 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
   const grass = async () =>
     (await brightness(page, [[0.49, 0.9, 0.02, 0.01]]))[0] ?? 0;
   await sky.selectOption("noon");
-  await expect.poll(grass).toBeGreaterThan(60);
+  // The ground under the tufts is graded dark, as the shade at their foot
+  // (ADR 0021).
+  await expect.poll(grass).toBeGreaterThan(40);
   const day = await grass();
   await sky.selectOption("night");
   await expect.poll(grass).toBeLessThan(day / 4);

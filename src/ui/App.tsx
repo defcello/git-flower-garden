@@ -449,7 +449,14 @@ export function App() {
               : undefined
           }
         >
-          {sceneDrawn && <GardenCanvas plants={plants} light={shownLight} />}
+          {/* The SVG compositor's plots draw their own plants, over the grass. */}
+          {sceneMode && (
+            <GardenCanvas
+              plants={plants}
+              light={shownLight}
+              grassOnly={!sceneDrawn}
+            />
+          )}
           {sceneMode && <WeatherOverlay light={shownLight} effects={effects} />}
           {repos.map((repo, index) => (
             <Plot

@@ -21,6 +21,9 @@ import ridgeNormal from "../assets/scene/ridge-normal.png";
 import spritesAlbedo from "../assets/scene/sprites-albedo.png";
 import spritesNormal from "../assets/scene/sprites-normal.png";
 import spritesTranslucency from "../assets/scene/sprites-translucency.png";
+import grassAlbedo from "../assets/scene/grass-albedo.png";
+import grassNormal from "../assets/scene/grass-normal.png";
+import grassTranslucency from "../assets/scene/grass-translucency.png";
 import {
   BOUNDARY_COLOR,
   HALO_COLOR,
@@ -86,7 +89,14 @@ const queued: Record<Channel, Request | null> = {
 };
 
 function closeAll(b: LitBitmaps) {
-  for (const bitmap of [b.ridge, b.hill, b.sprites, b.spritesMirrored])
+  for (const bitmap of [
+    b.ridge,
+    b.hill,
+    b.sprites,
+    b.spritesMirrored,
+    b.grass,
+    b.grassMirrored,
+  ])
     bitmap?.close();
 }
 
@@ -192,6 +202,9 @@ function start(): Worker | null {
       spritesAlbedo,
       spritesNormal,
       spritesTranslucency,
+      grassAlbedo,
+      grassNormal,
+      grassTranslucency,
     },
   };
   worker.postMessage(request);

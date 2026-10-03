@@ -141,7 +141,15 @@ async function cyanPixels(page: Page) {
         data?.[i + 2],
         data?.[i + 3],
       ];
-      if ((a ?? 0) > 60 && (r ?? 255) < 120 && (g ?? 0) > 170 && (b ?? 0) > 190)
+      // Cyan, or the outline's glow over the grass (whose blue is low):
+      // teal, blue well above red.
+      if (
+        (a ?? 0) > 60 &&
+        (r ?? 255) < 120 &&
+        (g ?? 0) > 150 &&
+        (b ?? 0) > 120 &&
+        (b ?? 0) - (r ?? 0) > 60
+      )
         count++;
     }
     return count;
@@ -236,7 +244,8 @@ test("hovering a plant reveals its icon and name and outlines it in cyan; clicki
   const unlit = await cyanPixels(page);
   await page.mouse.move(point.x, point.y);
   await expect.poll(() => lit(page)).toEqual(["fork"]);
-  await expect.poll(() => cyanPixels(page)).toBeGreaterThan(unlit + 100);
+  // Over the grass (ADR 0021) only the glow's stronger half reads as cyan.
+  await expect.poll(() => cyanPixels(page)).toBeGreaterThan(unlit + 60);
   const fork = page.locator('[data-plot="fork"]');
   await expect(fork.locator(".plot-card")).toHaveCSS("opacity", "1");
   await expect(fork.locator("h2")).toHaveText("Fork and merge");
@@ -621,7 +630,8 @@ test("with the GPU tier, plants keep their places, outline, and sway, and a lost
   const unlit = await cyanPixels(page);
   await page.mouse.move(point.x, point.y);
   await expect.poll(() => lit(page)).toEqual(["fork"]);
-  await expect.poll(() => cyanPixels(page)).toBeGreaterThan(unlit + 100);
+  // Over the grass (ADR 0021) only the glow's stronger half reads as cyan.
+  await expect.poll(() => cyanPixels(page)).toBeGreaterThan(unlit + 60);
   await page.mouse.move(2, 2);
   await expect.poll(() => lit(page)).toEqual([]);
 

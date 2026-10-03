@@ -59,6 +59,16 @@ export function windStrength(metersPerSecond: number): number {
 
 let currentStrength = 1;
 
+/** The wind now, without moving the waves on (for poses at rest). */
+export function currentWind(): WindField {
+  return wind;
+}
+
+/** How strongly the garden sways in the current wind (windStrength). */
+export function swayStrength(): number {
+  return currentStrength;
+}
+
 /** Set the wind the garden sways in (null: no weather; field retains a default 4 m/s breeze). */
 export function setSwayWind(metersPerSecond: number | null, windX = 0): void {
   currentStrength =
