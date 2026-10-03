@@ -170,7 +170,7 @@
       "scaleVariants": [
         "Drawn to the 1920×1080 design frame, cover-scaled to the viewport and upscaled above 1080p"
       ],
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (generated 2026-10-02; approved 2026-10-03). No claim of exclusive copyright in generated output."
     },
     {
       "id": "hill-normal",
@@ -192,7 +192,7 @@
         "height": 941
       },
       "alpha": false,
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (generated 2026-10-02; approved 2026-10-03). No claim of exclusive copyright in generated output."
     },
     {
       "id": "hill-translucency",
@@ -214,7 +214,7 @@
         "height": 941
       },
       "alpha": false,
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (generated 2026-10-02; approved 2026-10-03). No claim of exclusive copyright in generated output."
     },
     {
       "id": "grass-albedo",
@@ -262,7 +262,7 @@
       "scaleVariants": [
         "Resampled to a 512×512 atlas (256-pixel cells) before relighting; a mirrored copy is lit for mirrored tufts"
       ],
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (generated 2026-10-02; approved 2026-10-03). No claim of exclusive copyright in generated output."
     },
     {
       "id": "grass-normal",
@@ -284,7 +284,7 @@
         "height": 1254
       },
       "alpha": true,
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (generated 2026-10-02; approved 2026-10-03). No claim of exclusive copyright in generated output."
     },
     {
       "id": "grass-translucency",
@@ -306,7 +306,7 @@
         "height": 1254
       },
       "alpha": false,
-      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Pending the maintainer's approval for redistribution under the project's MIT license (generated 2026-10-02). No claim of exclusive copyright in generated output."
+      "redistribution": "Intended for redistribution with the MIT project; no third-party source artwork incorporated. Approved by the maintainer for redistribution under the project's MIT license (generated 2026-10-02; approved 2026-10-03). No claim of exclusive copyright in generated output."
     }
   ],
   "location": "Source images are in src/ui/assets/ of the repository; the build fingerprints their file names under dist/ui/assets/."
