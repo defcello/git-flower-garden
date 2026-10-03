@@ -296,8 +296,11 @@ export class LandscapeGpu implements GpuRenderer {
   draw(
     state: LightingState,
     weather: {
-      clouds: { canvas: HTMLCanvasElement; key: string } | null;
+      /** The clouds' raster, the canvas pixels it spans across. */
+      clouds: { canvas: HTMLCanvasElement; key: string; span: number } | null;
       rainbow: { canvas: HTMLCanvasElement; key: string } | null;
+      /** Where its copies' left edges go (weather-sky.ts cloudPlaces). */
+      cloudPlaces?: readonly number[];
     } = { clouds: null, rainbow: null },
   ): boolean {
     const gl = this.#gl;
@@ -358,7 +361,13 @@ export class LandscapeGpu implements GpuRenderer {
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
-    this.#overlay(weather.clouds, "clouds", W, H);
+    for (const x of weather.cloudPlaces ?? [])
+      this.#overlay(weather.clouds, "clouds", W, H, [
+        x,
+        0,
+        weather.clouds?.span ?? W,
+        H,
+      ]);
 
     const layers = this.#layers;
     if (layers !== null) {
@@ -405,12 +414,16 @@ export class LandscapeGpu implements GpuRenderer {
     return layers !== null;
   }
 
-  /** Draw a premultiplied raster over the whole canvas, uploading it if new. */
+  /**
+   * Draw a premultiplied raster over the whole canvas, or over `rect` (x, y,
+   * width, height in canvas pixels), uploading it if new.
+   */
   #overlay(
     raster: { canvas: HTMLCanvasElement; key: string } | null,
     kind: "clouds" | "rainbow",
     W: number,
     H: number,
+    rect: readonly [number, number, number, number] = [0, 0, W, H],
   ): void {
     if (raster === null) return;
     const gl = this.#gl;
@@ -424,7 +437,7 @@ export class LandscapeGpu implements GpuRenderer {
     gl.useProgram(this.#overlayProgram);
     gl.bindVertexArray(this.#empty);
     gl.uniform2f(this.#overlayU.uResolution ?? null, W, H);
-    gl.uniform4f(this.#overlayU.uRect ?? null, 0, 0, W, H);
+    gl.uniform4f(this.#overlayU.uRect ?? null, ...rect);
     gl.uniform1i(this.#overlayU.uImage ?? null, 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, slot.texture);

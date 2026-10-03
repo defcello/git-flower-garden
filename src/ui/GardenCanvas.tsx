@@ -74,21 +74,20 @@ import {
 } from "./scene/view.ts";
 import {
   GRASS_ATLAS,
+  GRASS_ROWS,
   grassField,
   TUFT_BASE,
   TUFT_RECT,
   SHEEN,
+  poseFrame,
+  steadyBend,
+  tuftBend,
+  tuftHeight,
   tuftPose,
-  tuftSquash,
   type Tuft,
 } from "./scene/grass.ts";
-import {
-  currentWind,
-  MAX_WIND_STRENGTH,
-  swayStrength,
-  swaySprites,
-  swayWind,
-} from "./sway.ts";
+import { windHeading } from "./scene/wind-field.ts";
+import { currentWind, swaySprites, swayWind } from "./sway.ts";
 import {
   blendScenes,
   settledFrame,
@@ -418,9 +417,9 @@ class Painter {
 
   /**
    * The grass as drawing items, back to front: near tufts one by one, far
-   * ones in patches (patchGrass) holding the wind's `steady` lean. Made
-   * again when the light, the canvas, the steady wind, or where the plants
-   * stand changes.
+   * ones in patches (patchGrass) holding the wind's `steady` bend toward
+   * `heading`. Made again when the light, the canvas, the steady wind, or
+   * where the plants stand changes.
    */
   private grass(
     description: SceneDescription,
@@ -428,6 +427,7 @@ class Painter {
     t: number,
     size: string,
     steady: number,
+    heading: Heading,
   ): readonly GrassItem[] {
     const density = preset().grass.software;
     // Every plant's base, the highlighted one's too (it is drawn last
@@ -435,7 +435,15 @@ class Painter {
     const bases = description.plants
       .map((plant) => plant.y)
       .sort((a, b) => a - b);
-    const key = [art.key, size, density, steady, bases.join(",")].join("|");
+    const key = [
+      art.key,
+      size,
+      density,
+      steady,
+      heading.x.toFixed(3),
+      heading.z.toFixed(3),
+      bases.join(","),
+    ].join("|");
     if (this.grassCache?.key !== key)
       this.grassCache = {
         key,
@@ -445,6 +453,7 @@ class Painter {
           sheenArts(art),
           t,
           steady,
+          heading,
         ),
       };
     return this.grassCache.items;
@@ -472,31 +481,41 @@ class Painter {
     // The grass, back to front, between the plants: each plant stands in
     // front of the tufts that grow behind its base.
     const wind = seconds === null ? currentWind() : swayWind(seconds);
-    const strength = swayStrength();
-    const pose = (tuft: Tuft) =>
-      tuftPose(tuft, seconds, wind, strength, MAX_WIND_STRENGTH);
-    // At rest every tuft holds the wind's steady lean (the same for all),
+    const heading = windHeading(wind);
+    const frame = poseFrame(wind);
+    // At rest every tuft holds the wind's steady bend (the same for all),
     // which the patches are drawn with: at rest they are copied as they are.
-    const first = grassField(preset().grass.software)[0];
-    const steady = first
-      ? tuftPose(first, null, wind, strength, MAX_WIND_STRENGTH).lean
-      : 0;
+    const steady = Math.round(steadyBend(wind.speed) * 1000) / 1000;
     const grass = this.grass(
       description,
       art,
       t,
       `${String(W)}x${String(H)}`,
-      Math.round(steady * 1000) / 1000,
+      steady,
+      heading,
     );
     const levels = sheenArts(art);
     let next = 0;
     const grassTo = (y: number) => {
       for (let item = grass[next]; item && item.y <= y; item = grass[++next]) {
-        const { lean, lift } = pose("tuft" in item ? item.tuft : item.lead);
+        const tuft = "tuft" in item ? item.tuft : item.lead;
+        const { bend, lift } =
+          seconds === null
+            ? { bend: steady, lift: 0 }
+            : tuftPose(tuft, seconds, wind, frame);
         const level = sheenLevel(lift);
         if ("tuft" in item)
-          paintTuft(g, item.tuft, levels[level] ?? art, t, lean);
-        else paintPatch(g, item, lean, level);
+          paintTuft(
+            g,
+            item.tuft,
+            levels[level] ?? art,
+            t,
+            bend,
+            heading,
+            // At rest, curved as smoothly as the GPU's strips.
+            seconds === null ? GRASS_ROWS : undefined,
+          );
+        else paintPatch(g, item, bend, level);
       }
       g.setTransform(1, 0, 0, 1, 0, 0);
     };
@@ -752,6 +771,38 @@ function silhouette(shadow: PlantShadow): Cast {
 /** Pixels per cell of the relit grass atlas (2×2). */
 const GRASS_CELL = GRASS_ATLAS / 2;
 
+/** Halvings of the grass atlas grassMip makes, at most. */
+const MIPS = 3;
+const mips = new WeakMap<CanvasImageSource, CanvasImageSource[]>();
+
+/**
+ * The grass atlas `source` at half its size `level` times, each made once
+ * from the one before with high-quality smoothing: Canvas's default
+ * smoothing samples too few texels to shrink thin blades further without
+ * aliasing, and high quality on every draw costs too much without a GPU.
+ */
+function grassMip(source: CanvasImageSource, level: number): CanvasImageSource {
+  if (level === 0) return source;
+  let chain = mips.get(source);
+  if (!chain) {
+    chain = [source];
+    mips.set(source, chain);
+  }
+  for (let i = chain.length; i <= level; i++) {
+    const size = GRASS_ATLAS / 2 ** i;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const g = canvas.getContext("2d");
+    const from = chain[i - 1];
+    if (!g || !from) return chain[i - 1] ?? source;
+    g.imageSmoothingQuality = "high";
+    g.drawImage(from, 0, 0, size, size);
+    chain.push(canvas);
+  }
+  return chain[level] ?? source;
+}
+
 /** The relit grass atlas and its mirror, as one sheen level shows them. */
 interface GrassArt {
   grass: CanvasImageSource;
@@ -804,45 +855,101 @@ function sheenArts(art: LitArt): GrassArt[] {
   return levels;
 }
 
+/** Where the wind blows on the ground (wind-field.ts windHeading). */
+type Heading = { x: number; z: number };
+
 /**
- * One tuft, growing from its base, leaning by `lean` (a shear about the
- * base: the tip moves `lean` heights downwind) and shortened to keep its
- * blades' length. `t` is canvas pixels per design pixel.
+ * Radians of bend per band a tuft is drawn in, at most: up to BANDS while
+ * the grass moves, GRASS_ROWS (the GPU's strips) at rest and in patches,
+ * which are drawn once.
+ */
+const BAND_BEND = 0.4;
+const BANDS = 4;
+
+/**
+ * One tuft, growing from its base, bent by `bend` toward `heading` along
+ * the arc of grass.ts tuftBend: drawn in horizontal bands, each mapped so
+ * its bottom and top rows land exactly where the arc puts them, so the
+ * bands meet and the blades bend in a few straight pieces (a band per
+ * 0.4 radians while it moves, at most four, one, a shear, when nearly
+ * upright; as the GPU's strips at rest). `t` is canvas pixels
+ * per design pixel.
  */
 function paintTuft(
   g: CanvasRenderingContext2D,
   tuft: Tuft,
   art: GrassArt,
   t: number,
-  lean: number,
+  bend: number,
+  heading: Heading,
+  /** How many bands; by default one per BAND_BEND, up to BANDS. */
+  count: number | undefined,
   /** Where the canvas's origin is, in canvas pixels (a patch's corner). */
   dx = 0,
   dy = 0,
 ): void {
   const base = TUFT_BASE[tuft.kind] ?? { x: 0.5, y: 1 };
   const bx = tuft.flip ? 1 - base.x : base.x;
-  g.setTransform(
-    t,
-    0,
-    -lean * t,
-    t * tuftSquash(lean),
-    tuft.x * t + dx,
-    tuft.y * t + dy,
-  );
   // Only the tuft's own rectangle of its cell (mirrored with the cell).
   const [l0 = 0, top = 0, r0 = 1, bottom = 1] = TUFT_RECT[tuft.kind] ?? [];
   const [left, right] = tuft.flip ? [1 - r0, 1 - l0] : [l0, r0];
-  g.drawImage(
-    tuft.flip ? art.grassMirrored : art.grass,
-    ((tuft.kind % 2) + left) * GRASS_CELL,
-    (Math.floor(tuft.kind / 2) + top) * GRASS_CELL,
-    (right - left) * GRASS_CELL,
-    (bottom - top) * GRASS_CELL,
-    (left - bx) * tuft.size,
-    (top - base.y) * tuft.size,
-    (right - left) * tuft.size,
-    (bottom - top) * tuft.size,
+  const size = tuft.size;
+  // Drawn at well under the atlas's size: from the smaller copy nearest
+  // its size (grassMip), as the GPU's mipmaps do, so thin blades do not
+  // alias.
+  const level = Math.max(
+    0,
+    Math.min(MIPS, Math.floor(Math.log2(GRASS_CELL / (size * t)))),
   );
+  const image = grassMip(tuft.flip ? art.grassMirrored : art.grass, level);
+  const cell = GRASS_CELL / 2 ** level;
+  const height = tuftHeight(tuft) * size;
+  // Where the row at cell height `y` lands, from the base (design pixels).
+  const row = (y: number) => {
+    const p = tuftBend(
+      (base.y - y) * size * tuft.stretch,
+      height,
+      bend,
+      heading,
+    );
+    return { x: p.x, y: -p.up };
+  };
+  const bands = Math.min(
+    BANDS,
+    Math.max(1, Math.ceil(Math.abs(bend) / BAND_BEND)),
+  );
+  let lower = bottom;
+  let from = row(lower);
+  for (let band = 1; band <= bands; band++) {
+    const upper = bottom + ((top - bottom) * band) / bands;
+    const to = row(upper);
+    // The band's rows, upright, from the base: y0 (lower) to y1 (upper).
+    const y0 = (lower - base.y) * size;
+    const y1 = (upper - base.y) * size;
+    const c = (to.x - from.x) / (y1 - y0);
+    const d = (to.y - from.y) / (y1 - y0);
+    g.setTransform(
+      t,
+      0,
+      c * t,
+      d * t,
+      (tuft.x + from.x - c * y0) * t + dx,
+      (tuft.y + from.y - d * y0) * t + dy,
+    );
+    g.drawImage(
+      image,
+      ((tuft.kind % 2) + left) * cell,
+      (Math.floor(tuft.kind / 2) + upper) * cell,
+      (right - left) * cell,
+      (lower - upper) * cell,
+      (left - bx) * size,
+      y1,
+      (right - left) * size,
+      y0 - y1,
+    );
+    lower = upper;
+    from = to;
+  }
 }
 
 /** A near tuft, drawn on its own. */
@@ -868,8 +975,9 @@ interface Patch {
   top: number;
   /** The baseline it leans about, in canvas pixels. */
   base: number;
-  /** The lean its tufts are drawn with: it leans only by the difference. */
+  /** The bend its tufts are drawn with: it bends only by the difference. */
   steady: number;
+  heading: Heading;
   /** Its canvases' size, in canvas pixels. */
   width: number;
   height: number;
@@ -896,6 +1004,7 @@ function patchGrass(
   levels: readonly GrassArt[],
   t: number,
   steady: number,
+  heading: Heading,
 ): GrassItem[] {
   const sorted = [...bases].sort((a, b) => a - b);
   const segment = (y: number) => sorted.filter((b) => b < y).length;
@@ -916,7 +1025,7 @@ function patchGrass(
     else groups.set(key, [tuft]);
   }
   for (const group of groups.values()) {
-    const patch = renderPatch(group, levels, t, steady);
+    const patch = renderPatch(group, levels, t, steady, heading);
     if (patch) items.push(patch);
   }
   // Ties go to the patch's deepest tuft, so a patch stays behind a plant
@@ -925,23 +1034,34 @@ function patchGrass(
 }
 
 /**
- * Draw a group of tufts leaning `steady` (the wind's lean at rest), at
- * every sheen level, into canvases of their own.
+ * A group of tufts bent `steady` (the wind's bend at rest) toward
+ * `heading`, drawn at each sheen level into canvases of their own.
  */
 function renderPatch(
   tufts: readonly Tuft[],
   levels: readonly GrassArt[],
   t: number,
   steady: number,
+  heading: Heading,
 ): Patch | null {
   let left = Infinity;
   let top = Infinity;
   let right = -Infinity;
   let bottom = -Infinity;
   for (const tuft of tufts) {
-    left = Math.min(left, tuft.x - tuft.size);
-    right = Math.max(right, tuft.x + tuft.size);
-    top = Math.min(top, tuft.y - tuft.size);
+    // Its rectangle, with its tip where the steady bend puts it.
+    const base = TUFT_BASE[tuft.kind] ?? { x: 0.5, y: 1 };
+    const [l0 = 0, rectTop = 0, r0 = 1] = TUFT_RECT[tuft.kind] ?? [];
+    const bx = tuft.flip ? 1 - base.x : base.x;
+    const [l, r] = tuft.flip ? [1 - r0, 1 - l0] : [l0, r0];
+    const height = tuftHeight(tuft) * tuft.size;
+    const tip = tuftBend(height, height, steady, heading);
+    left = Math.min(left, tuft.x + (l - bx) * tuft.size + Math.min(0, tip.x));
+    right = Math.max(right, tuft.x + (r - bx) * tuft.size + Math.max(0, tip.x));
+    top = Math.min(
+      top,
+      tuft.y - Math.max(height * 1.2, (base.y - rectTop) * tuft.size),
+    );
     bottom = Math.max(bottom, tuft.y + 1);
   }
   const x0 = Math.floor(left * t);
@@ -969,24 +1089,28 @@ function renderPatch(
     lead: middle,
     y: deepest,
     steady,
+    heading,
   };
 }
 
 /**
- * A patch leaning by `lean` about its baseline, shortened as a tuft is, at
- * sheen `level`. Its tufts already lean by its steady lean, so at rest it
- * is copied as it is.
+ * A patch bent by `bend` about its baseline, at sheen `level`. Its tufts
+ * are already bent by its steady bend, so at rest it is copied as it is;
+ * otherwise it is sheared and shortened as far as a stem's tip moves
+ * between the two (far tufts are small: a few pixels).
  */
 function paintPatch(
   g: CanvasRenderingContext2D,
   patch: Patch,
-  tuftLean: number,
+  bend: number,
   level: number,
 ) {
-  const lean = tuftLean - patch.steady;
-  const squash = tuftSquash(tuftLean) / tuftSquash(patch.steady);
-  // Canvas point (left + px, top + py) moves to (left + px - lean * h,
-  // base - squash * h'), with h' = base - (top + py): a shear about the
+  const was = tuftBend(1, 1, patch.steady, patch.heading);
+  const now = tuftBend(1, 1, bend, patch.heading);
+  const lean = (now.x - was.x) / was.up;
+  const squash = now.up / was.up;
+  // Canvas point (left + px, top + py) moves to (left + px + lean * h,
+  // base - squash * h), with h = base - (top + py): a shear about the
   // baseline.
   g.setTransform(
     1,
@@ -1015,8 +1139,19 @@ function patchCanvas(patch: Patch, level: number): HTMLCanvasElement | null {
   canvas.height = patch.height;
   const g = canvas.getContext("2d");
   if (!g) return null;
+  g.imageSmoothingQuality = "high";
   for (const tuft of patch.tufts)
-    paintTuft(g, tuft, art, patch.t, patch.steady, -patch.left, -patch.top);
+    paintTuft(
+      g,
+      tuft,
+      art,
+      patch.t,
+      patch.steady,
+      patch.heading,
+      GRASS_ROWS,
+      -patch.left,
+      -patch.top,
+    );
   patch.canvases[level] = canvas;
   return canvas;
 }

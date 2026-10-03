@@ -106,7 +106,11 @@ test("grass tufts bend in the wind on both tiers and return exactly to rest", as
     await drawing.selectOption(tier);
     const scene = page.locator(".landscape-scene:not([hidden])");
     await expect(scene).toHaveAttribute("data-tier", tier);
-    await expect(scene).toHaveAttribute("data-lit", "true");
+    // A new GPU context compiles and loads its art, slowly under software
+    // WebGL while the grass sways.
+    await expect(scene).toHaveAttribute("data-lit", "true", {
+      timeout: 15_000,
+    });
     const grass = `.garden-canvas[data-tier="${tier}"][data-ready="true"]`;
     // The tufts are on the plants' canvas, between the plants.
     expect(
@@ -134,6 +138,84 @@ test("grass tufts bend in the wind on both tiers and return exactly to rest", as
     await expect.poll(() => grassPixels(page, grass)).toBe(rest);
     await page.emulateMedia({ reducedMotion: "no-preference" });
   }
+});
+
+/** A pixel signature of the sky's top band, where the clouds drift. */
+async function skyPixels(page: Page): Promise<string> {
+  return page.locator(".landscape-scene:not([hidden])").evaluate((node) => {
+    const source = node as HTMLCanvasElement;
+    const copy = document.createElement("canvas");
+    copy.width = 160;
+    copy.height = 90;
+    const g = copy.getContext("2d");
+    if (!g) throw new Error("no canvas context");
+    g.drawImage(source, 0, 0, copy.width, copy.height);
+    const pixels = g.getImageData(0, 0, 160, 30).data;
+    let hash = 2166136261;
+    for (const channel of pixels) hash = Math.imul(hash ^ channel, 16777619);
+    return String(hash >>> 0);
+  });
+}
+
+test("the wind preview sets the wind, labelled, and the clouds drift with its speed", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await openGarden(page);
+  await page.getByLabel("Sky", { exact: true }).selectOption("noon");
+  await page
+    .getByLabel("Weather", { exact: true })
+    .selectOption("partly-cloudy");
+  await page.getByLabel("Quality", { exact: true }).selectOption("balanced");
+  await page.getByLabel("Drawing", { exact: true }).selectOption("software");
+  const note = page.locator(".art-notice");
+  await expect(note).not.toContainText("Wind preview");
+  // The sliders appear once a direction is chosen, from the weather's wind.
+  await expect(page.getByLabel("Wind speed", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Wind direction", { exact: true }).selectOption("E");
+  const speed = page.getByLabel("Wind speed", { exact: true });
+  await expect(speed).toHaveValue("7");
+  await speed.fill("0");
+  await page.getByLabel("Gust strength", { exact: true }).fill("0");
+  await expect(note).toContainText("Wind preview");
+  await expect(note).toContainText("From E, 0 mph (calm)");
+  const scene = page.locator(".landscape-scene:not([hidden])");
+  await expect(scene).toHaveAttribute("data-clouds", "true");
+  // Still air: once drawn for it, the clouds hold.
+  await expect
+    .poll(async () => {
+      const a = await skyPixels(page);
+      await page.waitForTimeout(300);
+      return a === (await skyPixels(page));
+    })
+    .toBe(true);
+  const still = await skyPixels(page);
+  await page.waitForTimeout(1500);
+  expect(await skyPixels(page)).toBe(still);
+  // A storm drives them across the sky.
+  await speed.fill("70");
+  await expect(note).toContainText("70 mph (storm)");
+  const first = await skyPixels(page);
+  await expect.poll(() => skyPixels(page)).not.toBe(first);
+  // Reduced motion holds them where they are.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect
+    .poll(async () => {
+      const a = await skyPixels(page);
+      await page.waitForTimeout(300);
+      return a === (await skyPixels(page));
+    })
+    .toBe(true);
+  const held = await skyPixels(page);
+  await page.waitForTimeout(1000);
+  expect(await skyPixels(page)).toBe(held);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  // Back to the weather's own wind.
+  await page
+    .getByLabel("Wind direction", { exact: true })
+    .selectOption("weather");
+  await expect(note).not.toContainText("Wind preview");
+  await expect(speed).toHaveCount(0);
 });
 
 /** Mean brightness and colorfulness (max - min channel) of a scene region. */

@@ -17,8 +17,18 @@ change configuration or behavior, and the notes say how.
   grow in front of its stem; the plants catch the same gusts. The hill
   beneath is a new, plainer ground. Low, Static, reduced motion, and
   hidden pages hold the grass still; the view's note says when reduced
-  motion or late frames are holding the garden still.
+  motion or late frames are holding the garden still. Tufts curve over
+  as they bend, keeping their blades' length, each a little different in
+  size, height, stiffness, and timing; they grow thickest toward the
+  viewer; and the wind's direction, including into the scene or toward
+  the viewer, sets which way they bend and the waves roll.
   ([ADR 0021](docs/decisions/0021-grass-sprites.md))
+- **Wind preview.** In the garden preview, a Wind control sets the wind's
+  direction, speed (still air to a hurricane), and gusts in place of the
+  weather's, labelled as a preview. Speed sets how far the grass bends
+  and how fast the clouds drift; gusts set how much it swings and how
+  bright the waves are. Clouds now drift continuously with the wind while
+  the garden animates.
 - **Optional weather.** Set `environment.weather.enabled` to show this
   hour's forecast (cloud, rain, sleet or snow, wind, temperature) from MET
   Norway's free service in the garden view's details, labelled as a model

@@ -595,7 +595,13 @@ test("the GPU tier draws the plants like Software, lit at once", async ({
       description: `${preview}: ${String(blocks)} plant blocks, worst ${worst.toFixed(1)} levels`,
     });
     expect(blocks).toBeGreaterThan(100);
-    expect(worst, preview).toBeLessThan(16);
+    // The tiers place every tuft alike, but light and filter the near
+    // grass's thin blades a little differently (the GPU per pixel, Software
+    // per texel of the atlas before scaling). With the near grass dense,
+    // large, and bent (ADR 0021, third iteration), the worst 8-pixel block
+    // of blades differs by about 10 levels by moonlight, 17 at sunrise, and
+    // 27 at noon (before: 6, 9.5, and 12).
+    expect(worst, preview).toBeLessThan(30);
   }
   await drawing.selectOption("software");
   await sky.selectOption("noon");

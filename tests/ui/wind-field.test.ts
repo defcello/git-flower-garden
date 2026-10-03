@@ -3,6 +3,7 @@ import {
   advance,
   gustEnvelope,
   gustPatch,
+  gustsOf,
   waveShape,
   waveSpeed,
   windDirection,
@@ -75,8 +76,11 @@ describe("wind field", () => {
   it("does not jump at a speed change; wrapping keeps the same lattice", () => {
     const before = advance(300, 0.1, 3);
     const changed = { speed: 10, windX: 10, travel: before };
-    expect(windWave(700, 900, 8, changed) / gustEnvelope(8, 10)).toBeCloseTo(
-      windWave(700, 900, 8, { ...changed, speed: 3 }) / gustEnvelope(8, 3),
+    expect(
+      windWave(700, 900, 8, changed) / gustEnvelope(8, gustsOf(10)),
+    ).toBeCloseTo(
+      windWave(700, 900, 8, { ...changed, speed: 3 }) /
+        gustEnvelope(8, gustsOf(3)),
       12,
     );
     expect(advance(TRAVEL_WRAP - 1, 0.2, 12)).toBeLessThan(waveSpeed(12));
