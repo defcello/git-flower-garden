@@ -9,13 +9,37 @@
  * travelled distance.
  */
 
-/** The wind: m/s, its screen direction (+ blows right), and how far it has carried the waves. */
+/**
+ * The wind: m/s, where it blows on the ground (`windX`: + to the right;
+ * `windZ`: + away from the viewer, into the scene), how strong its gusts
+ * are, and how far it has carried the waves.
+ */
 export interface WindField {
   speed: number;
   windX: number;
+  /** m/s away from the viewer; 0 when not given. */
+  windZ?: number;
+  /** m/s the gusts blow above `speed`; when not given, gustsOf(speed). */
+  gust?: number;
   /** Design pixels, accumulated (advance), so a new speed never jumps. */
   travel: number;
 }
+
+/** Typical gusts, when the forecast gives none: half again the mean wind. */
+export function gustsOf(speed: number): number {
+  return 0.5 * Math.max(0, speed);
+}
+
+/** The gusts of `wind`, m/s above its mean. */
+export function windGust(wind: WindField): number {
+  return Math.max(0, wind.gust ?? gustsOf(wind.speed));
+}
+
+/**
+ * The hillside's depth is foreshortened on screen: a distance into the
+ * scene looks this many times shorter than the same distance across.
+ */
+export const FORESHORTEN = 3;
 
 /** A multiple of every lattice period and of WAVELENGTH: wrapping changes no sample. */
 export const TRAVEL_WRAP = 256000;
@@ -56,16 +80,29 @@ export function advance(travel: number, dt: number, speed: number): number {
     TRAVEL_WRAP
   );
 }
+/** Design pixels a second the waves travel: faster in stronger wind, up to a storm's. */
 export function waveSpeed(speed: number): number {
-  return 35 + 12 * Math.min(12, Math.max(0, speed));
+  const v = Math.max(0, speed);
+  return 35 + 12 * Math.min(12, v) + 5 * Math.min(40, Math.max(0, v - 12));
 }
 export function windDirection(windX: number): number {
   return Math.abs(windX) > 0.15 ? Math.sign(windX) : 1;
 }
 
-/** Strong wind has deep lulls; still air keeps a nearly steady breeze. */
-export function gustEnvelope(seconds: number, speed: number): number {
-  const depth = 0.04 + 0.64 * Math.min(1, Math.max(0, speed) / 12);
+/**
+ * Where the wind blows on the ground, as a unit vector (x: right, z: away
+ * from the viewer); to the right in still air.
+ */
+export function windHeading(wind: WindField): { x: number; z: number } {
+  const z = wind.windZ ?? 0;
+  const length = Math.hypot(wind.windX, z);
+  if (length < 0.15) return { x: 1, z: 0 };
+  return { x: wind.windX / length, z: z / length };
+}
+
+/** Gusty wind has deep lulls; steady air keeps a nearly steady breeze. */
+export function gustEnvelope(seconds: number, gust: number): number {
+  const depth = 0.04 + 0.64 * Math.min(1, Math.max(0, gust) / 6);
   const pulse =
     0.5 * Math.sin((TAU * seconds) / 11) +
     0.32 * Math.sin((TAU * seconds) / 17 + 0.9) +
@@ -73,15 +110,43 @@ export function gustEnvelope(seconds: number, speed: number): number {
   return 1 - depth * (0.5 - 0.5 * pulse);
 }
 
-/** The broad gust mask travels faster than the local grass pattern. */
-export function gustPatch(x: number, y: number, wind: WindField): number {
+/**
+ * A place on the hill, in the wave's own coordinates (smaller toward the
+ * crest), with the part of the wave that never moves there: how far its
+ * fronts are pushed ahead or held back. Made once per tuft.
+ */
+export interface WaveSite {
+  px: number;
+  py: number;
+  /** ±3.5 radians, from slow noise. */
+  bend: number;
+}
+
+export function waveSite(x: number, y: number): WaveSite {
   const depth = 0.6 + 0.4 * Math.min(1, Math.max(0, (y - 650) / 430));
   const px = (x - 960) / depth;
   const py = (y - 650) / depth;
+  return { px, py, bend: 7 * (noise(px / 600 + 3.1, py / 220 + 11.3) - 0.5) };
+}
+
+/** The broad gust mask at a site, carried by `travel` toward `heading`. */
+function siteGust(
+  site: WaveSite,
+  travel: number,
+  heading: { x: number; z: number },
+): number {
+  const shift = travel * 1.5;
+  // Carried downwind on the ground: into the scene is up the screen, and
+  // foreshortened.
   return noise(
-    (px - windDirection(wind.windX) * wind.travel * 1.5) / 500 + 31.3,
-    py / 320 + 7.1,
+    (site.px - heading.x * shift) / 500 + 31.3,
+    (site.py + (heading.z * shift) / FORESHORTEN) / 320 + 7.1,
   );
+}
+
+/** The broad gust mask travels faster than the local grass pattern. */
+export function gustPatch(x: number, y: number, wind: WindField): number {
+  return siteGust(waveSite(x, y), wind.travel, windHeading(wind));
 }
 
 /** Design pixels from one wave front to the next, along the wind, near. */
@@ -89,26 +154,36 @@ export const WAVELENGTH = 320;
 
 /**
  * Waves of bent grass rolling downwind, smaller and slower toward the
- * crest: fronts across the wind, one WAVELENGTH apart, bent and broken by
- * slow noise so they never run in straight bars, with a little finer
- * texture, and strong only where a gust patch is passing. On the ground a
- * front runs across the wind, but the hillside's depth is foreshortened
- * about fourfold on screen, so the bends are tighter in depth than across.
+ * crest: fronts across the wind, one WAVELENGTH apart on the ground,
+ * bent and broken by slow noise so they never run in straight bars, with a
+ * little finer texture, and strong only where a gust patch is passing. A
+ * wind across the view sends the fronts sideways; one into the scene or
+ * toward the viewer, up or down the hill, foreshortened (FORESHORTEN).
  * Bounded by one.
  */
 export function waveShape(x: number, y: number, wind: WindField): number {
-  const depth = 0.6 + 0.4 * Math.min(1, Math.max(0, (y - 650) / 430));
-  const direction = windDirection(wind.windX);
-  const px = (x - 960) / depth;
-  const py = (y - 650) / depth;
-  const travel = direction * wind.travel;
-  // How far each front is pushed ahead or held back: ±3.5 radians.
-  const bend = 7 * (noise(px / 600 + 3.1, py / 220 + 11.3) - 0.5);
-  const front = Math.sin((TAU * (px - travel)) / WAVELENGTH + bend);
+  return siteWave(waveSite(x, y), wind.travel, windHeading(wind));
+}
+
+/** waveShape at a site, for the wind's `travel` and `heading` (windHeading). */
+export function siteWave(
+  site: WaveSite,
+  travel: number,
+  heading: { x: number; z: number },
+): number {
+  const { px, py } = site;
+  // On the ground: across, and into the scene (up the screen).
+  const along = px * heading.x - py * FORESHORTEN * heading.z;
+  const front = Math.sin((TAU * (along - travel)) / WAVELENGTH + site.bend);
+  const shift = travel * 0.75;
   const fine =
-    noise((px - travel * 0.75) / 125 + 19.7, py / 80 + wind.travel / 2000) * 2 -
+    noise(
+      (px - heading.x * shift) / 125 + 19.7,
+      (py + (heading.z * shift) / FORESHORTEN) / 80 + travel / 2000,
+    ) *
+      2 -
     1;
-  const p = gustPatch(x, y, wind);
+  const p = siteGust(site, travel, heading);
   const patch = p * p * (3 - 2 * p);
   return (0.78 * front + 0.22 * fine) * (0.15 + 0.85 * patch);
 }
@@ -119,5 +194,5 @@ export function windWave(
   seconds: number,
   wind: WindField,
 ): number {
-  return gustEnvelope(seconds, wind.speed) * waveShape(x, y, wind);
+  return gustEnvelope(seconds, windGust(wind)) * waveShape(x, y, wind);
 }

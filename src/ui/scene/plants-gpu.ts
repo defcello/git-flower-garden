@@ -20,8 +20,8 @@
  *   sway.ts, as in Software;
  * - hidden-commit badges, unlit, in the panels' colors.
  *
- * Between the plants, the grass (grass.ts): instanced tufts, each leaning
- * by a shear about its base, lit like the sprites from the grass maps; a
+ * Between the plants, the grass (grass.ts): instanced tufts, each bent
+ * downwind along an arc, lit like the sprites from the grass maps; a
  * plant stands in front of the tufts that grow behind its base.
  *
  * Wilting is the CSS filter's color matrix, applied in the shader.
@@ -43,23 +43,20 @@ import {
   type BadgeStyle,
   type PaintArt,
 } from "../paint.ts";
-import {
-  currentWind,
-  MAX_WIND_STRENGTH,
-  swayStrength,
-  swaySprites,
-  swayWind,
-} from "../sway.ts";
+import { currentWind, swaySprites, swayWind } from "../sway.ts";
 import { gpuSupport, preset } from "../motion.ts";
 import {
   grassField,
   TUFT_BASE,
   TUFT_RECT,
   SHEEN,
+  GRASS_ROWS,
+  poseFrame,
   tuftPose,
-  tuftSquash,
+  VIEW_TILT,
   type Tuft,
 } from "./grass.ts";
+import { windHeading, type WindField } from "./wind-field.ts";
 import { settledFrame, type Frame } from "../transition.ts";
 import { groundLine, toDesign, type PlantDescription } from "./description.ts";
 import type { SceneDescription } from "./description.ts";
@@ -268,25 +265,27 @@ void main() {
 }`;
 
 /**
- * A grass tuft growing from its base, leaning by a shear about it (the
- * tip moves `lean` heights downwind) and shortened by `squash`, as
- * GardenCanvas.tsx paintTuft draws it, with its sheen. Lit by GRASS_FS.
+ * A grass tuft growing from its base, bent downwind row by row along an
+ * arc that keeps its blades' length (grass.ts tuftBend), as GardenCanvas.tsx
+ * paintTuft draws it, with its sheen. A strip of GRASS_ROWS rows, so the
+ * blades curve. Lit by GRASS_FS.
  */
 const GRASS_VS = `#version 300 es
-in vec4 aTuft;  // base x, y (design pixels), size, lean
-in vec4 aCell;  // kind, mirrored, squash, lift
+in vec4 aTuft;  // base x, y (design pixels), size, bend
+in vec4 aCell;  // kind, mirrored, stretch, lift
 uniform vec2 uResolution;
 uniform float uScale; // canvas pixels per design pixel
 uniform vec2 uBase[4];
 uniform vec4 uRect[4]; // what each tuft covers of its cell (grass.ts)
+uniform vec2 uHeading; // where the wind blows: right, into the scene
 out vec2 vUv;
 flat out int vFlip;
 out float vAlpha;
 out float vLift;
 ${TO_CLIP_GLSL}
 void main() {
-  vec2 local = vec2(gl_VertexID == 1 || gl_VertexID == 3 ? 1.0 : 0.0,
-                    gl_VertexID >= 2 ? 1.0 : 0.0);
+  vec2 local = vec2(float(gl_VertexID % 2),
+                    1.0 - float(gl_VertexID / 2) / ${GRASS_ROWS.toFixed(1)});
   vFlip = aCell.y > 0.5 ? 1 : 0;
   vLift = aCell.w;
   int kind = int(aCell.x + 0.5);
@@ -299,7 +298,15 @@ void main() {
   if (vFlip == 1) base.x = 1.0 - base.x;
   vec2 drawn = vec2(vFlip == 1 ? 1.0 - local.x : local.x, local.y);
   vec2 p = (drawn - base) * aTuft.z;
-  p = vec2(p.x - aTuft.w * p.y, p.y * aCell.z);
+  // tuftBend: the row v up the stem moves as the stem's arc does there.
+  float v = -p.y * aCell.z;
+  float height = max((base.y - rect.y) * aTuft.z * aCell.z, 1e-3);
+  float phi = aTuft.w * v / height;
+  bool small = abs(phi) < 1e-4;
+  float along = small ? v * phi * 0.5 : v * (1.0 - cos(phi)) / phi;
+  float rise = small ? v : v * sin(phi) / phi;
+  p = vec2(p.x + uHeading.x * along,
+           -(rise + ${VIEW_TILT.toFixed(3)} * uHeading.y * along));
   vec2 cell = vec2(mod(aCell.x, 2.0), floor(aCell.x / 2.0)) * 0.5;
   vUv = cell + local * 0.5;
   vAlpha = 1.0;
@@ -347,6 +354,8 @@ export class PlantsGpu implements GpuRenderer {
   readonly #grassU: Uniforms;
   readonly #grassVao: WebGLVertexArrayObject;
   readonly #grassBuffer: WebGLBuffer;
+  /** This frame's tuft instances, kept between frames. */
+  #grassData = new Float32Array(0);
   readonly #grassAttribs: { tuft: number; cell: number };
   readonly #quadU: Uniforms;
   readonly #groundU: Uniforms;
@@ -387,6 +396,7 @@ export class PlantsGpu implements GpuRenderer {
       "uScale",
       "uBase",
       "uRect",
+      "uHeading",
       "uAlbedo",
       "uNormal",
       "uTranslucency",
@@ -589,7 +599,10 @@ export class PlantsGpu implements GpuRenderer {
         ? preset().grass.gpu
         : preset().grass.software,
     );
-    this.#uploadGrass(tufts, seconds);
+    const wind = seconds === null ? currentWind() : swayWind(seconds);
+    const heading = windHeading(wind);
+    gl.uniform2f(gu.uHeading ?? null, heading.x, heading.z);
+    this.#uploadGrass(tufts, seconds, wind);
     let next = 0;
     const grassTo = (y: number) => {
       let end = next;
@@ -915,35 +928,32 @@ export class PlantsGpu implements GpuRenderer {
   }
 
   /** Every tuft's instance at `seconds` (null: at rest), for this frame. */
-  #uploadGrass(tufts: readonly Tuft[], seconds: number | null): void {
+  #uploadGrass(
+    tufts: readonly Tuft[],
+    seconds: number | null,
+    wind: WindField,
+  ): void {
     const gl = this.#gl;
-    const wind = seconds === null ? currentWind() : swayWind(seconds);
-    const strength = swayStrength();
-    const data = new Float32Array(tufts.length * GRASS_FLOATS);
-    tufts.forEach((tuft, i) => {
-      const { lean, lift } = tuftPose(
-        tuft,
-        seconds,
-        wind,
-        strength,
-        MAX_WIND_STRENGTH,
-      );
-      data.set(
-        [
-          tuft.x,
-          tuft.y,
-          tuft.size,
-          lean,
-          tuft.kind,
-          tuft.flip ? 1 : 0,
-          tuftSquash(lean),
-          lift,
-        ],
-        i * GRASS_FLOATS,
-      );
-    });
+    const length = tufts.length * GRASS_FLOATS;
+    if (this.#grassData.length < length)
+      this.#grassData = new Float32Array(length);
+    const data = this.#grassData;
+    const frame = poseFrame(wind);
+    for (let i = 0, o = 0; i < tufts.length; i++, o += GRASS_FLOATS) {
+      const tuft = tufts[i];
+      if (!tuft) continue;
+      const { bend, lift } = tuftPose(tuft, seconds, wind, frame);
+      data[o] = tuft.x;
+      data[o + 1] = tuft.y;
+      data[o + 2] = tuft.size;
+      data[o + 3] = bend;
+      data[o + 4] = tuft.kind;
+      data[o + 5] = tuft.flip ? 1 : 0;
+      data[o + 6] = tuft.stretch;
+      data[o + 7] = lift;
+    }
     gl.bindBuffer(gl.ARRAY_BUFFER, this.#grassBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STREAM_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STREAM_DRAW, 0, length);
   }
 
   /** Draw tufts `from` up to `to` of this frame's upload. */
@@ -965,7 +975,12 @@ export class PlantsGpu implements GpuRenderer {
       stride,
       from * stride + 16,
     );
-    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, to - from);
+    gl.drawArraysInstanced(
+      gl.TRIANGLE_STRIP,
+      0,
+      2 * (GRASS_ROWS + 1),
+      to - from,
+    );
   }
 
   #sprites(

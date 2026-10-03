@@ -7,7 +7,14 @@
  * the landscape and plants.
  */
 import { seeded, type Sprite } from "./botanical.ts";
-import { advance, windWave, type WindField } from "./scene/wind-field.ts";
+import { CLOUD_SPAN, CLOUD_SPEED } from "../environment/weather-effects.ts";
+import {
+  advance,
+  gustsOf,
+  windDirection,
+  windWave,
+  type WindField,
+} from "./scene/wind-field.ts";
 
 /** Largest rocking angle, in radians (about 3.4°). */
 export const SWAY_ANGLE = 0.06;
@@ -17,12 +24,27 @@ const PERIOD_MAX = 5.2;
 let wind: WindField = { speed: 4, windX: 0, travel: 0 };
 let windAt: number | null = null;
 
+/** How far the clouds have moved on the clock, design pixels (CLOUD_SPEED). */
+let clouds = 0;
+
 /** One distance for every listener on the shared clock. Earlier clock readings do not rewind travel. */
 export function swayWind(seconds: number): WindField {
-  if (windAt !== null && seconds > windAt)
+  if (windAt !== null && seconds > windAt) {
     wind.travel = advance(wind.travel, seconds - windAt, wind.speed);
+    // The clouds go with the wind's speed; which way across the sky for
+    // now only left or right (a wind into the scene carries them right).
+    const step = Math.min(0.25, seconds - windAt);
+    clouds =
+      (clouds + step * CLOUD_SPEED * windDirection(wind.windX) * wind.speed) %
+      CLOUD_SPAN.width;
+  }
   windAt = seconds;
   return wind;
+}
+
+/** How far the clouds have moved while the scene animated, design pixels. */
+export function cloudTravel(): number {
+  return clouds;
 }
 
 /**
@@ -69,11 +91,22 @@ export function swayStrength(): number {
   return currentStrength;
 }
 
-/** Set the wind the garden sways in (null: no weather; field retains a default 4 m/s breeze). */
-export function setSwayWind(metersPerSecond: number | null, windX = 0): void {
+/**
+ * Set the wind the garden sways in (null: no weather; the field keeps a
+ * default 4 m/s breeze): its speed, where it blows on the ground (m/s to
+ * the right and away from the viewer), and its gusts (m/s above the mean;
+ * by default, wind-field.ts gustsOf).
+ */
+export function setSwayWind(
+  metersPerSecond: number | null,
+  windX = 0,
+  windZ = 0,
+  gust?: number,
+): void {
   currentStrength =
     metersPerSecond === null ? 1 : windStrength(metersPerSecond);
-  wind = { ...wind, speed: metersPerSecond ?? 4, windX };
+  const speed = metersPerSecond ?? 4;
+  wind = { ...wind, speed, windX, windZ, gust: gust ?? gustsOf(speed) };
 }
 
 /**

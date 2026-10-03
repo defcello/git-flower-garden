@@ -51,6 +51,13 @@ import { GardenCanvas } from "./GardenCanvas.tsx";
 import type { PlantInput } from "./scene/description.ts";
 import { useShownLight } from "./scene/client.ts";
 import { WeatherNote } from "./WeatherNote.tsx";
+import {
+  applyWind,
+  describeWind,
+  WEATHER_WIND,
+  WindControls,
+  type WindSetting,
+} from "./WindControls.tsx";
 import { WeatherOverlay } from "./WeatherOverlay.tsx";
 import { setSwayWind } from "./sway.ts";
 import {
@@ -102,6 +109,7 @@ export function App() {
     "live" | WeatherPreviewName
   >("live");
   const [looping, setLooping] = useState(false);
+  const [wind, setWind] = useState<WindSetting>(WEATHER_WIND);
   useSkyLoop(looping && renderer !== "technical", setSkySetting);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -210,7 +218,7 @@ export function App() {
     skyTime === null ? 0 : Math.floor(skyTime / 3_600_000) * 3_600_000;
   // Every server message parses anew; the weather changes far less often.
   const liveKey = JSON.stringify(liveConditions);
-  const effects = useMemo(
+  const forecast = useMemo(
     () =>
       renderer === "technical"
         ? NO_WEATHER
@@ -219,6 +227,11 @@ export function App() {
           : weatherEffects(previewConditions(weatherSetting, previewHour)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [renderer, weatherSetting, liveKey, previewHour],
+  );
+  // The wind controls replace the forecast's wind (WindControls.tsx).
+  const effects = useMemo(
+    () => (renderer === "technical" ? forecast : applyWind(forecast, wind)),
+    [renderer, forecast, wind],
   );
   const skyMinutes = Math.floor((skyTime ?? 0) / 60_000);
   const skyWeather = useMemo(
@@ -236,6 +249,8 @@ export function App() {
     setSwayWind(
       effects === NO_WEATHER ? null : effects.windSpeed,
       effects.windX,
+      effects.windZ,
+      effects.windGust,
     );
   }, [effects]);
   // Plant shadows change with the relit art, not ahead of it.
@@ -325,6 +340,13 @@ export function App() {
               </select>
             </label>
           )}
+          {renderer !== "technical" && (
+            <WindControls
+              setting={wind}
+              effects={forecast}
+              onChange={setWind}
+            />
+          )}
           <Legend />
         </header>
         <div className="hud-notes">
@@ -353,6 +375,14 @@ export function App() {
                   />{" "}
                 </>
               ) : null}
+              {describeWind(wind) !== null && (
+                <>
+                  <strong className="weather-preview-badge">
+                    Wind preview
+                  </strong>{" "}
+                  {describeWind(wind)}{" "}
+                </>
+              )}
               {motionNote(hold)}
               {showsRainbow && (
                 <>

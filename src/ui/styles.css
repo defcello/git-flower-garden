@@ -1346,3 +1346,9 @@ code,
   opacity: 0;
   pointer-events: none;
 }
+
+/* The wind preview's readouts: wide enough that the bar does not jump. */
+.wind-readout {
+  min-width: 16ch;
+  font-variant-numeric: tabular-nums;
+}
