@@ -98,7 +98,9 @@
       "additionalProperties": false,
       "properties": {
         "renderer": {
-          "const": "technical",
+          "description": "The view the browser opens on until the viewer picks another: a renderer id from src/ui/renderers/registry.ts, such as technical, canvas, svg, or pixel. An id the browser does not know falls back to its default.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,39}$",
           "default": "technical"
         },
         "reducedMotion": {

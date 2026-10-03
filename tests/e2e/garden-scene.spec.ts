@@ -669,3 +669,54 @@ test("with the GPU tier, plants keep their places, outline, and sway, and a lost
   await expect(garden).toHaveAttribute("data-tier", "gpu");
   expect(await knotMisses(page)).toEqual([]);
 });
+
+test("the pixel renderer opens from the URL, draws the garden, and shares details", async ({
+  page,
+}) => {
+  await page.goto(`${small.url}?renderer=pixel`);
+  await expect(page.getByLabel("Renderer", { exact: true })).toHaveValue(
+    "pixel",
+  );
+  const plants = page.locator(".pixel-plant");
+  await expect(plants).toHaveCount(SMALL.length);
+  expect(
+    await plants.evaluateAll((all) =>
+      all.map((p) => (p as HTMLElement).dataset.plot),
+    ),
+  ).toEqual(SMALL.map((entry) => entry.id));
+  // A broken repository carries a marker; a healthy one does not.
+  await expect(
+    page.locator('.pixel-plant[data-plot="missing"] .pixel-marker'),
+  ).toHaveCount(1);
+  await expect(
+    page.locator('.pixel-plant[data-plot="tour"] .pixel-marker'),
+  ).toHaveCount(0);
+  // The frame is drawn: many colors, not a blank canvas.
+  const colors = await page
+    .locator(".pixel-stage canvas")
+    .evaluate((canvas: HTMLCanvasElement) => {
+      const context = canvas.getContext("2d");
+      if (!context) return 0;
+      const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+      const seen = new Set<number>();
+      for (let i = 0; i < data.length; i += 4)
+        seen.add(
+          ((data[i] ?? 0) << 16) |
+            ((data[i + 1] ?? 0) << 8) |
+            (data[i + 2] ?? 0),
+        );
+      return seen.size;
+    });
+  expect(colors).toBeGreaterThan(8);
+  // The shell's details drawer works for any renderer; Escape closes it.
+  await page.locator('.pixel-plant[data-plot="tour"]').focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".drawer .oid-full")).toHaveText(/^[0-9a-f]{40}$/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".drawer")).toHaveCount(0);
+  // A URL choice is for this visit only; an unknown id falls back.
+  await page.goto(`${small.url}?renderer=nonesuch`);
+  await expect(page.getByLabel("Renderer", { exact: true })).toHaveValue(
+    "technical",
+  );
+});

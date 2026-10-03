@@ -12,7 +12,8 @@ import {
   loopAdvance,
   type EnvironmentSnapshot,
 } from "../environment/environment.ts";
-import { lightingState, type LightingState } from "../environment/lighting.ts";
+import { lightingState } from "../environment/lighting.ts";
+import type { Sky } from "./viewmodel/environment.ts";
 import {
   PREVIEWS,
   isPreviewName,
@@ -56,10 +57,7 @@ export function bookmarkSetting(value: string): SkySetting {
   };
 }
 
-export interface Sky {
-  snapshot: EnvironmentSnapshot;
-  state: LightingState;
-}
+export type { Sky } from "./viewmodel/environment.ts";
 
 const LIVE_REFRESH_MS = 60_000;
 

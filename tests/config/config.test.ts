@@ -222,6 +222,23 @@ describe("validation errors", () => {
     ]);
   });
 
+  it("accepts any well-formed renderer id and rejects others", () => {
+    const withRenderer = (renderer: unknown) =>
+      parseConfig(
+        JSON.stringify({ version: 1, repositories: [], display: { renderer } }),
+        dir,
+      );
+    expect(withRenderer("pixel")).toMatchObject({
+      ok: true,
+      config: { display: { renderer: "pixel" } },
+    });
+    for (const bad of ["Pixel Art", "9lives", "", 3])
+      expect(withRenderer(bad), JSON.stringify(bad)).toMatchObject({
+        ok: false,
+        errors: [{ pointer: "/display/renderer" }],
+      });
+  });
+
   it("reports JSON syntax errors with their location", () => {
     expect(errorsFor('{\n  "version": 1,\n}')).toEqual([
       "c.json:3:1: invalid JSON: Expected a quoted property name",

@@ -1346,3 +1346,52 @@ code,
   opacity: 0;
   pointer-events: none;
 }
+
+/* Pixel-art renderer (renderers/pixel): one low-resolution frame, scaled
+   up without smoothing to the 16:9 stage; plants are buttons over it. */
+.pixel-garden {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: #10140f;
+}
+.pixel-stage {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: var(--stage-width);
+  height: var(--stage-height);
+}
+.pixel-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.pixel-plant {
+  position: absolute;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+.pixel-plant:hover,
+.pixel-plant:focus-visible {
+  border-color: #5ff3ff;
+  outline: none;
+}
+.pixel-marker {
+  position: absolute;
+  top: -1.4em;
+  right: -0.6em;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #f4ead2;
+  color: #3b2a14;
+  font:
+    700 12px/1.4 ui-monospace,
+    monospace;
+}

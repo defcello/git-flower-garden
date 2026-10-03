@@ -43,6 +43,11 @@ export interface DisplayJson {
   timeZone: string;
   businessDays: number;
   reducedMotion: boolean;
+  /**
+   * The renderer to open on until the viewer picks one (`display.renderer`).
+   * Absent from services older than this field.
+   */
+  renderer?: string;
   /** Start of the recent-history window; when it moves, graphs change. */
   windowStartMs: number;
   /** A notice to show on every page, e.g. demo mode. */
