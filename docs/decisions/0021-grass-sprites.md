@@ -46,9 +46,11 @@ The maintainer's choices (2026-10-02):
   gone) with the turf's fine detail; it is now in the standard convention,
   so the load-time X correction is gone.
 - The raw Codex images are kept in `docs/art/grass/`; every file is in the
-  asset manifest with its provenance. **Redistribution of the new
-  generated art under the MIT license awaits the maintainer's approval**,
-  as ADR 0015 recorded it for the first art.
+  asset manifest with its provenance. The maintainer approved
+  redistributing the new generated art under the MIT license
+  (2026-10-03), as ADR 0015 recorded it for the first art, and confirmed
+  that generated art made for the project ships under its MIT license as
+  a matter of course.
 
 ### Planting and wind
 
@@ -196,8 +198,7 @@ the clouds.
   still move as one (correlation above 0.9 a tuft apart; above 0.5 even
   at the largest difference in delay).
 - **Bending**: a procedural bend of the painted tufts, chosen over new
-  art. It needs no new generated images, so nothing more waits on
-  redistribution approval, and it is continuous where frames would step.
+  art. It needs no new generated images, and it is continuous where frames would step.
   A tuft's stem bends along a circular arc, tips most (`tuftBend`): the
   point `v` up a stem of height `h` bent by `θ` lies `v(1 − cos φ)/φ`
   downwind and `v sin φ / φ` up, with `φ = θv/h`. Every point of a row
