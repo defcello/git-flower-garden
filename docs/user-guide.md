@@ -211,7 +211,8 @@ the noon sun in the middle, whichever way your monitor faces. Heights above
 the horizon are real. The **Time** slider (garden view) shows the sky at any
 time of that day, and **Loop** plays the day round, a day every 30 seconds.
 The **Sky** menu returns to **Live**, or jumps to a preview such as sunrise,
-full moon, or polar night, which sets the slider, date, and place. Any
+full moon, polar night, or a solar or lunar eclipse, which sets the slider,
+date, and place. Any
 chosen time is labelled **Sky preview** and is never taken for live
 conditions.
 

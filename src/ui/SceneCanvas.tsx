@@ -47,7 +47,10 @@ import {
   DESIGN,
   lightKey,
   moonLight,
+  moonShadow,
   MOON_COLOR,
+  MOON_SILHOUETTE,
+  MOON_UMBRA_COLOR,
   sceneLight,
   skyBodies,
   transform,
@@ -56,14 +59,15 @@ import {
 const css = (c: readonly number[], a = 1) =>
   `rgb(${c.map((v) => String(Math.round(v * 255))).join(" ")} / ${a.toFixed(3)})`;
 
-/** The Moon's disc with its phase, cached by lighting and size. */
+/** The Moon's disc with its phase and any eclipse, cached by lighting and size. */
 let moonCache: { key: string; canvas: HTMLCanvasElement } | null = null;
 function moonSprite(
   s: readonly [number, number, number],
+  shadow: readonly [number, number, number, number],
   r: number,
 ): HTMLCanvasElement {
   const size = Math.max(2, Math.ceil(r * 2.1));
-  const key = `${s.map((v) => v.toFixed(3)).join()}:${String(size)}`;
+  const key = `${[...s, ...shadow].map((v) => v.toFixed(3)).join()}:${String(size)}`;
   if (moonCache?.key === key) return moonCache.canvas;
   const canvas = document.createElement("canvas");
   canvas.width = size;
@@ -79,10 +83,13 @@ function moonSprite(
         if (radius > 1.03) continue;
         const lit = moonLight(dx, dy, s);
         const edge = 1 - Math.min(1, Math.max(0, (radius - 0.97) / 0.06));
+        const { umbra, dim } = moonShadow(dx, dy, shadow);
         const i = (y * size + x) * 4;
-        image.data[i] = MOON_COLOR[0] * 255;
-        image.data[i + 1] = MOON_COLOR[1] * 255;
-        image.data[i + 2] = MOON_COLOR[2] * 255;
+        for (let c = 0; c < 3; c++) {
+          const day = (MOON_COLOR[c] ?? 0) * (1 - dim);
+          image.data[i + c] =
+            (day + ((MOON_UMBRA_COLOR[c] ?? 0) - day) * umbra) * 255;
+        }
         // Unlit parts let the sky through.
         image.data[i + 3] = edge * (0.3 + 0.7 * lit) * 255;
       }
@@ -268,28 +275,70 @@ function paintSky(
     g.fill();
   }
   if (sky.sun !== null) {
-    const { x, y, r, glow, alpha } = sky.sun;
+    const { x, y, r, glow, alpha, visible, hole, corona } = sky.sun;
     const halo = g.createRadialGradient(x, y, 0, x, y, glow);
     const stops = 6;
     for (let i = 0; i <= stops; i++) {
       const f = i / stops;
       halo.addColorStop(
         f,
-        css(state.sun.color, Math.pow(1 - f, 2) * 0.55 * alpha),
+        css(state.sun.color, Math.pow(1 - f, 2) * 0.55 * alpha * visible),
       );
     }
     g.fillStyle = halo;
     g.fillRect(x - glow, y - glow, glow * 2, glow * 2);
+    g.save();
+    if (hole !== null) {
+      // The Moon covers the disc: draw only outside it.
+      g.beginPath();
+      g.rect(0, 0, W, H);
+      g.arc(hole.x, hole.y, hole.r, 0, Math.PI * 2);
+      g.clip("evenodd");
+    }
     g.fillStyle = css(state.sun.color, alpha);
     g.beginPath();
     g.arc(x, y, r, 0, Math.PI * 2);
     g.fill();
+    if (hole !== null && corona > 0) {
+      // As the GPU shader: falling off by e every 0.55 of the Moon's radius.
+      const reach = hole.r * 4;
+      const ring = g.createRadialGradient(
+        hole.x,
+        hole.y,
+        hole.r,
+        hole.x,
+        hole.y,
+        reach,
+      );
+      for (let i = 0; i <= stops; i++) {
+        const f = i / stops;
+        const k = Math.exp(-(f * (reach - hole.r)) / (0.55 * hole.r));
+        ring.addColorStop(f, css(state.sun.color, k * 0.85 * corona * alpha));
+      }
+      g.fillStyle = ring;
+      g.fillRect(hole.x - reach, hole.y - reach, reach * 2, reach * 2);
+    }
+    g.restore();
+    if (hole !== null) {
+      // The Moon's silhouette: where it covers the disc, whole at totality.
+      g.save();
+      if (corona <= 0) {
+        g.beginPath();
+        g.arc(x, y, r, 0, Math.PI * 2);
+        g.clip();
+      }
+      g.fillStyle = css(MOON_SILHOUETTE, alpha);
+      g.beginPath();
+      g.arc(hole.x, hole.y, hole.r, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+    }
   }
   if (sky.moon !== null) {
     const size = sky.moon.r * 2.1;
     g.globalAlpha = sky.moon.alpha;
     g.drawImage(
-      moonSprite(sky.moon.s, sky.moon.r),
+      moonSprite(sky.moon.s, sky.moon.shadow, sky.moon.r),
       sky.moon.x - size / 2,
       sky.moon.y - size / 2,
       size,

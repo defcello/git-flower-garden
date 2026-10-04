@@ -9,6 +9,17 @@ change configuration or behavior, and the notes say how.
 
 ### Changes
 
+- **Solar and lunar eclipses.** The Moon now covers the Sun as far as it
+  really does: partial eclipses show a crescent Sun, annular ones a thin
+  ring, and at totality the corona and the brightest stars come out under a
+  twilight sky. The day dims with the covered Sun, gently at first and all
+  at once in the last moments. Because the Sun and Moon are drawn far larger
+  than life, the Moon is placed by the discs' own scale near the Sun, so it
+  no longer seems to overlap the Sun on ordinary days near a new moon. In a
+  lunar eclipse the Earth's shadow crosses the Moon, turning it copper
+  red and dimming the moonlight. New **Sky** previews show a partial, an
+  annular, and a total solar eclipse, and a partial and a total lunar
+  eclipse.
 - **Flower bushes move with the wind.** Each plant bends with the same
   wind and gusts as the grass beside it, at half the grass's angle since
   its stems are stiffer: its stems curve along an arc that keeps their
