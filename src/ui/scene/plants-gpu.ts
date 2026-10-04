@@ -58,6 +58,7 @@ import {
 } from "./grass.ts";
 import { windHeading, type WindField } from "./wind-field.ts";
 import {
+  bendAt,
   bendReach,
   bendSprites,
   plantBend,
@@ -687,7 +688,7 @@ export class PlantsGpu implements GpuRenderer {
         });
       }
 
-      this.#grounds(frame, place, plant.wilting);
+      this.#grounds(frame, place, plant.wilting, bent);
       if (entry.stemsFrame !== frame) {
         entry.stems = this.#raster(
           entry,
@@ -949,12 +950,23 @@ export class PlantsGpu implements GpuRenderer {
     frame: Frame,
     place: [number, number, number],
     wilting: boolean,
+    bent: { pose: PlantBend; t: number } | null,
   ): void {
     if (frame.grounds.length === 0) return;
     const gl = this.#gl;
+    const [k, , offsetY] = place;
     const data = new Float32Array(frame.grounds.length * 3);
     frame.grounds.forEach((ground, i) => {
-      data.set([ground.x, ground.y, ground.width / 2], i * 3);
+      // Moved with the stems (as the Canvas tier's rows move them), so a
+      // shadow under a bent plant's root stays under it.
+      let { x, y } = ground;
+      if (bent) {
+        const { pose, t } = bent;
+        const { dx, dy } = bendAt(pose, pose.baseY - (k * y + offsetY) / t);
+        x += (dx * t) / k;
+        y += (dy * t) / k;
+      }
+      data.set([x, y, ground.width / 2], i * 3);
     });
     gl.useProgram(this.#ground);
     gl.uniform3fv(this.#groundU.uPlace ?? null, place);
