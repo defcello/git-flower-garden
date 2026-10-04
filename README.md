@@ -9,7 +9,34 @@ merges reconnect stems. Every plant is drawn from real Git history and updates
 moments after you commit. Put it on a spare monitor and watch your team's work
 grow. It only reads your repositories and never changes them.
 
-![The garden view: five repositories growing as flowering plants on a sunlit hillside below the Blue Ridge Mountains](docs/images/garden-view.png)
+![The garden view: five repositories growing as flowering plants on a grassy hillside below the Blue Ridge Mountains, under a midday sun and drifting clouds](docs/images/garden-view.jpg)
+
+## A sky that follows the real world
+
+The scene is built from real-world physics, not canned backdrops. The Sun,
+Moon, and stars are placed for your latitude, longitude, and time; the light
+on every leaf, ridge, and blade of grass follows them through the day. With
+weather turned on, the local forecast brings cloud, rain, sleet, snow, fog,
+and wind to the hillside.
+
+| | |
+| --- | --- |
+| ![Sunrise: an orange Sun just over the ridges, the hill in warm shadow](docs/images/scenes/sunrise.jpg) | ![Sunset: low pink light through drifting clouds, the Moon already up](docs/images/scenes/sunset.jpg) |
+| **Sunrise.** The sky, the haze over the ridges, and the light on the plants change color with the Sun's height. | **Sunset**, with the Moon wherever it really is. |
+| ![A rainbow over the hill in a sunlit afternoon shower, opposite the Sun](docs/images/scenes/rainbow.jpg) | ![Civil dusk: a rose and violet sky after sunset, the Moon over the ridges](docs/images/scenes/civil-dusk.jpg) |
+| **Rainbows** appear when the Sun shines on rain. Their colors and the fainter second bow come from the optics of water drops. They circle the point opposite the Sun and sink into the hill as the Sun climbs past 42°. | **Twilight** deepens through civil, nautical, and astronomical dusk. |
+| ![The full Moon high over a dark, moonlit hillside, with stars](docs/images/scenes/full-moon.jpg) | ![The Moon in a blue daytime sky, the Sun high to its right](docs/images/scenes/daytime-moon.jpg) |
+| **Moonlight** brightens the night by the Moon's phase, with the stars behind it. | **The Moon by day**, at its real phase and with its lit side turned toward the Sun. |
+| ![A total solar eclipse: the Sun's black disc ringed by the corona in a dark twilight sky, with stars out](docs/images/scenes/solar-eclipse-total.jpg) | ![A total lunar eclipse: a copper-red Moon in a starry sky](docs/images/scenes/lunar-eclipse-total.jpg) |
+| **Solar eclipses**, partial, annular, and total: the day dims, and at totality the corona and brightest stars come out. | **Lunar eclipses**: the Earth's shadow crosses the Moon and turns it copper red. |
+| ![A thunderstorm: a grey sky of heavy cloud over the hill](docs/images/scenes/thunderstorm.jpg) | ![Snow falling over the hill under grey cloud](docs/images/scenes/snow.jpg) |
+| **Rain and storms** grey the sky and dim the light. | **Snow and sleet** drift down through the scene. |
+| ![Fog: a pale Sun through mist that hides the far ridges](docs/images/scenes/fog.jpg) | ![The midnight Sun low over the ridges in Svalbard](docs/images/scenes/polar-day.jpg) |
+| **Fog** hides the far ridges first. | **Anywhere on Earth**, including the midnight Sun and polar night. |
+
+Grass and plants move with the wind, which sends waves rolling across the
+hill as gusts pass. The garden view's *Sky*, *Weather*, and *Wind* menus
+preview any of these, clearly labelled as previews.
 
 The **technical view** shows the same graph without the artwork. It shows
 every branch head, the common ancestors that connect them, and recent work,
@@ -114,9 +141,11 @@ garden, and a small pixel-art garden that you can copy as a template. See
 
 ## Project status and contributing
 
-Version 0.3 is a beta. The technical view is complete. The garden view is in
-active development: lighting and the GPU renderer are done, and weather and
-motion are next. See the [roadmap](ROADMAP.md) for the plan and
+Version 0.3 is a beta. The technical view is complete. In the garden view,
+the lighting, sky, eclipses, weather, rainbows, wind, and the GPU renderer
+are done, with Low, Balanced, and High quality settings for slower machines.
+What remains before a visual release is measuring the scene on the dedicated
+monitor and a 24-hour soak test. See the [roadmap](ROADMAP.md) for the plan and
 [CONTRIBUTING.md](CONTRIBUTING.md) to set up a development checkout.
 
 [MIT License](LICENSE)
