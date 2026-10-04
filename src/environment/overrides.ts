@@ -26,6 +26,22 @@ const SVALBARD: Place = {
 };
 const SVALBARD_ZONE = "Arctic/Longyearbyen";
 
+/** Dallas, Texas: under totality on 8 April 2024. */
+const DALLAS: Place = {
+  latitude: 32.7767,
+  longitude: -96.797,
+  elevationMeters: 140,
+};
+const DALLAS_ZONE = "America/Chicago";
+
+/** Albuquerque, New Mexico: under the annular eclipse of 14 October 2023. */
+const ALBUQUERQUE: Place = {
+  latitude: 35.0844,
+  longitude: -106.6504,
+  elevationMeters: 1619,
+};
+const ALBUQUERQUE_ZONE = "America/Denver";
+
 interface Preview {
   label: string;
   time: string;
@@ -105,6 +121,38 @@ export const PREVIEWS = {
     time: "2024-12-21T11:00Z",
     place: SVALBARD,
     timeZone: SVALBARD_ZONE,
+  },
+  // Eclipses, each at its greatest from the place (astronomy-engine's
+  // SearchLocalSolarEclipse and SearchLunarEclipse).
+  "solar-eclipse-partial": {
+    label: "Partial solar eclipse",
+    time: "2024-04-08T19:09:33Z",
+    place: BLUE_RIDGE,
+    timeZone: BLUE_RIDGE_ZONE,
+  },
+  "solar-eclipse-annular": {
+    label: "Annular solar eclipse (Albuquerque)",
+    time: "2023-10-14T16:36:52Z",
+    place: ALBUQUERQUE,
+    timeZone: ALBUQUERQUE_ZONE,
+  },
+  "solar-eclipse-total": {
+    label: "Total solar eclipse (Dallas)",
+    time: "2024-04-08T18:42:37Z",
+    place: DALLAS,
+    timeZone: DALLAS_ZONE,
+  },
+  "lunar-eclipse-partial": {
+    label: "Partial lunar eclipse",
+    time: "2025-03-14T05:55:00Z",
+    place: BLUE_RIDGE,
+    timeZone: BLUE_RIDGE_ZONE,
+  },
+  "lunar-eclipse-total": {
+    label: "Total lunar eclipse",
+    time: "2025-03-14T06:58:42Z",
+    place: BLUE_RIDGE,
+    timeZone: BLUE_RIDGE_ZONE,
   },
 } as const satisfies Record<string, Preview>;
 

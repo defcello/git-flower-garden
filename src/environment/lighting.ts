@@ -36,6 +36,8 @@ export interface SkyBody {
   color: Color;
   /** Direct light it casts on the scene, 0..1. */
   intensity: number;
+  /** Apparent radius of the disc, degrees. */
+  radius: number;
 }
 
 export interface MoonBody extends SkyBody {
@@ -70,9 +72,72 @@ export interface LightingState {
    * horizon (below it while the Sun is up).
    */
   antisolar: { u: number; altitude: number };
+  eclipse: Eclipse;
+}
+
+/** How the Moon and the Sun, or the Earth's shadow, overlap now. */
+export interface Eclipse {
+  /** Degrees between the centres of the Moon and the Sun, as seen. */
+  separation: number;
+  /** Fraction of the Sun's disc the Moon covers, 0..1 (a solar eclipse). */
+  solar: number;
+  /**
+   * The corona's visibility, 0..1: it shows only as the last of the Sun's
+   * disc is covered (a total eclipse), never through an annular one.
+   */
+  corona: number;
+  /** The Earth's shadow at the Moon, in Moon radii (astronomy.ts). */
+  shadow: { distance: number; umbra: number; penumbra: number };
+  /** Fractions of the Moon's disc in the umbra and the penumbra (a lunar eclipse). */
+  umbra: number;
+  penumbra: number;
 }
 
 const DEG = Math.PI / 180;
+
+/**
+ * Area common to two discs of radii `a` and `b` whose centres are `d`
+ * apart, as a fraction of the first disc's area.
+ */
+export function discOverlap(a: number, b: number, d: number): number {
+  if (a <= 0) return 0;
+  if (d >= a + b) return 0;
+  if (d <= Math.abs(a - b)) return Math.min(1, (b * b) / (a * a));
+  const angleA = Math.acos(clamp((d * d + a * a - b * b) / (2 * d * a), -1, 1));
+  const angleB = Math.acos(clamp((d * d + b * b - a * a) / (2 * d * b), -1, 1));
+  const lens =
+    a * a * (angleA - Math.sin(2 * angleA) / 2) +
+    b * b * (angleB - Math.sin(2 * angleB) / 2);
+  return clamp(lens / (Math.PI * a * a), 0, 1);
+}
+
+/** Eclipses from the sky's geometry. */
+function eclipseOf(sky: EnvironmentSnapshot["sky"]): Eclipse {
+  const { sun, moon } = sky;
+  const solar = discOverlap(sun.radius, moon.radius, moon.separation);
+  // Covered to within a hair of the whole disc: the corona and the
+  // brightest stars come out over the last moments before totality.
+  const corona = moon.radius >= sun.radius ? smoothstep(0.985, 1, solar) : 0;
+  const shadow = moon.shadow;
+  return {
+    separation: moon.separation,
+    solar,
+    corona,
+    shadow,
+    umbra: discOverlap(1, shadow.umbra, shadow.distance),
+    penumbra: discOverlap(1, shadow.penumbra, shadow.distance),
+  };
+}
+
+/**
+ * How much of its light the eclipsed Sun still seems to give, 0..1: the
+ * eye adapts, so a half-covered Sun barely dims the day, while the last
+ * percent of the disc goes dark all at once.
+ */
+export const eclipseDaylight = (solar: number) => Math.pow(1 - solar, 0.35);
+
+/** The sky of nautical twilight, which a total eclipse brings at midday. */
+const TOTALITY_ALTITUDE = -9;
 
 const clamp = (value: number, low: number, high: number) =>
   Math.min(high, Math.max(low, value));
@@ -272,17 +337,33 @@ export function lightingState(snapshot: EnvironmentSnapshot): LightingState {
   const { sun, moon } = snapshot.sky;
   const latitude = snapshot.place.latitude;
   const sunAltitude = sun.altitude;
-  const sunIntensity = smoothstep(-1, 8, sunAltitude);
+  const eclipse = eclipseOf(snapshot.sky);
+  // The covered Sun lights the scene less, and at totality the sky turns
+  // to twilight around it.
+  const daylight = eclipseDaylight(eclipse.solar);
+  const sunIntensity = smoothstep(-1, 8, sunAltitude) * daylight;
+  // The Moon in the umbra keeps only a dim red glow; the penumbra barely
+  // dims it.
+  const moonShade = 1 - 0.95 * eclipse.umbra - 0.25 * eclipse.penumbra;
   const sunProjected = project(sun, latitude);
   const moonProjected = project(moon, latitude);
   const moonUp = moon.altitude > 0;
   const moonIntensity = moonUp
     ? 0.25 *
       moon.illuminatedFraction *
+      Math.max(0, moonShade) *
       Math.sin(moon.altitude * DEG) *
       (1 - sunIntensity)
     : 0;
-  const sky = skyAt(sunAltitude);
+  const daySky = skyAt(sunAltitude);
+  const dark = sunAltitude > 0 ? 1 - daylight : 0;
+  const nightSky = skyAt(Math.min(sunAltitude, TOTALITY_ALTITUDE));
+  const sky = {
+    zenith: mix(daySky.zenith, nightSky.zenith, dark),
+    horizon: mix(daySky.horizon, nightSky.horizon, dark),
+    ambient: mix(daySky.ambient, nightSky.ambient, dark),
+    haze: daySky.haze + (nightSky.haze - daySky.haze) * dark,
+  };
 
   let shadow: LightingState["shadow"] = null;
   if (sunAltitude > 0) {
@@ -308,6 +389,7 @@ export function lightingState(snapshot: EnvironmentSnapshot): LightingState {
       aboveHorizon: sunAltitude > 0,
       color: mix(SUN_LOW, SUN_HIGH, smoothstep(0, 20, sunAltitude)),
       intensity: sunIntensity,
+      radius: sun.radius,
     },
     moon: {
       ...moonProjected,
@@ -320,11 +402,16 @@ export function lightingState(snapshot: EnvironmentSnapshot): LightingState {
       illuminatedFraction: moon.illuminatedFraction,
       waxing: moon.phaseDegrees < 180,
       limbAngle: limbAngle(moon, sun, latitude),
+      radius: moon.radius,
     },
     sky: { zenith: sky.zenith, horizon: sky.horizon },
     ambient: sky.ambient,
     haze: sky.haze,
-    stars: 1 - smoothstep(-15, -4, sunAltitude),
+    stars: Math.max(
+      1 - smoothstep(-15, -4, sunAltitude),
+      // Only the brightest at totality.
+      0.6 * eclipse.corona,
+    ),
     shadow,
     antisolar: {
       u: project(
@@ -333,5 +420,6 @@ export function lightingState(snapshot: EnvironmentSnapshot): LightingState {
       ).u,
       altitude: -sun.altitude,
     },
+    eclipse,
   };
 }

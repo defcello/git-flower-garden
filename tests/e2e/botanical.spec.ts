@@ -96,6 +96,8 @@ test("sky previews at 1080p and 4K are marked as previews and load local art", a
     { name: "night", sun: false, moon: false, stars: true },
     { name: "daytime-moon", sun: true, moon: true, stars: false },
     { name: "polar-night", sun: false, moon: true, stars: true },
+    { name: "solar-eclipse-total", sun: true, moon: true, stars: true },
+    { name: "lunar-eclipse-total", sun: false, moon: true, stars: true },
   ];
   for (const width of [1920, 3840]) {
     await page.setViewportSize({ width, height: (width * 9) / 16 });

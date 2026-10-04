@@ -29,6 +29,8 @@ import type { GpuRenderer } from "./useGpu.ts";
 import {
   DESIGN,
   MOON_COLOR,
+  MOON_SILHOUETTE,
+  MOON_UMBRA_COLOR,
   sceneLight,
   skyBodies,
   transform,
@@ -53,9 +55,12 @@ uniform vec3 uZenith, uHorizon;
 uniform float uHorizonY;
 uniform vec4 uSun;       // x, y, radius, glow radius
 uniform vec4 uSunColor;  // rgb, alpha (0: no Sun)
+uniform vec3 uSunHole;   // the Moon's disc over the Sun: x, y, radius (0: none)
+uniform vec2 uSunEclipse; // glow left uncovered, corona
 uniform vec4 uMoon;      // x, y, radius, alpha (0: no Moon)
 uniform vec3 uMoonS;
-uniform vec3 uMoonColor;
+uniform vec3 uMoonColor, uMoonUmbraColor, uMoonSilhouette;
+uniform vec4 uMoonShadow; // Earth's shadow: centre (Moon radii), umbra, penumbra
 out vec4 color;
 void main() {
   vec2 p = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y);
@@ -67,10 +72,23 @@ void main() {
   if (uSunColor.a > 0.0) {
     float d = distance(p, uSun.xy);
     float f = clamp(d / uSun.w, 0.0, 1.0);
-    float glow = (1.0 - f) * (1.0 - f) * 0.55 * uSunColor.a;
+    float glow = (1.0 - f) * (1.0 - f) * 0.55 * uSunColor.a * uSunEclipse.x;
     float disc = clamp(uSun.z - d + 0.5, 0.0, 1.0) * uSunColor.a;
+    float silhouette = 0.0;
+    if (uSunHole.z > 0.0) {
+      // The Moon covers the disc (view.ts SkyBodies.sun.hole).
+      float h = distance(p, uSunHole.xy);
+      float hole = clamp(uSunHole.z - h + 0.5, 0.0, 1.0);
+      silhouette = hole * (uSunEclipse.y > 0.0 ? 1.0 : disc);
+      if (uSunEclipse.y > 0.0 && h > uSunHole.z) {
+        float k = exp(-(h - uSunHole.z) / (0.55 * uSunHole.z));
+        float corona = k * 0.85 * uSunEclipse.y * uSunColor.a;
+        disc = 1.0 - (1.0 - disc) * (1.0 - corona);
+      }
+    }
     float a = 1.0 - (1.0 - glow) * (1.0 - disc);
     c = vec4(uSunColor.rgb * a, a);
+    c = vec4(uMoonSilhouette * silhouette, silhouette) + c * (1.0 - silhouette);
   }
   if (uMoon.w > 0.0) {
     vec2 q = (p - uMoon.xy) / uMoon.z;
@@ -84,7 +102,15 @@ void main() {
       float edge = 1.0 - clamp((r - 0.97) / 0.06, 0.0, 1.0);
       // Unlit parts let the sky through.
       float m = edge * (0.3 + 0.7 * lit) * uMoon.w;
-      c = vec4(uMoonColor * m, m) + c * (1.0 - m);
+      // The Earth's shadow (view.ts moonShadow).
+      vec3 moonColor = uMoonColor;
+      if (uMoonShadow.w > 0.0) {
+        float sd = distance(q, uMoonShadow.xy);
+        float umbra = 1.0 - smoothstep(uMoonShadow.z - 0.08, uMoonShadow.z + 0.08, sd);
+        float pen = clamp((uMoonShadow.w - sd) / (uMoonShadow.w - uMoonShadow.z), 0.0, 1.0);
+        moonColor = mix(uMoonColor * (1.0 - 0.6 * pen * pen), uMoonUmbraColor, umbra);
+      }
+      c = vec4(moonColor * m, m) + c * (1.0 - m);
     }
   }
   if (c.a <= 0.0) discard;
@@ -212,9 +238,14 @@ export class LandscapeGpu implements GpuRenderer {
       "uHorizonY",
       "uSun",
       "uSunColor",
+      "uSunHole",
+      "uSunEclipse",
       "uMoon",
       "uMoonS",
       "uMoonColor",
+      "uMoonUmbraColor",
+      "uMoonSilhouette",
+      "uMoonShadow",
     ]);
     this.#starU = uniforms(gl, this.#star, ["uResolution"]);
     this.#litU = uniforms(gl, this.#lit, [
@@ -328,6 +359,13 @@ export class LandscapeGpu implements GpuRenderer {
       sky.sun?.glow ?? 1,
     );
     gl.uniform4f(s.uSunColor ?? null, ...state.sun.color, sky.sun?.alpha ?? 0);
+    const hole = sky.sun?.hole;
+    gl.uniform3f(s.uSunHole ?? null, hole?.x ?? 0, hole?.y ?? 0, hole?.r ?? 0);
+    gl.uniform2f(
+      s.uSunEclipse ?? null,
+      sky.sun?.visible ?? 1,
+      sky.sun?.corona ?? 0,
+    );
     gl.uniform4f(
       s.uMoon ?? null,
       sky.moon?.x ?? 0,
@@ -337,6 +375,9 @@ export class LandscapeGpu implements GpuRenderer {
     );
     gl.uniform3fv(s.uMoonS ?? null, sky.moon?.s ?? [0, 0, 1]);
     gl.uniform3fv(s.uMoonColor ?? null, MOON_COLOR);
+    gl.uniform3fv(s.uMoonUmbraColor ?? null, MOON_UMBRA_COLOR);
+    gl.uniform3fv(s.uMoonSilhouette ?? null, MOON_SILHOUETTE);
+    gl.uniform4fv(s.uMoonShadow ?? null, sky.moon?.shadow ?? [0, 0, 0, 0]);
     gl.bindVertexArray(this.#empty);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 

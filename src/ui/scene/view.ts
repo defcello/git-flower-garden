@@ -146,7 +146,23 @@ export function rainbowAngle(
 
 export interface SkyBodies {
   horizonY: number;
-  sun: { x: number; y: number; r: number; glow: number; alpha: number } | null;
+  sun: {
+    x: number;
+    y: number;
+    r: number;
+    glow: number;
+    alpha: number;
+    /** What of the glow is left uncovered by the Moon, 0..1. */
+    visible: number;
+    /**
+     * The Moon's disc over the Sun, in canvas pixels, drawn as a dark
+     * silhouette where it covers the disc (and whole at totality); null
+     * when apart.
+     */
+    hole: { x: number; y: number; r: number } | null;
+    /** The corona around the covered Sun, 0..1 (totality). */
+    corona: number;
+  } | null;
   moon: {
     x: number;
     y: number;
@@ -154,38 +170,116 @@ export interface SkyBodies {
     alpha: number;
     /** Direction to the Sun on the Moon's disc (x right, y up, z out). */
     s: [number, number, number];
+    /**
+     * The Earth's shadow on the disc, in Moon radii: its centre (x right,
+     * y up) and the umbra's and penumbra's radii; all 0 when none.
+     */
+    shadow: [number, number, number, number];
   } | null;
   stars: Star[];
 }
 
+/** The Sun's and Moon's drawn radii, design pixels: far larger than true. */
+const SUN_RADIUS = 22;
+const MOON_RADIUS = 20;
+
+/**
+ * Where the Moon is drawn, as an offset from the Sun in canvas pixels, and
+ * its radius. The discs are drawn many times their true size, so near the
+ * Sun the Moon is placed by the discs' own scale instead of the sky's: it
+ * touches the Sun's disc exactly when the true discs touch, covers it as
+ * far, and is never drawn over it when they are apart (which at the sky's
+ * scale it would be, for several degrees around every new moon). Far from
+ * the Sun it is where the panorama puts it.
+ */
+function moonNearSun(
+  state: LightingState,
+  real: { x: number; y: number },
+  scale: number,
+): { x: number; y: number; r: number } {
+  const { sun, moon, eclipse } = state;
+  // Within a few degrees, the Moon takes the Sun's scale: so a Moon nearer
+  // than the Sun covers it whole, and a farther one leaves a ring.
+  const near = 1 - smooth(1, 3, eclipse.separation);
+  const r =
+    (MOON_RADIUS +
+      (SUN_RADIUS * (moon.radius / sun.radius) - MOON_RADIUS) * near) *
+    scale;
+  const touching = sun.radius + moon.radius;
+  const target =
+    (SUN_RADIUS * scale + r) * Math.min(1, eclipse.separation / touching);
+  const length = Math.hypot(real.x, real.y);
+  if (length >= target) return { ...real, r };
+  // Away from the Sun along the sky (limbAngle points to it, y up).
+  const away = (moon.limbAngle * Math.PI) / 180;
+  const extra = target - length;
+  return {
+    x: real.x - Math.cos(away) * extra,
+    y: real.y + Math.sin(away) * extra,
+    r,
+  };
+}
+
+function smooth(edge0: number, edge1: number, value: number): number {
+  const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
 export function skyBodies(t: Transform, state: LightingState): SkyBodies {
   const sunP = toCanvas(t, skyPoint(state.sun).x, skyPoint(state.sun).y);
-  const moonP = toCanvas(t, skyPoint(state.moon).x, skyPoint(state.moon).y);
+  const moonSky = toCanvas(t, skyPoint(state.moon).x, skyPoint(state.moon).y);
+  const placed = moonNearSun(
+    state,
+    { x: moonSky.x - sunP.x, y: moonSky.y - sunP.y },
+    t.scale,
+  );
+  const moonP = { x: sunP.x + placed.x, y: sunP.y + placed.y };
   const e = (state.moon.phaseDegrees * Math.PI) / 180;
   const limb = (state.moon.limbAngle * Math.PI) / 180;
   const side = Math.abs(Math.sin(e));
+  const sunR = SUN_RADIUS * t.scale;
+  const { eclipse } = state;
+  const sunUp = state.sun.altitude > -1;
+  const moonUp = state.moon.altitude > -1;
+  const covering =
+    sunUp && moonUp && Math.hypot(placed.x, placed.y) < sunR + placed.r;
+  const shadow: [number, number, number, number] =
+    eclipse.penumbra > 0
+      ? [
+          // Away from the Sun, along the same great circle.
+          -Math.cos(limb) * eclipse.shadow.distance,
+          -Math.sin(limb) * eclipse.shadow.distance,
+          eclipse.shadow.umbra,
+          eclipse.shadow.penumbra,
+        ]
+      : [0, 0, 0, 0];
   return {
     horizonY: t.oy + DESIGN.height * HORIZON * t.scale,
-    sun:
-      state.sun.altitude > -1
-        ? {
-            ...sunP,
-            r: 22 * t.scale,
-            glow: 150 * t.scale,
-            alpha: Math.min(1, (state.sun.altitude + 1) / 2),
-          }
-        : null,
-    moon:
-      state.moon.altitude > -1
-        ? {
-            ...moonP,
-            r: 20 * t.scale,
-            alpha:
-              Math.min(1, (state.moon.altitude + 1) / 2) *
+    sun: sunUp
+      ? {
+          ...sunP,
+          r: sunR,
+          glow: 150 * t.scale,
+          alpha: Math.min(1, (state.sun.altitude + 1) / 2),
+          visible: 1 - eclipse.solar,
+          hole: covering ? { ...moonP, r: placed.r } : null,
+          corona: covering ? eclipse.corona : 0,
+        }
+      : null,
+    moon: moonUp
+      ? {
+          ...moonP,
+          r: placed.r,
+          // Over the Sun the new Moon is its silhouette (the Sun's hole),
+          // and no earthshine shows beside the glare.
+          alpha: covering
+            ? 0
+            : Math.min(1, (state.moon.altitude + 1) / 2) *
               (1 - 0.55 * state.sun.intensity),
-            s: [Math.cos(limb) * side, Math.sin(limb) * side, -Math.cos(e)],
-          }
-        : null,
+          s: [Math.cos(limb) * side, Math.sin(limb) * side, -Math.cos(e)],
+          shadow,
+        }
+      : null,
     stars:
       state.stars > 0
         ? STARS.map((s) => {
@@ -208,6 +302,35 @@ export function moonLight(
   // Earthshine keeps the dark side faintly visible.
   return 0.07 + 0.93 * t * t * (3 - 2 * t);
 }
+
+/** The Moon's colour deep in the Earth's shadow: lit red by every sunset. */
+export const MOON_UMBRA_COLOR: readonly [number, number, number] = [
+  0.42, 0.14, 0.07,
+];
+
+/**
+ * How the Earth's shadow falls at a point on the Moon's disc (dx right, dy
+ * up, unit radius), for `SkyBodies.moon.shadow`: how far into the umbra
+ * (0..1, soft at its edge) and how much the penumbra dims it (0..1,
+ * deepening toward the umbra). The GPU tier does the same in its shader.
+ */
+export function moonShadow(
+  dx: number,
+  dy: number,
+  shadow: readonly [number, number, number, number],
+): { umbra: number; dim: number } {
+  const [cx, cy, umbra, penumbra] = shadow;
+  if (penumbra <= 0) return { umbra: 0, dim: 0 };
+  const d = Math.hypot(dx - cx, dy - cy);
+  const inUmbra = 1 - smooth(umbra - 0.08, umbra + 0.08, d);
+  const p = Math.min(1, Math.max(0, (penumbra - d) / (penumbra - umbra)));
+  return { umbra: inUmbra, dim: 0.6 * p * p };
+}
+
+/** The new Moon's silhouette against the Sun or the corona. */
+export const MOON_SILHOUETTE: readonly [number, number, number] = [
+  0.015, 0.015, 0.025,
+];
 
 export const MOON_COLOR: readonly [number, number, number] = [0.94, 0.93, 0.87];
 
