@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { lightingState, project } from "../../src/environment/lighting.ts";
+import { environmentSnapshot } from "../../src/environment/environment.ts";
+import { lightingState } from "../../src/environment/lighting.ts";
 import { previewSnapshot } from "../../src/environment/overrides.ts";
 import { PREVIEWS } from "../../src/environment/overrides.ts";
 import {
@@ -113,7 +114,7 @@ describe("rainbow optics", () => {
 });
 
 describe("rainbow geometry", () => {
-  it("centres on the point opposite the Sun, in the panorama's own terms", () => {
+  it("centres opposite the Sun: its place mirrored, as far below the horizon", () => {
     for (const name of ["sunrise", "sunset"] as const) {
       const state = lightingState(previewSnapshot(name));
       const bow = rainbow(
@@ -121,20 +122,45 @@ describe("rainbow geometry", () => {
         weatherEffects(previewConditions("showers", 0)),
       );
       if (!bow) throw new Error(`no rainbow at ${name}`);
-      // The antisolar direction, projected like the Sun itself.
-      const opposite = project(
-        {
-          altitude: -state.sun.altitude,
-          azimuth: (state.sun.azimuth + 180) % 360,
-        },
-        PREVIEWS[name].place.latitude,
-      );
-      expect(bow.antisolar.u, name).toBeCloseTo(opposite.u, 9);
+      expect(bow.antisolar.u, name).toBeCloseTo(1 - state.sun.u, 9);
       expect(bow.antisolar.altitude, name).toBeCloseTo(-state.sun.altitude, 9);
+    }
+    // Morning bows are west (right), afternoon bows east (left).
+    expect(
+      lightingState(previewSnapshot("sunrise")).antisolar.u,
+    ).toBeGreaterThan(0.5);
+    expect(lightingState(previewSnapshot("sunset")).antisolar.u).toBeLessThan(
+      0.5,
+    );
+  });
+
+  it("moves smoothly through solar noon and sinks into the ground by 42°", () => {
+    const { place, timeZone } = PREVIEWS.noon;
+    // A showery October day in the Blue Ridge, a minute at a time from
+    // 10:00 to 16:00 EDT: the Sun climbs past 42° and back.
+    const start = Date.parse("2026-10-04T14:00Z");
+    let before: { x: number; y: number } | null = null;
+    for (let minute = 0; minute <= 360; minute++) {
+      const state = lightingState(
+        environmentSnapshot(new Date(start + minute * 60_000), place, timeZone),
+      );
+      const centre = rainbowCentre(state.antisolar);
+      if (before) {
+        // No jump from one edge to the other (it did at solar noon).
+        expect(Math.abs(centre.x - before.x), String(minute)).toBeLessThan(5);
+        expect(Math.abs(centre.y - before.y), String(minute)).toBeLessThan(5);
+      }
+      before = centre;
+      // The primary's top is above the ground only while the Sun is below 42°.
+      const top = centre.y - RAINBOW_RADIUS * RAINBOW_SCALE;
+      if (state.sun.altitude > RAINBOW_RADIUS + 0.01)
+        expect(top, String(minute)).toBeGreaterThan(RAINBOW_GROUND);
+      if (state.sun.altitude < RAINBOW_RADIUS - 0.01)
+        expect(top, String(minute)).toBeLessThan(RAINBOW_GROUND);
     }
   });
 
-  it("is round, stands on the ground, and keeps its top at the true height", () => {
+  it("is round, stands on the ground, and sinks as the Sun climbs", () => {
     for (const name of ["sunrise", "sunset", "daytime-moon"] as const) {
       const state = lightingState(previewSnapshot(name));
       const bow = rainbow(
@@ -146,17 +172,18 @@ describe("rainbow geometry", () => {
       // Its lower half is never seen: the centre is on or below the ground
       // line, which the hill hides from edge to edge.
       expect(centre.y, name).toBeGreaterThanOrEqual(RAINBOW_GROUND);
-      // Straight up, the primary's top is 42° less the Sun's altitude
-      // above the horizon, on the sky's own scale.
-      const top = skyPlace({
-        u: bow.antisolar.u,
-        altitude: RAINBOW_RADIUS - state.sun.altitude,
-      });
+      // Straight up, the primary's top is 42° less the Sun's altitude above
+      // the ground line, on the bow's own scale.
+      const top = {
+        x: centre.x,
+        y:
+          RAINBOW_GROUND -
+          (RAINBOW_RADIUS - state.sun.altitude) * RAINBOW_SCALE,
+      };
       expect(rainbowAngle(top.x, top.y, centre), name).toBeCloseTo(
         RAINBOW_RADIUS,
         9,
       );
-      expect(top.x).toBeCloseTo(centre.x, 9);
       // The same angle in every direction: a circle, not the oval the
       // panorama's wider azimuth scale would make.
       for (let turn = 0; turn < 360; turn += 30) {
@@ -171,6 +198,12 @@ describe("rainbow geometry", () => {
         ).toBeCloseTo(RAINBOW_RADIUS, 9);
       }
     }
+    // With the Sun on the horizon, the top is at the true height.
+    const level = rainbowCentre({ u: 0.5, altitude: 0 });
+    expect(level.y - RAINBOW_RADIUS * RAINBOW_SCALE).toBeCloseTo(
+      skyPlace({ u: 0.5, altitude: RAINBOW_RADIUS }).y,
+      9,
+    );
     // Larger than the sky's scale: the landscape is not at its true depth.
     expect(RAINBOW_SCALE / PIXELS_PER_DEGREE).toBeGreaterThan(2);
     // The ground line is behind the hill's whole crest.

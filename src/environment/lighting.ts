@@ -67,9 +67,12 @@ export interface LightingState {
   /** Ground shadow cast away from the Sun; null when it is down. */
   shadow: { x: number; z: number; length: number } | null;
   /**
-   * The point of the sky opposite the Sun, which a rainbow circles, placed
-   * on the panorama like the Sun itself: across (`u`) and degrees above the
-   * horizon (below it while the Sun is up).
+   * The point of the sky opposite the Sun, which a rainbow circles: across
+   * (`u`), the Sun's place mirrored, and degrees above the horizon (below
+   * it while the Sun is up). It is behind the viewer, so it has no place of
+   * its own on the panorama: placed by its hour angle, it wrapped from one
+   * edge to the other at solar noon. Mirrored, it moves smoothly against
+   * the Sun all day, still west in the morning and east in the afternoon.
    */
   antisolar: { u: number; altitude: number };
   eclipse: Eclipse;
@@ -414,10 +417,7 @@ export function lightingState(snapshot: EnvironmentSnapshot): LightingState {
     ),
     shadow,
     antisolar: {
-      u: project(
-        { altitude: -sun.altitude, azimuth: (sun.azimuth + 180) % 360 },
-        latitude,
-      ).u,
+      u: 1 - sunProjected.u,
       altitude: -sun.altitude,
     },
     eclipse,
