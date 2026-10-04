@@ -267,7 +267,7 @@
     {
       "id": "grass-normal",
       "file": "scene/grass-normal.png",
-      "sha256": "aaae830c03ece72688f06a9d44f2ce6ad146f2ad41671ea1aae39bf71391096f",
+      "sha256": "a561fe9aa1715d66ee79fe1f2f64e7774c89c52d6148662ae938c89d0b513c2f",
       "role": "Normal map for grass-albedo",
       "author": "Derived for git-flower-garden by scripts/grass-art.ts (deterministic, no model)",
       "source": "grass-albedo",
@@ -289,7 +289,7 @@
     {
       "id": "grass-translucency",
       "file": "scene/grass-translucency.png",
-      "sha256": "1e1df549a9c8f0b05e4b737d12184fa26ec3a1a06d04d001406b21804c93c4d3",
+      "sha256": "9355c425b9e5fb8a8eb8f7616d1c39404f5b1422933f0fd7e5a44a50f87203d9",
       "role": "Translucency map for grass-albedo",
       "author": "Derived for git-flower-garden by scripts/grass-art.ts (deterministic, no model)",
       "source": "grass-albedo",

@@ -204,7 +204,11 @@ for (let i = 3; i < tufts.data.length; i += 4) {
 }
 writeFileSync(
   `${OUT}/grass-normal.png`,
-  encode(deriveNormals(tufts, { radius: 5, detail: 2 }), true),
+  // Strong relief: the tufts are drawn from 256-pixel cells (a 627-pixel
+  // source), so a faint rim or faint luminance detail flattens to a card
+  // there. Each painted blade, light along its middle and dark at its
+  // overlaps, becomes its own ridge.
+  encode(deriveNormals(tufts, { radius: 14, detail: 28 }), true),
 );
 const cell = tufts.width / 2;
 const thin = edgeDistance(tufts);
@@ -217,7 +221,9 @@ for (let y = 0; y < tufts.height; y++)
     const up = 1 - (y % cell) / cell;
     const tip = Math.min(1, 0.2 + up * 1.1);
     const narrow = 1 - Math.min(1, Math.max(0, ((thin[i] ?? 0) - 1) / 8));
-    const v = a * tip * (0.55 + 0.45 * narrow) * 255;
+    // Paler painted blades are the thin, sunlit ones: they pass more.
+    const pale = luminance(tufts.data, i * 4);
+    const v = a * tip * (0.35 + 0.35 * narrow + 0.5 * pale) * 255;
     trans[i * 4] = trans[i * 4 + 1] = trans[i * 4 + 2] = v;
     trans[i * 4 + 3] = 255;
   }
