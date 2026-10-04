@@ -48,6 +48,7 @@
     "build": "tsc -p tsconfig.build.json && vite build",
     "pages:build": "vite build --mode pages",
     "pages:snapshot": "node scripts/pages-snapshot.ts",
+    "readme:screenshots": "node scripts/readme-screenshots.ts",
     "typecheck": "tsc -p tsconfig.json && tsc -p src/ui/tsconfig.json && tsc -p tests/e2e/tsconfig.json && tsc -p spikes/relight/tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",

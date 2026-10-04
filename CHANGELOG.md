@@ -9,6 +9,16 @@ change configuration or behavior, and the notes say how.
 
 ### Changes
 
+- **Rainbows follow the Sun.** A rainbow now moves smoothly across the
+  view, opposite the Sun. Before, it jumped from one edge to the other at
+  solar noon. It also sinks into the hill as the Sun climbs: the primary bow
+  is gone once the Sun is above 42°, and the fainter secondary above about
+  51°.
+- **Fixed: focus-view marks on the hillside.** Worktree markers, the
+  selected commit's ring and highlight, and missing-history marks no longer
+  appear, standing still, over the swaying garden plants. With the GPU, the
+  soft ground shadows under a plant's roots now lean with the plant in the
+  wind instead of staying behind.
 - **Solar and lunar eclipses.** The Moon now covers the Sun as far as it
   really does: partial eclipses show a crescent Sun, annular ones a thin
   ring, and at totality the corona and the brightest stars come out under a
