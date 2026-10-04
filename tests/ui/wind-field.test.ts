@@ -6,6 +6,8 @@ import {
   gustsOf,
   waveShape,
   waveSpeed,
+  wavePeriod,
+  WAVELENGTH,
   windDirection,
   windWave,
   TRAVEL_WRAP,
@@ -63,6 +65,12 @@ describe("wind field", () => {
 
   it("deepens lulls with wind while calm air continues drifting", () => {
     expect(waveSpeed(12)).toBeGreaterThan(waveSpeed(2));
+    // Fronts pass more often as the wind rises, a fixed WAVELENGTH apart.
+    for (let v = 0; v < 40; v++)
+      expect(wavePeriod(v + 1)).toBeLessThan(wavePeriod(v));
+    expect(wavePeriod(0)).toBeCloseTo(16, 5);
+    expect(wavePeriod(40)).toBeGreaterThan(2);
+    expect(waveSpeed(4) * wavePeriod(4)).toBeCloseTo(WAVELENGTH, 5);
     const calm = Array.from({ length: 300 }, (_, i) => gustEnvelope(i, 0));
     const windy = Array.from({ length: 300 }, (_, i) => gustEnvelope(i, 12));
     expect(Math.min(...windy)).toBeLessThan(0.4);

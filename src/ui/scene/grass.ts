@@ -170,13 +170,14 @@ export function grassField(density = 1): readonly Tuft[] {
 
 /**
  * The sheen of bent grass (TuftPose `lift`), the same on both tiers: a
- * fully bent tuft mixes this far toward this pale green, scaled by
- * daylight; one standing up between the waves darkens by `shade`.
+ * tuft at lift 1 mixes this far toward this pale green, scaled by
+ * daylight; one at -1, standing up between the waves, darkens by `shade`.
+ * Lift grows with the gusts (gustBend), so a 5 m/s gust shows 0.3 and 0.2.
  */
 export const SHEEN = {
   color: [0.82, 0.94, 0.72],
-  lift: 0.3,
-  shade: 0.2,
+  lift: 0.47,
+  shade: 0.32,
 } as const;
 
 /** A tuft's pose in the wind. */
@@ -188,7 +189,7 @@ export interface TuftPose {
   bend: number;
   /**
    * Its sheen, -1..1: how far the passing wave bends it beyond its steady
-   * bend. Bent grass shows its lighter sides; grass standing up between
+   * bend, so stronger in stronger gusts, as the bend is (gustBend). Bent grass shows its lighter sides; grass standing up between
    * the waves, darker. This is what makes the waves readable at a distance,
    * where a tuft's bend is a pixel or two.
    */
@@ -268,7 +269,7 @@ export function tuftPose(
     0.03 * frame.stir * flutter;
   return {
     bend: Math.max(BEND_MIN, Math.min(BEND_MAX, bend)),
-    lift: wave * Math.min(1, frame.reach / 0.6),
+    lift: wave * frame.reach,
   };
 }
 
