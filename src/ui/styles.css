@@ -1048,6 +1048,16 @@ code,
 .botanical .garden-scene .botanical-overlay .commit text {
   display: none;
 }
+/* On the hillside the overlay is only the plant's hit target: its marks
+   would hold still while the art sways, and selection belongs to focus. */
+.botanical .garden-scene .botanical-overlay .selection,
+.botanical .garden-scene .botanical-overlay .worktree,
+.botanical .garden-scene .botanical-overlay .boundary-mark {
+  display: none;
+}
+.botanical .garden-scene .botanical-overlay .commit .hit {
+  fill: transparent;
+}
 .botanical .garden-scene .botanical-overlay .commit .hit {
   /* The normal row spans the label column. On the hillside the plant's
      target is its lanes, so it does not cover neighboring plants. */
