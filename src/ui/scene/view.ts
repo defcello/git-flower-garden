@@ -114,10 +114,11 @@ export const RAINBOW_GROUND = Math.round(0.76 * DESIGN.height);
  * the horizon), so a rainbow drawn at the sky's scale looked small and
  * showed the lower half of its circle over the ridges. Instead the bow
  * stands on the ground line, its centre (the antisolar point) the Sun's
- * altitude below it, so its lower half is always behind the hill
- * (maintainer's rule, 2026-10-01); and this scale puts its top at the true
- * height, 42° less the Sun's altitude on the sky's scale, at every Sun
- * altitude. About 2.1 times the sky's scale.
+ * altitude below it on this same scale, so its lower half is always behind
+ * the hill (maintainer's rule, 2026-10-01). This scale puts its top at the
+ * true height with the Sun on the horizon; as the Sun climbs the bow sinks,
+ * and the primary is gone into the ground at 42°, the secondary at about
+ * 51° (the 42° rule). About 2.1 times the sky's scale.
  */
 export const RAINBOW_SCALE =
   (RAINBOW_GROUND - DESIGN.height * HORIZON) / RAINBOW_RADIUS +
@@ -127,7 +128,7 @@ export const RAINBOW_SCALE =
 export function rainbowCentre(antisolar: { u: number; altitude: number }) {
   return {
     x: skyPlace(antisolar).x,
-    y: RAINBOW_GROUND - antisolar.altitude * PIXELS_PER_DEGREE,
+    y: RAINBOW_GROUND - antisolar.altitude * RAINBOW_SCALE,
   };
 }
 
