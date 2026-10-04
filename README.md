@@ -34,9 +34,14 @@ and wind to the hillside.
 | ![Fog: a pale Sun through mist that hides the far ridges](docs/images/scenes/fog.jpg) | ![The midnight Sun low over the ridges in Svalbard](docs/images/scenes/polar-day.jpg) |
 | **Fog** hides the far ridges first. | **Anywhere on Earth**, including the midnight Sun and polar night. |
 
-Grass and plants move with the wind, which sends waves rolling across the
-hill as gusts pass. The garden view's *Sky*, *Weather*, and *Wind* menus
-preview any of these, clearly labelled as previews.
+![A gale from the west: the grass leans right, with paler bands where gusts bend it, and the plants lean downwind](docs/images/scenes/high-wind.jpg)
+
+**Wind** bends every tuft of grass and every plant. Gusts send waves rolling
+across the hill, paler where they bend the grass and darker where it stands
+back up. Faster winds roll them more often and lean everything further.
+
+The garden view's *Sky*, *Weather*, and *Wind* menus preview any of these,
+clearly labelled as previews.
 
 The **technical view** shows the same graph without the artwork. It shows
 every branch head, the common ancestors that connect them, and recent work,
