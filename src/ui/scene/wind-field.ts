@@ -150,7 +150,7 @@ export function gustPatch(x: number, y: number, wind: WindField): number {
 }
 
 /** Design pixels from one wave front to the next, along the wind, near. */
-export const WAVELENGTH = 320;
+export const WAVELENGTH = 640;
 
 /**
  * Waves of bent grass rolling downwind, smaller and slower toward the
