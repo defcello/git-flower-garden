@@ -551,6 +551,22 @@ async function moves(page: Page, selector: string) {
   return (await artwork(page, selector)) !== before;
 }
 
+/**
+ * Whether the artwork comes to rest: a slow runner may still finish a frame
+ * or two queued before the change, so poll until a half-second passes
+ * unchanged rather than taking one sample.
+ */
+async function settles(page: Page, selector: string) {
+  try {
+    await expect
+      .poll(() => moves(page, selector), { timeout: 10_000, intervals: [0] })
+      .toBe(false);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 test("leaves sway in the garden only, hit targets stay put, and Static and Low stand still", async ({
   page,
 }) => {
@@ -584,14 +600,13 @@ test("leaves sway in the garden only, hit targets stay put, and Static and Low s
 
   // Static draws nothing between lighting changes, and is remembered.
   await page.getByLabel("Drawing", { exact: true }).selectOption("static");
-  await page.waitForTimeout(200);
-  expect(await moves(page, garden)).toBe(false);
+  expect(await settles(page, garden)).toBe(true);
   await page.reload();
   await expect(page.getByLabel("Drawing", { exact: true })).toHaveValue(
     "static",
   );
   await holdLight(page);
-  expect(await moves(page, garden)).toBe(false);
+  expect(await settles(page, garden)).toBe(true);
 
   // Reduced motion stills every tier.
   await page.getByLabel("Drawing", { exact: true }).selectOption("auto");
@@ -600,7 +615,7 @@ test("leaves sway in the garden only, hit targets stay put, and Static and Low s
   await expect(note).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.waitForTimeout(200);
-  expect(await moves(page, garden)).toBe(false);
+  expect(await settles(page, garden)).toBe(true);
   // A still garden says why.
   await expect(note).toHaveAttribute("data-hold", "reduced");
   await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -612,14 +627,14 @@ test("leaves sway in the garden only, hit targets stay put, and Static and Low s
   const quality = page.getByLabel("Quality", { exact: true });
   await quality.selectOption("low");
   await page.waitForTimeout(200);
-  expect(await moves(page, garden)).toBe(false);
+  expect(await settles(page, garden)).toBe(true);
   expect(await targets()).toEqual(still);
   // The viewer chose stillness: nothing to explain.
   await expect(note).toHaveCount(0);
   await page.reload();
   await expect(quality).toHaveValue("low");
   await holdLight(page);
-  expect(await moves(page, garden)).toBe(false);
+  expect(await settles(page, garden)).toBe(true);
   await quality.selectOption("balanced");
   expect(await moves(page, garden)).toBe(true);
 
@@ -627,7 +642,7 @@ test("leaves sway in the garden only, hit targets stay put, and Static and Low s
   await page.locator(tour).focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("main.focus")).toBeVisible();
-  expect(await moves(page, "main.focus .botanical-graph canvas")).toBe(false);
+  expect(await settles(page, "main.focus .botanical-graph canvas")).toBe(true);
 });
 
 test("with the GPU tier, plants keep their places, outline, and sway, and a lost context hands them to Software", async ({

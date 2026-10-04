@@ -80,10 +80,16 @@ export function advance(travel: number, dt: number, speed: number): number {
     TRAVEL_WRAP
   );
 }
-/** Design pixels a second the waves travel: faster in stronger wind, up to a storm's. */
+/**
+ * Seconds between one wave front and the next passing a place: shorter as
+ * the wind rises, from about 16 in still air to 2 in a storm.
+ */
+export function wavePeriod(speed: number): number {
+  return 2 + 14 * Math.exp(-Math.max(0, speed) / 6);
+}
+/** Design pixels a second the waves travel: one WAVELENGTH each wavePeriod. */
 export function waveSpeed(speed: number): number {
-  const v = Math.max(0, speed);
-  return 35 + 12 * Math.min(12, v) + 5 * Math.min(40, Math.max(0, v - 12));
+  return WAVELENGTH / wavePeriod(speed);
 }
 export function windDirection(windX: number): number {
   return Math.abs(windX) > 0.15 ? Math.sign(windX) : 1;

@@ -229,6 +229,27 @@ describe("grass tufts (ADR 0021)", () => {
     expect(lifted).toBeGreaterThan(10);
   });
 
+  it("leans further and shows a stronger sheen in stronger gusts", () => {
+    const tuft = grassField(1)[800];
+    if (!tuft) throw new Error("no tuft");
+    // The same wave, the same steady push; only the gusts differ.
+    const swing = (gust: number) => {
+      let bend = 0;
+      let lift = 0;
+      for (let s = 0; s < 60; s += 0.5) {
+        const pose = tuftPose(tuft, s, wind(6, 6, s * 150, gust));
+        bend = Math.max(bend, Math.abs(pose.bend - steadyBend(6)));
+        lift = Math.max(lift, Math.abs(pose.lift));
+      }
+      return { bend, lift };
+    };
+    const [light, moderate, strong] = [1, 4, 10].map(swing);
+    expect(moderate?.bend).toBeGreaterThan(light?.bend ?? 0);
+    expect(strong?.bend).toBeGreaterThan(moderate?.bend ?? 0);
+    expect(moderate?.lift).toBeGreaterThan(light?.lift ?? 0);
+    expect(strong?.lift).toBeGreaterThan(moderate?.lift ?? 0);
+  });
+
   it("bends blades along an arc that keeps their length", () => {
     const across = { x: 1, z: 0 };
     expect(tuftBend(0.7, 1, 0, across)).toEqual({ x: 0, up: 0.7 });
